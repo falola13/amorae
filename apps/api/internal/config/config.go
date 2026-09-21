@@ -23,7 +23,17 @@ type Config struct {
 	SessionTTL      time.Duration
 	BCryptCost      int
 	ShutdownTimeout time.Duration
+	// MetricsAddr is a separate listener for /metrics, so it is never on
+	// the public API port. Defaults to loopback; containers set ":9090" and
+	// simply don't publish it.
+	MetricsAddr string
+	// BFFSecret, when set, lets the web BFF vouch for the real client IP
+	// (see middleware.ClientIP). Empty means no forwarded IP is trusted.
+	BFFSecret string
 }
+
+// minBFFSecretLen keeps the secret out of reach of guessing.
+const minBFFSecretLen = 32
 
 func (c Config) IsProduction() bool {
 	return c.AppEnv == "production"
@@ -83,6 +93,11 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("SHUTDOWN_TIMEOUT: must be positive, got %s", shutdownTimeout))
 	}
 
+	bffSecret := getEnv("BFF_SECRET", "")
+	if bffSecret != "" && len(bffSecret) < minBFFSecretLen {
+		errs = append(errs, fmt.Errorf("BFF_SECRET: must be at least %d characters when set", minBFFSecretLen))
+	}
+
 	if len(errs) > 0 {
 		return Config{}, errors.Join(errs...)
 	}
@@ -97,6 +112,8 @@ func Load() (Config, error) {
 		SessionTTL:      sessionTTL,
 		BCryptCost:      bcryptCost,
 		ShutdownTimeout: shutdownTimeout,
+		MetricsAddr:     getEnv("METRICS_ADDR", "127.0.0.1:9090"),
+		BFFSecret:       bffSecret,
 	}, nil
 }
 

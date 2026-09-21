@@ -4,7 +4,10 @@
 // exactly one HTTP status in exactly one place.
 package apperr
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // Kind classifies an error for the purpose of choosing an HTTP status. It
 // deliberately has nothing to do with HTTP itself, so this package stays
@@ -21,18 +24,21 @@ const (
 	KindForbidden
 	KindNotFound
 	KindConflict
+	KindRateLimited
 )
 
 // Error is the application's error type. Code is a stable machine-readable
 // string clients can branch on; Message is safe to show a user; Fields
-// carries per-field validation messages; Err is the underlying cause, kept
-// for logging and Unwrap but never rendered.
+// carries per-field validation messages; RetryAfter tells a rate-limited
+// client how long to wait; Err is the underlying cause, kept for logging
+// and Unwrap but never rendered.
 type Error struct {
-	Kind    Kind
-	Code    string
-	Message string
-	Fields  map[string]string
-	Err     error
+	Kind       Kind
+	Code       string
+	Message    string
+	Fields     map[string]string
+	RetryAfter time.Duration
+	Err        error
 }
 
 func (e *Error) Error() string {
@@ -87,6 +93,18 @@ func NotFound(code, message string) *Error {
 
 func Conflict(code, message string) *Error {
 	return &Error{Kind: KindConflict, Code: code, Message: message}
+}
+
+// RateLimited means "too many attempts, wait retryAfter". The message is the
+// same wherever it's raised, so a limit never reveals *which* limit tripped
+// (e.g. whether an email address exists).
+func RateLimited(retryAfter time.Duration) *Error {
+	return &Error{
+		Kind:       KindRateLimited,
+		Code:       "rate_limited",
+		Message:    "Too many attempts. Please wait a moment and try again.",
+		RetryAfter: retryAfter,
+	}
 }
 
 // Internal wraps an unexpected error. The wrapped error is never shown to a

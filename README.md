@@ -86,16 +86,23 @@ Each app documents its variables in its own `.env.example`:
 - [`apps/api/.env.example`](apps/api/.env.example): `DATABASE_URL`, `HTTP_ADDR`,
   `SESSION_TTL`, `BCRYPT_COST`, logging, and so on. The API refuses to start on
   invalid config.
-- [`apps/web/.env.example`](apps/web/.env.example): `API_URL` and `COOKIE_SECURE`,
-  both read at runtime on the server, so one image can serve every environment.
+- [`apps/web/.env.example`](apps/web/.env.example): `API_URL`, `COOKIE_SECURE`
+  and `BFF_SECRET`, all read at runtime on the server, so one image can serve
+  every environment.
 
 ## Before production
 
 The template leaves some decisions to you on purpose. See
 *Deliberately not included* in the architecture doc. At minimum:
 
-- Add shared rate limiting to `/v1/auth/*`.
-- Keep `/metrics` off the public internet.
+- Set the same random `BFF_SECRET` (`openssl rand -hex 32`) on the API and the
+  web app, so the auth rate limit counts per visitor. The compose file's value
+  is for local development only.
+- Run the web app behind a reverse proxy that sets `X-Forwarded-For` (every
+  host does). See *Rate limiting* in the architecture doc for why.
+- The rate limiter is in-memory. Before running more than one API replica,
+  swap in a shared (Redis) limiter.
+- Don't publish `METRICS_ADDR`. Scrape it from inside your network.
 - Put real secrets in your platform's secret store, not in `.env` files.
 - Terminate TLS in front of the web app and leave `COOKIE_SECURE` at its
   production default (`true`).

@@ -5,7 +5,15 @@
 #
 # Postgres is published on 5434 (override with AMORAE_DB_PORT), not 5432, so it
 # can sit alongside other Postgres instances already running on the host.
+#
+# Every published port binds to 127.0.0.1: reachable from this machine, not
+# from anyone else on the same Wi-Fi. Without that, the database (with its
+# well-known dev password) is open to the whole local network.
 name: amorae
+
+# Shared by api and web. A dev-only value: use a real random secret
+# (e.g. `openssl rand -hex 32`) anywhere that isn't your laptop.
+x-bff-secret: &bff-secret dev-only-bff-secret-0123456789abcdef
 
 services:
   db:
@@ -15,7 +23,7 @@ services:
       POSTGRES_PASSWORD: amorae
       POSTGRES_DB: amorae
     ports:
-      - "${AMORAE_DB_PORT:-5434}:5432"
+      - "127.0.0.1:${AMORAE_DB_PORT:-5434}:5432"
     volumes:
       # Postgres 18 images keep data under /var/lib/postgresql/<major>/, so the
       # volume mounts the parent rather than the pre-18 .../data path.
@@ -45,8 +53,11 @@ services:
       HTTP_ADDR: ":8088"
       DATABASE_URL: postgres://amorae:amorae@db:5432/amorae?sslmode=disable
       LOG_LEVEL: info
+      # Inside the container network only; deliberately not published.
+      METRICS_ADDR: ":9090"
+      BFF_SECRET: *bff-secret
     ports:
-      - "8088:8088"
+      - "127.0.0.1:8088:8088"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -65,8 +76,9 @@ services:
       API_URL: http://api:8088
       # Served over plain http on localhost here; set true behind TLS.
       COOKIE_SECURE: "false"
+      BFF_SECRET: *bff-secret
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       api:
         condition: service_healthy

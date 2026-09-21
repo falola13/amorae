@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
+	"github.com/falola13/amorae/apps/api/internal/platform/ratelimit"
 )
 
 // This file lives in package auth (not auth_test) because fakeSessionRepo
@@ -43,7 +45,8 @@ func (f *fakeUserRepo) GetByEmail(_ context.Context, email string) (user.User, e
 }
 
 type fakeSessionRepo struct {
-	byHash map[string]Session
+	byHash    map[string]Session
+	createErr error // when set, Create fails with it (simulates a DB error)
 }
 
 func newFakeSessionRepo() *fakeSessionRepo {
@@ -51,9 +54,18 @@ func newFakeSessionRepo() *fakeSessionRepo {
 }
 
 func (f *fakeSessionRepo) Create(_ context.Context, s Session) error {
+	if f.createErr != nil {
+		return f.createErr
+	}
 	f.byHash[string(s.TokenHash)] = s
 	return nil
 }
+
+// allowAll is an AttemptLimiter that never limits, for tests about
+// everything except rate limiting.
+type allowAll struct{}
+
+func (allowAll) Allow(string) (bool, time.Duration) { return true, 0 }
 func (f *fakeUserRepo) SetLastLoginAt(_ context.Context, id uuid.UUID, at time.Time) error {
 	for email, u := range f.byEmail {
 		if u.ID == id {
@@ -117,7 +129,7 @@ func newTestService(t *testing.T, newToken func() (string, error)) (*Service, *f
 	sessions := newFakeSessionRepo()
 	hasher := NewBcryptHasher(bcrypt.MinCost)
 
-	svc, err := NewService(users, sessions, hasher, fakeTxRunner{}, time.Hour, fixedNow, newToken)
+	svc, err := NewService(users, sessions, hasher, fakeTxRunner{}, time.Hour, fixedNow, newToken, allowAll{})
 	if err != nil {
 		t.Fatalf("NewService() returned an error: %v", err)
 	}
@@ -261,7 +273,7 @@ func TestService_Login_UnknownEmail_StillComparesAgainstDummy(t *testing.T) {
 	sessions := newFakeSessionRepo()
 	spy := &spyHasher{inner: NewBcryptHasher(bcrypt.MinCost)}
 
-	svc, err := NewService(users, sessions, spy, fakeTxRunner{}, time.Hour, fixedNow, NewToken)
+	svc, err := NewService(users, sessions, spy, fakeTxRunner{}, time.Hour, fixedNow, NewToken, allowAll{})
 	if err != nil {
 		t.Fatalf("NewService() returned an error: %v", err)
 	}
@@ -339,5 +351,57 @@ func TestService_Logout_Idempotent(t *testing.T) {
 	}
 	if err := svc.Logout(context.Background(), "token-1"); err != nil {
 		t.Fatalf("second Logout() on an already-logged-out token returned an error: %v", err)
+	}
+}
+
+func TestService_Login_SessionWriteFails_ReturnsErrorNotToken(t *testing.T) {
+	svc, _, sessions := newTestService(t, sequentialToken("tok-reg", "tok-login"))
+	if _, err := svc.Register(context.Background(), RegisterInput{Email: "a@b.com", Password: "correct horse", DisplayName: "A"}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	sessions.createErr = errors.New("connection reset")
+	res, err := svc.Login(context.Background(), LoginInput{Email: "a@b.com", Password: "correct horse"})
+
+	if err == nil {
+		t.Fatalf("Login succeeded with token %q although the session was never stored", res.Token)
+	}
+	if res.Token != "" {
+		t.Errorf("Login returned token %q alongside an error", res.Token)
+	}
+}
+
+func TestService_Login_RateLimitedPerAccountBeforeBcrypt(t *testing.T) {
+	users := newFakeUserRepo()
+	spy := &spyHasher{inner: NewBcryptHasher(bcrypt.MinCost)}
+	limiter := ratelimit.New(2, 15*time.Minute, fixedNow)
+	svc, err := NewService(users, newFakeSessionRepo(), spy, fakeTxRunner{}, time.Hour, fixedNow, NewToken, limiter)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	for range 2 {
+		_, _ = svc.Login(context.Background(), LoginInput{Email: "victim@example.com", Password: "guess"})
+	}
+	comparesBefore := spy.compareCalls
+
+	// Different casing is the same account: the key uses the normalised email.
+	_, err = svc.Login(context.Background(), LoginInput{Email: " VICTIM@example.com ", Password: "guess"})
+
+	appErr, ok := apperr.As(err)
+	if !ok || appErr.Kind != apperr.KindRateLimited {
+		t.Fatalf("3rd attempt err = %v, want rate_limited", err)
+	}
+	if appErr.RetryAfter <= 0 {
+		t.Errorf("RetryAfter = %s, want > 0", appErr.RetryAfter)
+	}
+	if spy.compareCalls != comparesBefore {
+		t.Error("a rate-limited attempt still ran bcrypt; the limit must be checked first")
+	}
+
+	// Another account is unaffected.
+	_, err = svc.Login(context.Background(), LoginInput{Email: "other@example.com", Password: "guess"})
+	if appErr, _ := apperr.As(err); appErr != nil && appErr.Kind == apperr.KindRateLimited {
+		t.Fatal("one account's limit blocked a different account")
 	}
 }

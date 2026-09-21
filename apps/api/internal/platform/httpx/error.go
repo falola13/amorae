@@ -1,7 +1,9 @@
 package httpx
 
 import (
+	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 	"github.com/falola13/amorae/apps/api/internal/platform/logger"
@@ -47,6 +49,11 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 		status, code, message = http.StatusNotFound, appErr.Code, appErr.Message
 	case apperr.KindConflict:
 		status, code, message = http.StatusConflict, appErr.Code, appErr.Message
+	case apperr.KindRateLimited:
+		status, code, message = http.StatusTooManyRequests, appErr.Code, appErr.Message
+		// Whole seconds, rounded up so a client never retries too early.
+		seconds := int(math.Ceil(appErr.RetryAfter.Seconds()))
+		w.Header().Set("Retry-After", strconv.Itoa(max(seconds, 1)))
 	default:
 		// KindInternal (including the zero value): log the real cause for
 		// whoever reads the logs, but the response below stays generic.

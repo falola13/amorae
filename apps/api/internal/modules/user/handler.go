@@ -31,8 +31,8 @@ func NewHandler(svc service) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
-	r.HandleAuthed("GET /v1/users/me", http.HandlerFunc(h.getMe))
-	r.HandleAuthed("PATCH /v1/users/me", http.HandlerFunc(h.updateMe))
+	r.HandleAuthed("GET /users/me", http.HandlerFunc(h.getMe))
+	r.HandleAuthed("PATCH /users/me", http.HandlerFunc(h.updateMe))
 }
 
 func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {

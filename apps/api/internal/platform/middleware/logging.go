@@ -21,6 +21,9 @@ func Logging(next http.Handler) http.Handler {
 		logger.FromContext(r.Context()).Info("http_request",
 			"method", r.Method,
 			"path", r.URL.Path,
+			// As resolved by ClientIP (the visitor, not the BFF), so a
+			// rate-limited or abusive caller can be traced in the logs.
+			"client_ip", httpx.ClientIP(r.Context()),
 			"status", sw.Status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"bytes", sw.Bytes,

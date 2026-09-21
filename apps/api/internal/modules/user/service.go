@@ -31,7 +31,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 type UpdateProfileInput struct {
-	DisplayName string
+	DisplayName string `json:"display_name"`
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateProfileInput) (User, error) {

@@ -17,19 +17,22 @@ import (
 
 	"github.com/falola13/amorae/apps/api/internal/config"
 	"github.com/falola13/amorae/apps/api/internal/modules/auth"
+	"github.com/falola13/amorae/apps/api/internal/modules/couples"
 	"github.com/falola13/amorae/apps/api/internal/modules/health"
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
 	"github.com/falola13/amorae/apps/api/internal/platform/metrics"
 	"github.com/falola13/amorae/apps/api/internal/platform/middleware"
+	"github.com/falola13/amorae/apps/api/internal/platform/ratelimit"
 	"github.com/falola13/amorae/apps/api/internal/platform/server"
 )
 
 type App struct {
-	db     *database.DB
-	server *server.Server
-	log    *slog.Logger
+	db            *database.DB
+	server        *server.Server
+	metricsServer *server.Server
+	log           *slog.Logger
 }
 
 func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error) {
@@ -51,10 +54,21 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	// on every later read, so clients can compare them safely.
 	now := func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 	userSvc := user.NewService(userRepo, now)
+	couplesRepo := couples.NewPostgresRepository(db)
+	couplesSvc := couples.NewService(couplesRepo, now)
+
+	// Rate limits. In memory, so they are per process: correct for one API
+	// instance. When scaling out, swap in a Redis-backed limiter here; both
+	// consumers only see an Allow(key) interface.
+	//   loginAttempts: per account, stops password guessing from any number of IPs.
+	//   authRequests:  per client IP across /auth/*, caps bcrypt load and
+	//                  account enumeration through register.
+	loginAttempts := ratelimit.New(10, 15*time.Minute, time.Now)
+	authRequests := ratelimit.New(20, time.Minute, time.Now)
 
 	// *database.DB satisfies auth.TxRunner directly (matching InTx method
 	// signature) — no adapter type needed just to cross that interface.
-	authSvc, err := auth.NewService(userRepo, sessionRepo, hasher, db, cfg.SessionTTL, now, auth.NewToken)
+	authSvc, err := auth.NewService(userRepo, sessionRepo, hasher, db, cfg.SessionTTL, now, auth.NewToken, loginAttempts)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("building auth service: %w", err)
@@ -64,6 +78,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	healthHandler := health.NewHandler(db)
 	userHandler := user.NewHandler(userSvc)
 	authHandler := auth.NewHandler(authSvc)
+	couplesHandler := couples.NewHandler(couplesSvc, userSvc)
 
 	// --- HTTP ---
 	m := metrics.New()
@@ -72,28 +87,54 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	router := httpx.NewRouter(mux, requireAuth, m)
 
 	healthHandler.RegisterRoutes(router)
-	userHandler.RegisterRoutes(router)
-	authHandler.RegisterRoutes(router)
 
-	// /metrics is infrastructure plumbing, not a module with business
-	// routes, so it's registered straight on the mux rather than through
-	// the Router (which would record metrics about serving metrics).
-	mux.Handle("GET /metrics", m.Handler())
+	// Product routes are versioned here, once. Handlers register
+	// "/auth/login" and "/users/me"; they do not know which version
+	// they are mounted on.
+	v1 := router.Version(httpx.V1)
+	userHandler.RegisterRoutes(v1)
+	authHandler.RegisterRoutes(v1.With(middleware.RateLimit(authRequests, "auth")))
+	couplesHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
-	// logs and responds with the request id. Recover sits inside Logging so
-	// the 500 it writes still gets an access-log line.
-	handler := middleware.Chain(mux, middleware.RequestID(log), middleware.Logging, middleware.Recover)
+	// logs and responds with the request id. ClientIP resolves the caller
+	// before any rate limit reads it. Recover sits inside Logging so the 500
+	// it writes still gets an access-log line.
+	handler := middleware.Chain(mux,
+		middleware.RequestID(log),
+		middleware.ClientIP(cfg.BFFSecret),
+		middleware.Logging,
+		middleware.Recover,
+	)
 
 	srv := server.New(cfg.HTTPAddr, handler, cfg.ShutdownTimeout, log)
 
-	return &App{db: db, server: srv, log: log}, nil
+	// /metrics gets its own listener so it can never be reached through the
+	// public API port, whatever the deployment exposes.
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", m.Handler())
+	metricsSrv := server.New(cfg.MetricsAddr, metricsMux, cfg.ShutdownTimeout, log)
+
+	return &App{db: db, server: srv, metricsServer: metricsSrv, log: log}, nil
 }
 
-// Run blocks until ctx is canceled, then returns once the server has
-// finished its graceful shutdown.
+// Run serves the API and the metrics listener until ctx is canceled or
+// either one fails. A failure in one shuts the other down too, so the
+// process never keeps running half up.
 func (a *App) Run(ctx context.Context) error {
-	return a.server.Run(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	errs := make(chan error, 2)
+	go func() { errs <- a.server.Run(ctx) }()
+	go func() { errs <- a.metricsServer.Run(ctx) }()
+
+	err := <-errs
+	cancel()
+	if other := <-errs; err == nil {
+		err = other
+	}
+	return err
 }
 
 // Close releases resources Run doesn't own — currently just the database

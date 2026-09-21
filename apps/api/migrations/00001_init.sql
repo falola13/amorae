@@ -46,4 +46,10 @@ CREATE TABLE couple_invitations (
 );
 
 -- +goose Down
+-- Reverse dependency order: everything that references users goes first,
+-- or Postgres refuses to drop it.
+DROP TABLE couple_invitations;
+DROP TYPE invitation_status;
+DROP TABLE couple_members;
+DROP TABLE couples;
 DROP TABLE users;

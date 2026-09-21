@@ -109,7 +109,7 @@ an exception.
 | Principle | Where it shows up |
 | --- | --- |
 | **S**ingle responsibility | Handlers only translate HTTP (decode, call, map to DTO, respond). Services only hold use cases. Repositories only run SQL, and they translate driver errors into domain errors (`23505` → `user.ErrEmailTaken`, `ErrNoRows` → `user.ErrNotFound`) so nothing above them imports pgx. |
-| **O**pen/closed | A new feature is a new package under `modules/` plus one `RegisterRoutes` line in `app`. Error→HTTP mapping is keyed on `apperr.Kind` in one place, so new domain errors need no transport changes. |
+| **O**pen/closed | A new feature is a new package under `modules/` plus one `RegisterRoutes` line on the versioned router in `app`. Handlers register resource paths (`GET /users/me`); `router.Version(httpx.V1)` is the only place the `/v1` prefix is applied, so a later version does not require editing every module. Error→HTTP mapping is keyed on `apperr.Kind` in one place, so new domain errors need no transport changes. |
 | **L**iskov substitution | The in-memory fakes in `auth/service_test.go` and the Postgres repositories satisfy the same interfaces and behave the same way, including returning the same domain errors. That's why the service tests mean anything. |
 | **I**nterface segregation | `auth` needs only `Create` + `GetByEmail` from users, so it declares exactly that interface. The Postgres user repository satisfies both `user`'s and `auth`'s interfaces without either knowing about the other's. |
 | **D**ependency inversion | Every interface is declared in the package that *consumes* it (the idiomatic Go form of DIP). Services depend on `Repository`, `PasswordHasher` and `TxRunner` abstractions. Only `internal/app` calls concrete constructors. |
@@ -121,21 +121,23 @@ an exception.
 1. **`RequestID`** accepts a sane incoming `X-Request-ID` or mints one, echoes it on the
    response, and puts a request-scoped logger in the context. Every log line
    for this request now carries `request_id`.
-2. **`Logging`** writes one access-log line when the request finishes.
-3. **`Recover`** catches panics so a bug returns a clean 500 and doesn't
-   kill the connection. It sits inside the first two, so the panic's log line and
-   error body carry the request id, and the 500 is still access-logged.
-4. **`ServeMux`** matches the method and pattern. The route was registered via
+2. **`ClientIP`** works out who is really calling: the TCP peer, or the visitor
+   IP the web BFF vouches for with its shared secret (see *Rate limiting*).
+3. **`Logging`** writes one access-log line when the request finishes.
+4. **`Recover`** catches panics so a bug returns a clean 500 and doesn't
+   kill the connection. It sits inside RequestID and Logging, so the panic's log
+   line and error body carry the request id, and the 500 is still access-logged.
+5. **`ServeMux`** matches the method and pattern. The route was registered via
    `Router.HandleAuthed`, so it's wrapped in per-route metrics and **`RequireAuth`**.
    RequireAuth validates the bearer token through the `auth` service and stores the
    user id with `authctx`.
-5. The **handler** decodes the body (1 MiB cap, unknown fields rejected) and
+6. The **handler** decodes the body (1 MiB cap, unknown fields rejected) and
    calls `service.UpdateProfile`.
-6. The **service** validates with the domain rules in `user.go` and calls the
+7. The **service** validates with the domain rules in `user.go` and calls the
    repository.
-7. The **repository** runs SQL through `db.Q(ctx)`, which transparently uses the
+8. The **repository** runs SQL through `db.Q(ctx)`, which transparently uses the
    open transaction when there is one.
-8. On error, the handler calls `httpx.Error`. That's the single place an error
+9. On error, the handler calls `httpx.Error`. That's the single place an error
    becomes a status code and an envelope.
 
 ### Errors
@@ -175,13 +177,36 @@ err := s.tx.InTx(ctx, func(ctx context.Context) error {
 - Passwords are 8–72 bytes. The upper bound is bcrypt's input limit, enforced
   so longer passwords aren't silently truncated.
 
+### Rate limiting
+
+Two limits protect the auth endpoints. Each answers a different attack:
+
+| Limit | Where | Stops |
+| --- | --- | --- |
+| 10 login attempts per account per 15 min | `auth.Service.Login`, before any DB or bcrypt work | Password guessing, even from many IPs. Keyed on the email as typed, so it reveals nothing about which accounts exist. |
+| 20 requests per client IP per minute on `/v1/auth/*` | `middleware.RateLimit`, applied in `app` via `v1.With(...)` | bcrypt CPU exhaustion, and enumerating accounts through register's `email_taken` |
+
+A blocked request gets `429 rate_limited` with a `Retry-After` header.
+
+**Which IP?** Browsers never call the API directly, so every web request
+arrives from the Next.js server. The web app forwards the visitor's IP in
+`X-Client-IP`, and the API believes it only when `X-BFF-Secret` matches its
+`BFF_SECRET` (compared in constant time). Everyone else, including mobile
+clients and anyone setting headers, is identified by the TCP peer address.
+`X-Forwarded-For` is never trusted by the API.
+
+The limiter is in-memory, so limits are per API process: correct for one
+instance. Running several replicas needs a shared (Redis) limiter; see the
+scaling table.
+
 ### Observability
 
 - Structured JSON logs in production (`log/slog`), text in development, and
   `request_id` on every line.
 - Prometheus metrics on `GET /metrics`: request count and latency labelled by
   **route pattern** (`/v1/users/me`, not raw paths, which keeps label cardinality
-  bounded).
+  bounded). Metrics are served on their **own listener** (`METRICS_ADDR`, loopback
+  by default), so they can't be reached through the public API port.
 - `GET /healthz` (process is up) and `GET /readyz` (database reachable) are
   separate so an orchestrator can take an instance out of rotation without killing it.
 
@@ -243,6 +268,7 @@ roughly the order you'll need them:
 | Pressure | Move | Why the template already allows it |
 | --- | --- | --- |
 | More traffic | Run N API and web replicas behind a load balancer | Both apps are stateless. Sessions live in Postgres, migrations are a separate one-shot job, and shutdown drains in-flight requests. |
+| Rate limits across replicas | Replace the in-memory limiter with a Redis-backed one | Both limits consume a one-method `Allow(key)` interface. Only `internal/app` changes. Until then, each replica enforces its own budget. |
 | DB connections | Put PgBouncer in front and tune `DB_MAX_CONNS` per replica | The pool size is config. Nothing holds connections across requests. |
 | Session lookups hot | Swap the session repository for Redis | `auth.SessionRepository` is an interface. Only `internal/app` changes. |
 | Read-heavy pages | Read replica via a second `Querier` for read paths, plus HTTP caching in Next.js | Repositories get their querier from `db.Q(ctx)`, so there's one place to route reads. |
@@ -261,7 +287,7 @@ Say you're adding `matches`:
    - `repository_postgres.go`: SQL via `db.Q(ctx)`, driver errors translated to domain errors
    - `handler.go` + `dto.go`: HTTP only. `RegisterRoutes(r *httpx.Router)`
    - `service_test.go` with in-memory fakes, `repository_postgres_test.go` using `dbtest.New(t)`
-3. Wire it in `internal/app`: construct the repo, service and handler, and call `RegisterRoutes`.
+3. Wire it in `internal/app`: construct the repo, service and handler, and call `RegisterRoutes` on `router.Version(httpx.V1)`. The handler registers `GET /matches/{id}`, not `GET /v1/matches/{id}`.
 4. Document the endpoints in `docs/API.md`.
 5. Web: add `src/features/matches/{api.ts,actions.ts,components/}`, add types to
    `lib/api/types.ts`, and add routes under `src/app/(app)/`.
@@ -272,10 +298,10 @@ These are real product needs. They're left out because the right answer depends
 on decisions that haven't been made yet, and a guessed default is worse than an
 obvious gap:
 
-- **Rate limiting** on `/v1/auth/*`. It has to be shared across replicas (Redis or the
-  edge), and in-memory would give false confidence. Add it before launch.
 - **Email verification and password reset.** Both need an email provider and a
-  worker.
+  worker. Verification is also what fully closes account enumeration: today
+  register answers `409 email_taken`, which the per-IP rate limit slows down
+  but can't hide. A verify-by-email flow can respond identically either way.
 - **Roles and authorisation.** `authctx` carries only the user id today. Extend
   it once the permission model exists.
 - **Tracing (OpenTelemetry).** The request id covers correlation until there's

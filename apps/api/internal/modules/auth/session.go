@@ -11,10 +11,10 @@ import (
 // written to the database (see token.go) — the token itself never touches
 // storage.
 type Session struct {
-	TokenHash []byte
-	UserID    uuid.UUID
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	TokenHash []byte    `json:"-"`
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 // errSessionNotFound is repository_postgres.go's signal that no row

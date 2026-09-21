@@ -31,13 +31,13 @@ const maxDisplayNameRunes = 50
 // line of defense: if a future change ever marshals a User by mistake, the
 // hash can't leak through it.
 type User struct {
-	ID           uuid.UUID
-	Email        string
-	DisplayName  string
-	PasswordHash string `json:"-"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	LastLoginAt  *time.Time
+	ID           uuid.UUID  `json:"id"`
+	Email        string     `json:"email"`
+	DisplayName  string     `json:"display_name"`
+	PasswordHash string     `json:"-"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	LastLoginAt  *time.Time `json:"last_login_at"`
 }
 
 // New validates email and displayName and constructs a User ready to

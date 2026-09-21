@@ -44,7 +44,18 @@ it up in the logs by `request_id`.
 | 403 | `forbidden` |
 | 404 | `*_not_found` |
 | 409 | `email_taken` (and future conflicts) |
+| 429 | `rate_limited`, with a `Retry-After` header in seconds |
 | 500 | `internal_error` |
+
+### Rate limits
+
+| Scope | Limit |
+| --- | --- |
+| All `/v1/auth/*` endpoints | 20 requests per client IP per minute |
+| `POST /v1/auth/login` | 10 attempts per email per 15 minutes, counted whether or not the account exists |
+
+Clients should wait `Retry-After` seconds before trying again. The message is
+the same for every limit, so a 429 never reveals whether an account exists.
 
 ## Types
 
@@ -75,6 +86,7 @@ interface AuthResult {
 - `201` → `{ "data": AuthResult }`
 - `400 validation_failed`: `fields` may contain `email`, `password`, `display_name`
 - `409 email_taken`
+- `429 rate_limited`: see *Rate limits*
 
 Rules: the email is trimmed, lower-cased and must be a bare address. The password is
 8–72 bytes. The display name is trimmed and 1–50 characters.
@@ -87,6 +99,7 @@ Rules: the email is trimmed, lower-cased and must be a bare address. The passwor
 
 - `200` → `{ "data": AuthResult }`
 - `401 invalid_credentials`: identical for unknown email and wrong password
+- `429 rate_limited`: see *Rate limits*
 
 ### `POST /v1/auth/logout` (auth)
 
@@ -112,4 +125,4 @@ Rules: the email is trimmed, lower-cased and must be a bare address. The passwor
 | --- | --- |
 | `GET /healthz` | Liveness. `200 {"status":"ok"}` whenever the process can serve. |
 | `GET /readyz` | Readiness. `200 {"status":"ready"}`, or `503 {"status":"unavailable"}` if Postgres is unreachable. |
-| `GET /metrics` | Prometheus metrics. Keep this off the public internet in production. |
+| `GET /metrics` | Prometheus metrics, served on a **separate listener** (`METRICS_ADDR`, default `127.0.0.1:9090`), never on the API port. |

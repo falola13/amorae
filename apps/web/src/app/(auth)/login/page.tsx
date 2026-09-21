@@ -3,20 +3,9 @@ import type { Metadata } from "next";
 import { Alert } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { LoginForm } from "@/features/auth/components/login-form";
+import { safeNext } from "@/lib/safe-next";
 
 export const metadata: Metadata = { title: "Sign in" };
-
-// Only a same-origin, single-slash path is safe to send the browser to
-// after login — mirrors the check in features/auth/actions.ts, which is the
-// one that actually enforces it (this copy only decides what's shown in the
-// form's hidden `next` field).
-function safeNext(value: string | undefined): string {
-  if (!value) return "/dashboard";
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
-    return "/dashboard";
-  }
-  return value;
-}
 
 interface LoginPageProps {
   searchParams: Promise<{ next?: string; reason?: string }>;

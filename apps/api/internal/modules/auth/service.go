@@ -44,6 +44,12 @@ type TxRunner interface {
 	InTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
+// AttemptLimiter caps login attempts per account, so a password can't be
+// guessed by brute force even from many IPs. ratelimit.Limiter satisfies it.
+type AttemptLimiter interface {
+	Allow(key string) (allowed bool, retryAfter time.Duration)
+}
+
 var (
 	ErrInvalidCredentials = apperr.Unauthenticated("invalid_credentials", "Invalid email or password.")
 	ErrUnauthenticated    = apperr.Unauthenticated("unauthenticated", "Authentication required.")
@@ -62,6 +68,7 @@ type Service struct {
 	ttl      time.Duration
 	now      func() time.Time
 	newToken func() (string, error)
+	attempts AttemptLimiter
 
 	// dummyHash is compared against on every failed login where the email
 	// doesn't exist, so that path costs the same bcrypt work as a wrong
@@ -77,6 +84,7 @@ func NewService(
 	ttl time.Duration,
 	now func() time.Time,
 	newToken func() (string, error),
+	attempts AttemptLimiter,
 ) (*Service, error) {
 	dummyHash, err := hasher.Hash("amorae-timing-equalisation-dummy-password")
 	if err != nil {
@@ -91,25 +99,26 @@ func NewService(
 		ttl:       ttl,
 		now:       now,
 		newToken:  newToken,
+		attempts:  attempts,
 		dummyHash: dummyHash,
 	}, nil
 }
 
 type RegisterInput struct {
-	Email       string
-	Password    string
-	DisplayName string
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	DisplayName string `json:"display_name"`
 }
 
 type LoginInput struct {
-	Email    string
-	Password string
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type AuthResult struct {
-	Token     string
-	ExpiresAt time.Time
-	User      user.User
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	User      user.User `json:"user"`
 }
 
 // Register validates the input, hashes the password, and creates the user
@@ -176,6 +185,13 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (AuthResult
 func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, error) {
 	email := user.NormalizeEmail(input.Email)
 
+	// Checked before any database or bcrypt work, so a blocked guess costs
+	// nothing. The key is the email as typed, registered or not, so hitting
+	// the limit reveals nothing about which accounts exist.
+	if ok, retryAfter := s.attempts.Allow("login:" + email); !ok {
+		return AuthResult{}, apperr.RateLimited(retryAfter)
+	}
+
 	u, err := s.users.GetByEmail(ctx, email)
 	if err != nil {
 		if !errors.Is(err, user.ErrNotFound) {
@@ -209,6 +225,11 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 		}
 		return s.sessions.Create(ctx, session)
 	})
+	if err != nil {
+		// The transaction rolled back, so the session doesn't exist: handing
+		// out the token anyway would "log in" a user whose every request 401s.
+		return AuthResult{}, err
+	}
 
 	return AuthResult{Token: token, ExpiresAt: session.ExpiresAt, User: u}, nil
 }

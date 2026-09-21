@@ -6,12 +6,12 @@ import { getSessionToken } from "@/lib/auth/session";
 
 export async function getCurrentUser(): Promise<User> {
   const token = await getSessionToken();
-  return apiFetch<User>("/v1/users/me", { token });
+  return apiFetch<User>("/users/me", { token });
 }
 
 export async function updateProfile(displayName: string): Promise<User> {
   const token = await getSessionToken();
-  return apiFetch<User>("/v1/users/me", {
+  return apiFetch<User>("/users/me", {
     method: "PATCH",
     body: { display_name: displayName },
     token,

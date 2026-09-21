@@ -34,9 +34,9 @@ func NewHandler(svc service) *Handler {
 // "log out an already-expired session" into a 401 instead of the idempotent
 // 204 the contract promises.
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
-	r.Handle("POST /v1/auth/register", http.HandlerFunc(h.register))
-	r.Handle("POST /v1/auth/login", http.HandlerFunc(h.login))
-	r.Handle("POST /v1/auth/logout", http.HandlerFunc(h.logout))
+	r.Handle("POST /auth/register", http.HandlerFunc(h.register))
+	r.Handle("POST /auth/login", http.HandlerFunc(h.login))
+	r.Handle("POST /auth/logout", http.HandlerFunc(h.logout))
 }
 
 // authResultDTO matches AuthResult{"token","expires_at","user"} in the HTTP

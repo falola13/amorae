@@ -4,25 +4,8 @@ import { redirect } from "next/navigation";
 
 import { clearSession, getSessionToken, setSession } from "@/lib/auth/session";
 import { toFormState, type FormState } from "@/lib/forms";
+import { safeNext } from "@/lib/safe-next";
 import { login, logout, register } from "./api";
-
-// Only a same-origin path is a safe redirect target. Prefix checks alone are
-// not enough: browsers normalise "\" to "/" and strip tabs/newlines, so
-// "/\\evil.com" or "/\t/evil.com" become the off-site "//evil.com". Resolving
-// with the URL parser (which applies the same rules) and checking the origin
-// catches every variant.
-function safeNext(value: FormDataEntryValue | null): string {
-  const fallback = "/dashboard";
-  if (typeof value !== "string" || !value.startsWith("/")) return fallback;
-  const base = "http://amorae.invalid";
-  try {
-    const url = new URL(value, base);
-    if (url.origin !== base) return fallback;
-    return `${url.pathname}${url.search}${url.hash}`;
-  } catch {
-    return fallback;
-  }
-}
 
 export async function loginAction(
   _prevState: FormState,

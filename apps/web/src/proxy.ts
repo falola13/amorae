@@ -18,8 +18,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Keep the query string (e.g. the PWA's ?source=pwa, or a deep link's
+  // ?tab=...) so the user lands exactly where they were headed. The login
+  // action re-validates `next` before redirecting to it.
   const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("next", request.nextUrl.pathname);
+  loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
   return NextResponse.redirect(loginUrl);
 }
 

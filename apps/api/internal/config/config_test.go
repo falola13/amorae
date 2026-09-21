@@ -87,3 +87,31 @@ func TestLoad_BCryptCostOutOfRange(t *testing.T) {
 		t.Fatal("Load() with BCRYPT_COST=3 returned nil error")
 	}
 }
+
+func TestLoad_BFFSecretMustBeLongEnoughWhenSet(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("BFF_SECRET", "too-short")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted a 9-character BFF_SECRET")
+	}
+
+	t.Setenv("BFF_SECRET", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with BFF_SECRET unset: %v", err)
+	}
+	if cfg.BFFSecret != "" {
+		t.Errorf("BFFSecret = %q, want empty (feature off)", cfg.BFFSecret)
+	}
+}
+
+func TestLoad_MetricsDefaultsToLoopback(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load(): %v", err)
+	}
+	if cfg.MetricsAddr != "127.0.0.1:9090" {
+		t.Errorf("MetricsAddr = %q, want loopback by default", cfg.MetricsAddr)
+	}
+}
