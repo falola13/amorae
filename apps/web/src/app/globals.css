@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Design tokens, built from the brand palette in docs/BRAND.md (plum
+   #5B2A4A, background #F7F4EF, ink #24201F, soft white #FFFDFA).
+   Components use these (bg-bg, text-fg, text-accent, ...) and never raw
+   colours, so the palette lives in exactly one place. src/lib/brand.ts
+   mirrors the few values that the manifest and theme-color need. */
+@theme {
+  --color-bg: #f7f4ef;
+  --color-bg-elevated: #fffdfa;
+  --color-fg: #24201f;
+  --color-fg-muted: #6b625e;
+  --color-border: #e6dfd6;
+  --color-accent: #5b2a4a;
+  --color-accent-hover: #4a2140;
+  --color-accent-fg: #fffdfa;
+  --color-danger: #b3261e;
+  --color-danger-bg: #fbeae8;
+  --color-success: #2f6b3a;
+  --color-success-bg: #e8f2ea;
+}
+
+/* `inline` makes Tailwind reference these variables where they're used
+   instead of resolving them at build time. That's required because
+   --font-manrope and --font-inter only exist at runtime, defined by
+   next/font's class on <html> (see app/layout.tsx). */
+@theme inline {
+  --font-display: var(--font-manrope);
+  --font-sans: var(--font-inter);
+}
+
+/* Dark mode keeps the brand's warmth: ink surfaces, and the soft plum-white
+   the favicon switches to (#E9D5E1) as the accent. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #1a1716;
+    --color-bg-elevated: #24201f;
+    --color-fg: #f7f4ef;
+    --color-fg-muted: #b3aaa4;
+    --color-border: #3a3432;
+    --color-accent: #e9d5e1;
+    --color-accent-hover: #f3e6ee;
+    --color-accent-fg: #3d1b31;
+    --color-danger: #ff8a80;
+    --color-danger-bg: #3b1616;
+    --color-success: #8fd19e;
+    --color-success-bg: #16301c;
+  }
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  /* viewport-fit=cover (app/layout.tsx) lets the page run under the notch
+     and home indicator; these insets keep content clear of both. They are
+     0 everywhere else. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+@layer base {
+  /* Manrope reads best a step heavier than Tailwind's reset leaves headings. */
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+}

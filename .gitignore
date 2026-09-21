@@ -1,0 +1,27 @@
+# Environment — never commit real secrets. Each app ships a .env.example.
+.env
+.env.*
+!.env.example
+
+# Go
+apps/api/bin/
+apps/api/tmp/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+*.tsbuildinfo
+npm-debug.log*
+
+# Editors & OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

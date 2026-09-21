@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      # A real database, so the repository tests run instead of skipping.
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: amorae
+          POSTGRES_PASSWORD: amorae
+          POSTGRES_DB: amorae_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U amorae -d amorae_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      AMORAE_TEST_DATABASE_URL: postgres://amorae:amorae@localhost:5432/amorae_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      - name: Build
+        run: go build ./cmd/api ./cmd/migrate
+
+  web:
+    name: Web (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  images:
+    name: Docker images
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t amorae-api:ci apps/api
+      - run: docker build -t amorae-web:ci apps/web

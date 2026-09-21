@@ -1,0 +1,21 @@
+{
+  "name": "amorae",
+  "private": true,
+  "description": "Task runner for the Amorae monorepo. npm scripts rather than a Makefile so the same commands work on Windows, macOS and Linux.",
+  "scripts": {
+    "up": "docker compose up --build",
+    "down": "docker compose down",
+    "db": "docker compose up -d db",
+    "migrate": "cd apps/api && go run ./cmd/migrate up",
+    "migrate:down": "cd apps/api && go run ./cmd/migrate down",
+    "migrate:status": "cd apps/api && go run ./cmd/migrate status",
+    "dev:api": "cd apps/api && go run ./cmd/api",
+    "dev:web": "npm --prefix apps/web run dev",
+    "test:api": "cd apps/api && go test ./...",
+    "vet:api": "cd apps/api && go vet ./...",
+    "lint:web": "npm --prefix apps/web run lint",
+    "typecheck:web": "npm --prefix apps/web run typecheck",
+    "build:web": "npm --prefix apps/web run build",
+    "check": "npm run vet:api && npm run test:api && npm run lint:web && npm run typecheck:web && npm run build:web"
+  }
+}

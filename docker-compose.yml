@@ -1,0 +1,76 @@
+# Full local stack: Postgres → one-shot migrations → API → web.
+#
+#   docker compose up --build        # everything, on http://localhost:3000
+#   docker compose up -d db          # just the database, for running the apps natively
+#
+# Postgres is published on 5434 (override with AMORAE_DB_PORT), not 5432, so it
+# can sit alongside other Postgres instances already running on the host.
+name: amorae
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: amorae
+      POSTGRES_PASSWORD: amorae
+      POSTGRES_DB: amorae
+    ports:
+      - "${AMORAE_DB_PORT:-5434}:5432"
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql/<major>/, so the
+      # volume mounts the parent rather than the pre-18 .../data path.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amorae -d amorae"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Migrations run as their own step, once, before any API replica starts.
+  # Running them inside the API process would race when the API is scaled out.
+  migrate:
+    build: ./apps/api
+    command: ["/app/migrate", "up"]
+    environment:
+      DATABASE_URL: postgres://amorae:amorae@db:5432/amorae?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: ./apps/api
+    environment:
+      APP_ENV: production
+      HTTP_ADDR: ":8088"
+      DATABASE_URL: postgres://amorae:amorae@db:5432/amorae?sslmode=disable
+      LOG_LEVEL: info
+    ports:
+      - "8088:8088"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # The runtime image is distroless (no shell, no curl), so the binary
+      # checks itself.
+      test: ["CMD", "/app/api", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build: ./apps/web
+    environment:
+      API_URL: http://api:8088
+      # Served over plain http on localhost here; set true behind TLS.
+      COOKIE_SECURE: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:

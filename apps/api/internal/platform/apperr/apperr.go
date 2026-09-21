@@ -1,0 +1,96 @@
+// Package apperr defines the error type every layer above the database uses
+// to describe what went wrong. Handlers never see a raw pgx or sql error and
+// never send err.Error() to a client — they see a Kind, which httpx maps to
+// exactly one HTTP status in exactly one place.
+package apperr
+
+import "errors"
+
+// Kind classifies an error for the purpose of choosing an HTTP status. It
+// deliberately has nothing to do with HTTP itself, so this package stays
+// importable from services and repositories that must never import net/http.
+type Kind int
+
+const (
+	// KindInternal is the zero value on purpose: an error that forgets to set
+	// a Kind fails closed as "internal" (500), never as something more
+	// permissive like NotFound or Invalid.
+	KindInternal Kind = iota
+	KindInvalid
+	KindUnauthenticated
+	KindForbidden
+	KindNotFound
+	KindConflict
+)
+
+// Error is the application's error type. Code is a stable machine-readable
+// string clients can branch on; Message is safe to show a user; Fields
+// carries per-field validation messages; Err is the underlying cause, kept
+// for logging and Unwrap but never rendered.
+type Error struct {
+	Kind    Kind
+	Code    string
+	Message string
+	Fields  map[string]string
+	Err     error
+}
+
+func (e *Error) Error() string {
+	if e.Err != nil {
+		return e.Code + ": " + e.Message + ": " + e.Err.Error()
+	}
+	return e.Code + ": " + e.Message
+}
+
+func (e *Error) Unwrap() error {
+	return e.Err
+}
+
+// As reports whether err is (or wraps) an *Error, mirroring the errors.As
+// contract with a signature that doesn't force call sites to declare a
+// target variable first.
+func As(err error) (*Error, bool) {
+	var target *Error
+	if errors.As(err, &target) {
+		return target, true
+	}
+	return nil, false
+}
+
+func Invalid(code, message string) *Error {
+	return &Error{Kind: KindInvalid, Code: code, Message: message}
+}
+
+// Validation builds the one Invalid error every handler returns when field
+// checks fail, so every 400 body in the API has the same code and message
+// regardless of which fields tripped.
+func Validation(fields map[string]string) *Error {
+	return &Error{
+		Kind:    KindInvalid,
+		Code:    "validation_failed",
+		Message: "Some fields are invalid.",
+		Fields:  fields,
+	}
+}
+
+func Unauthenticated(code, message string) *Error {
+	return &Error{Kind: KindUnauthenticated, Code: code, Message: message}
+}
+
+func Forbidden(code, message string) *Error {
+	return &Error{Kind: KindForbidden, Code: code, Message: message}
+}
+
+func NotFound(code, message string) *Error {
+	return &Error{Kind: KindNotFound, Code: code, Message: message}
+}
+
+func Conflict(code, message string) *Error {
+	return &Error{Kind: KindConflict, Code: code, Message: message}
+}
+
+// Internal wraps an unexpected error. The wrapped error is never shown to a
+// client (see httpx.Error) — it exists so the caller can log it.
+func Internal(err error) *Error {
+	return &Error{Kind: KindInternal, Code: "internal_error", Message: "Something went wrong. Please try again.", Err: err}
+}
