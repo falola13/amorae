@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -65,6 +66,18 @@ func (r *PostgresRepository) Update(ctx context.Context, u User) (User, error) {
 		return User{}, ErrNotFound
 	}
 	return u, nil
+}
+func (r *PostgresRepository) SetLastLoginAt(ctx context.Context, id uuid.UUID, at time.Time) error {
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		UPDATE users SET last_login_at = $2 WHERE id = $1
+	`, id, at)
+	if err != nil {
+		return fmt.Errorf("writing last_login_at: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *PostgresRepository) scanOne(ctx context.Context, query string, arg any) (User, error) {

@@ -14,12 +14,17 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ next }: LoginFormProps) {
-  const [state, formAction, pending] = useActionState<FormState, FormData>(loginAction, idleFormState);
+  const [state, formAction, pending] = useActionState<FormState, FormData>(
+    loginAction,
+    idleFormState,
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="next" value={next} />
-      {state.status === "error" && state.message ? <Alert message={state.message} /> : null}
+      {state.status === "error" && state.message ? (
+        <Alert message={state.message} />
+      ) : null}
       <Input
         label="Email"
         name="email"
@@ -44,7 +49,10 @@ export function LoginForm({ next }: LoginFormProps) {
       </Button>
       <p className="text-center text-sm text-fg-muted">
         Need an account?{" "}
-        <Link href="/register" className="font-medium text-accent hover:underline">
+        <Link
+          href="/register"
+          className="font-medium text-accent hover:underline"
+        >
           Register
         </Link>
       </p>

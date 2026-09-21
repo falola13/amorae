@@ -41,6 +41,14 @@ func (f *fakeRepository) Update(_ context.Context, u User) (User, error) {
 	return u, nil
 }
 
+func (f *fakeRepository) UpdateLoginTime(_ context.Context, u User) (User, error) {
+	if _, ok := f.users[u.ID]; !ok {
+		return User{}, ErrNotFound
+	}
+	f.users[u.ID] = u
+	return u, nil
+}
+
 func fixedNow() time.Time {
 	return time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 }

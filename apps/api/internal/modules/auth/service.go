@@ -24,6 +24,7 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, u user.User) (user.User, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
+	SetLastLoginAt(ctx context.Context, id uuid.UUID, at time.Time) error
 }
 
 type SessionRepository interface {
@@ -193,15 +194,21 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 		return AuthResult{}, apperr.Internal(fmt.Errorf("generating token: %w", err))
 	}
 
+	now := s.now()
 	session := Session{
 		TokenHash: hashToken(token),
 		UserID:    u.ID,
 		CreatedAt: s.now(),
 		ExpiresAt: s.now().Add(s.ttl),
 	}
-	if err := s.sessions.Create(ctx, session); err != nil {
-		return AuthResult{}, err
-	}
+
+	err = s.tx.InTx(ctx, func(ctx context.Context) error {
+		if err := s.users.SetLastLoginAt(ctx, u.ID, now); err != nil {
+
+			return err
+		}
+		return s.sessions.Create(ctx, session)
+	})
 
 	return AuthResult{Token: token, ExpiresAt: session.ExpiresAt, User: u}, nil
 }

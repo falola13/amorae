@@ -24,7 +24,10 @@ function safeNext(value: FormDataEntryValue | null): string {
   }
 }
 
-export async function loginAction(_prevState: FormState, formData: FormData): Promise<FormState> {
+export async function loginAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const next = safeNext(formData.get("next"));
@@ -43,7 +46,10 @@ export async function loginAction(_prevState: FormState, formData: FormData): Pr
   redirect(next);
 }
 
-export async function registerAction(_prevState: FormState, formData: FormData): Promise<FormState> {
+export async function registerAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const displayName = String(formData.get("display_name") ?? "");

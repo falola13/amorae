@@ -37,6 +37,7 @@ type User struct {
 	PasswordHash string `json:"-"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	LastLoginAt  *time.Time
 }
 
 // New validates email and displayName and constructs a User ready to

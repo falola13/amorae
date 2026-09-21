@@ -54,6 +54,16 @@ func (f *fakeSessionRepo) Create(_ context.Context, s Session) error {
 	f.byHash[string(s.TokenHash)] = s
 	return nil
 }
+func (f *fakeUserRepo) SetLastLoginAt(_ context.Context, id uuid.UUID, at time.Time) error {
+	for email, u := range f.byEmail {
+		if u.ID == id {
+			u.LastLoginAt = &at
+			f.byEmail[email] = u
+			return nil
+		}
+	}
+	return user.ErrNotFound
+}
 
 func (f *fakeSessionRepo) GetByTokenHash(_ context.Context, hash []byte) (Session, error) {
 	s, ok := f.byHash[string(hash)]
