@@ -1,0 +1,2141 @@
+# Amorae: Functional Requirements (Software Requirements Specification)
+
+| | |
+|---|---|
+| **Document ID** | AMR-REQ-02 |
+| **Version** | 3.0 |
+| **Status** | Draft for review |
+| **Owner** | Engineering |
+| **Last updated** | 2026-09-22 |
+
+---
+
+## 1. Introduction
+
+### 1.1 Purpose
+
+This document specifies what the Amorae system shall do: every functional requirement (`FR`),
+the business rules several requirements share (`BR`), the data the system holds, the external
+interfaces it exposes and consumes, and the traceability between requirements, goals and the
+API. It is written to the structure and quality bar of ISO/IEC/IEEE 29148 (a Software
+Requirements Specification): each requirement is necessary, singular, unambiguous, verifiable,
+feasible, and traceable to a product goal.
+
+This is a **rewrite**, not an update, of the v2.0 "Engineering Specification" that previously
+lived at this path. v2.0 was written before most of the code existed. This version keeps every
+substantive functional requirement, business rule, data model detail, scheduler rule and AI rule
+that v2.0 defined, and reconciles all of it against the system as actually built, as verified on
+2026-09-22. Where the code and v2.0 disagree, the disagreement is recorded, not silently resolved
+in either direction (per the definition of done in [`README.md`](./README.md) §4).
+
+### 1.2 Scope
+
+In scope: functional behaviour of the Amorae PWA (Next.js BFF) and its Go API, module by module,
+for MVP and the Post-MVP AI phase. Out of scope, and covered elsewhere: *why* the product exists
+and its release plan ([01](./01-product-requirements.md)); performance, security, privacy,
+accessibility, compatibility, offline and operational targets
+([03](./03-non-functional-requirements.md)); visual design, tokens and the screen inventory
+([04](./04-design-specification.md)); the register of decisions and open questions
+([05](./05-decisions-and-open-questions.md)); *how* the system is built, module boundaries and
+request lifecycle ([`../ARCHITECTURE.md`](../ARCHITECTURE.md)); the HTTP contract itself
+([`../API.md`](../API.md)); and architecture decision records ([`../adr/`](../adr/)).
+
+### 1.3 Audience
+
+Engineering (implementation and test authoring), Product (acceptance and prioritisation), and
+Design (cross-checking behaviour against [04](./04-design-specification.md)). Anyone citing a
+requirement elsewhere should cite its permanent ID, not a section number.
+
+### 1.4 Conventions
+
+This document follows the identifier scheme, requirement-writing rules (keywords, EARS patterns,
+the quality bar), attribute set (Priority, Release, Implementation status, Verification) and
+definition of done set out in [`README.md`](./README.md) §2–§4. In short:
+
+- **Shall** is mandatory, **should** is recommended, **may** is optional.
+- Every requirement carries Priority (Must/Should/Could/Won't), Release (MVP/Post-MVP),
+  Implementation status (Implemented/Partial/Mock only/Not started) and Verification
+  (Test/Demo/Inspection/Analysis).
+- Acceptance criteria are Given/When/Then, numbered `.AC1`, `.AC2`, … under their requirement.
+- A requirement that cannot proceed until a `Q-NN` is answered says so: *Blocked by Q-NN*.
+- IDs (`FR-<MODULE>-NNN`, `BR-<MODULE>-NN`) are permanent; a withdrawn requirement keeps its ID
+  with status **Withdrawn** and a reason, never reused or renumbered.
+
+### 1.5 References
+
+- [`./01-product-requirements.md`](./01-product-requirements.md) — vision, pillars, principles, MVP scope, roadmap
+- [`./03-non-functional-requirements.md`](./03-non-functional-requirements.md) — performance, security, privacy, accessibility, offline and operational targets
+- [`./04-design-specification.md`](./04-design-specification.md) — tokens, components, screen inventory
+- [`./05-decisions-and-open-questions.md`](./05-decisions-and-open-questions.md) — the single `DEC`/`Q` register
+- [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — module layout, request lifecycle, rate limiting, scaling path
+- [`../API.md`](../API.md) — the HTTP contract: conventions, envelopes, error codes, built and proposed endpoints
+- [`../adr/`](../adr/) — architecture decision records
+
+---
+
+## 2. Overall description
+
+### 2.1 Product perspective
+
+Amorae is a new, standalone product; it does not integrate with or replace another system. It is
+a mobile-first Progressive Web App used by exactly two people — a couple — who share one private
+space. There is no public surface: nothing is visible to anyone outside the couple.
+
+System context:
+
+```text
+   Browser (PWA, or installed to the home screen)
+        |  HTTPS; httpOnly session cookie "amorae_session" (DEC-02)
+        v
+   Next.js BFF  —  same-origin /api/v1/*                    (DEC-02, DEC-10)
+        |  Authorization: Bearer <opaque token>, added server-side
+        v
+   Go API  —  /v1/*                                          (DEC-01, DEC-03)
+        |
+        v
+   PostgreSQL  (the only stateful dependency)                (DEC-20)
+        ^
+        |  background worker (cmd/worker): hourly tick, reads/writes the
+        |  same Postgres, no separate queue or cache                (Q-16)
+        |
+        +--> Web Push services (VAPID)        — reminders, alerts    (Q-16, FR-NOTF)
+        +--> Email provider                   — reset, verification  (Q-04)
+        +--> Object storage (S3-compatible)    — memory photos        (Q-06)
+        +--> AI provider (Post-MVP, optional)  — behind an interface  (Q-18, DEC-15)
+```
+
+The browser never calls the Go API directly (DEC-02): every request the client makes goes to the
+Next.js BFF at `/api/v1/*`, which proxies it to the Go API's `/v1/*` and refuses any path outside
+`/v1` (DEC-10). *How* each of these pieces is built — the module layout, the request lifecycle
+through the BFF and the API, and the scaling path — is [`../ARCHITECTURE.md`](../ARCHITECTURE.md),
+not repeated here.
+
+### 2.2 User classes
+
+| Class | Description |
+|---|---|
+| **Visitor** | Not signed in. Can read the marketing/welcome screens, Terms and Privacy pages, and register or log in. |
+| **Unpaired user** | Signed in, no couple yet. Can manage their own profile and create or join a couple. |
+| **Partner** | Signed in and a member of a paired couple. The two partners are symmetric: there is no "partner A"/"partner B" distinction, no owner role, and no elevated permissions between them. |
+| **This week's setter** | A temporal role, not an account type: whichever partner is due to set prayer points this week, computed by BR-PRAY-01. Both partners hold this role in alternating weeks. |
+
+### 2.3 Design constraints
+
+These decisions from [05](./05-decisions-and-open-questions.md) bound every requirement below:
+
+- **DEC-01** — the API is a single Go binary, a modular monolith; feature modules depend only on
+  interfaces they declare, wired together in one composition root. No requirement here should
+  assume a separately deployable service per feature.
+- **DEC-02** — the browser never calls Go directly; sessions are opaque server-side tokens behind
+  the Next.js BFF, not JWTs, with no refresh endpoint.
+- **DEC-03** — the API is built stdlib-first (router, hand-written SQL over pgx, goose migrations,
+  stdlib testing); requirements should not presuppose a specific ORM or query-generation tool.
+- **DEC-10** — the Go API is served under `/v1`; the browser only ever calls same-origin
+  `/api/v1/*`.
+- **DEC-20** — there is no Redis, cache or queue in MVP; Postgres is the only stateful dependency,
+  including for the background worker (Q-16) and rate limiting (Q-13).
+
+### 2.4 Assumptions and dependencies
+
+Assumptions, constraints and dependencies are stated once, in
+[01-product-requirements.md](./01-product-requirements.md) §9, alongside the product principles
+(§6) and MVP scope (§7), and are not repeated here. Every functional requirement in this
+document assumes those principles hold, in particular: private by default, a two-person
+experience, and a product that works fully with AI disabled (01 §6).
+
+---
+
+## 3. Functional requirements
+
+One subsection per module, in the order `AUTH`, `ACCT`, `PAIR`, `PRAY`, `EVT`, `CAL`, `GOAL`,
+`CHAL`, `JRNL`, `APPR`, `MEM`, `DATE`, `NOTF`, `PWA`, `AI`. Each module opens with a short
+description, the pillar(s) it belongs to, the product goal(s) it serves (from
+[01](./01-product-requirements.md)'s five: **G-01** Activation/pairing, **G-02** Faith rhythm,
+**G-03** Shared life planning/growth, **G-04** Connection and memory, **G-05**
+Trust/privacy/reliability), and the `DEC`/`Q` entries that shape it. Requirements are numbered
+consecutively within the module, starting at 001.
+
+### 3.1 AUTH — Authentication
+
+Sign-up, sign-in, session management and account recovery. Cross-cutting: every other module
+depends on it, but it is not one of the five product pillars itself.
+
+**Goals:** G-01 (Activation/pairing), G-05 (Trust/privacy/reliability)
+**Related:** DEC-02, DEC-06, DEC-11, DEC-19; Q-02, Q-03, Q-04, Q-05, Q-10, Q-20
+
+**Business rules**
+
+- **BR-AUTH-01** — Password policy: at least 10 characters, counted as Unicode code points, no
+  composition rules, maximum 72 bytes while bcrypt is the hash (DEC-06). Applied identically by
+  the web client and the API. Q-02 tracks a possible move to argon2id, which would remove the
+  72-byte cap.
+- **BR-AUTH-02** — Login throttling: 10 attempts per email per 15 minutes, checked before any
+  password hashing and applied whether or not the account exists, plus 20 requests per client IP
+  per minute across `/v1/auth/*` (DEC-11). Both return 429 with `Retry-After`.
+- **BR-AUTH-03** — Authentication failures never reveal whether an account exists: a generic
+  `invalid_credentials` error and equalised response timing (a dummy bcrypt comparison runs for
+  an unknown email) make a wrong password and an unknown email indistinguishable.
+
+#### FR-AUTH-001 Register
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall let a visitor register a new account with an email address, a password and a
+display name.
+
+**Acceptance criteria**
+
+- **FR-AUTH-001.AC1** Given a visitor submits a unique, valid email, a password meeting
+  BR-AUTH-01, and a display name of 1–50 trimmed characters, when they submit registration, then
+  the API shall create the account, start a session, and respond 201 with the new user and an
+  opaque session token.
+- **FR-AUTH-001.AC2** Given the email is already registered, when the visitor submits, then the
+  API shall respond 409 `email_taken` and shall not create a second account.
+- **FR-AUTH-001.AC3** Given the email, password or display name fails validation, when the
+  visitor submits, then the API shall respond 400 `validation_failed` with a per-field message
+  and shall not create an account.
+
+#### FR-AUTH-002 Login
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall let a registered user start a session with their email and password.
+
+**Acceptance criteria**
+
+- **FR-AUTH-002.AC1** Given correct credentials for an existing account, when the user submits
+  them, then the API shall respond 200 with a new opaque session token and the user's profile.
+- **FR-AUTH-002.AC2** Given an unknown email or an incorrect password, when the user submits
+  credentials, then the API shall respond 401 `invalid_credentials` per BR-AUTH-03, so a caller
+  cannot tell which was wrong or whether the account exists.
+
+#### FR-AUTH-003 Logout
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall let a signed-in user end their session on request.
+
+**Acceptance criteria**
+
+- **FR-AUTH-003.AC1** Given a valid session, when the user logs out, then the API shall delete
+  the session row and respond 204.
+- **FR-AUTH-003.AC2** Given a session that no longer exists (already logged out, expired, or
+  never valid), when logout is called with its token, then the API shall still respond 204
+  (idempotent) rather than an error.
+
+#### FR-AUTH-004 Absolute session lifetime
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall expire every session no later than 30 days after it was created (DEC-02), with
+no refresh endpoint.
+
+**Acceptance criteria**
+
+- **FR-AUTH-004.AC1** Given a session older than 30 days, when it is used on any authenticated
+  endpoint, then the API shall respond 401 `unauthenticated` and the client shall route the user
+  to sign in again.
+
+#### FR-AUTH-005 Idle session expiry
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started — Blocked by Q-03 | Test |
+
+The system shall also expire a session after 14 days of inactivity, independent of the 30-day
+absolute limit (Q-03 recommendation).
+
+**Acceptance criteria**
+
+- **FR-AUTH-005.AC1** Given a session with no use for 14 days, when it is next used, then the API
+  shall respond 401 `unauthenticated` even though the absolute lifetime has not elapsed.
+
+#### FR-AUTH-006 Password policy enforcement
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall reject a password that does not meet BR-AUTH-01 wherever a password is set.
+
+**Acceptance criteria**
+
+- **FR-AUTH-006.AC1** Given a password under 10 Unicode code points, when it is submitted at
+  registration, then the API shall respond 400 `validation_failed` with `fields.password`.
+- **FR-AUTH-006.AC2** Given a password whose UTF-8 encoding exceeds 72 bytes, when it is
+  submitted, then the API shall respond 400 `validation_failed` with `fields.password` (Q-02
+  tracks removing this cap).
+
+#### FR-AUTH-007 Login throttling
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall rate-limit authentication attempts per BR-AUTH-02.
+
+**Acceptance criteria**
+
+- **FR-AUTH-007.AC1** Given 10 failed login attempts for one email within 15 minutes, when an
+  11th attempt is made, then the API shall respond 429 `rate_limited` with `Retry-After`, whether
+  or not the account exists.
+- **FR-AUTH-007.AC2** Given 20 requests from one client IP to any `/v1/auth/*` endpoint within one
+  minute, when a further request is made, then the API shall respond 429 `rate_limited`.
+
+#### FR-AUTH-008 Password reset
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-04 | Test |
+
+The system shall let a user reset a forgotten password through a time-limited emailed link.
+
+**Acceptance criteria**
+
+- **FR-AUTH-008.AC1** Given a user requests a reset for a registered email, when the request is
+  submitted, then the system shall send a single-use, time-limited reset link and shall not
+  reveal whether the email is registered.
+- **FR-AUTH-008.AC2** Given a valid, unused, unexpired reset link, when the user sets a new
+  password meeting BR-AUTH-01, then the API shall update the password hash and invalidate every
+  existing session for that user.
+
+#### FR-AUTH-009 Email verification
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started — Blocked by Q-05 | Test |
+
+The system shall send a verification email on registration and shall require a verified address
+before it can be used for password reset (Q-05).
+
+**Acceptance criteria**
+
+- **FR-AUTH-009.AC1** Given a new account, when registration completes, then the system shall
+  send a verification email without blocking use of the app.
+- **FR-AUTH-009.AC2** Given an unverified email, when the user requests a password reset, then
+  the system shall decline and prompt the user to verify the address first.
+
+#### FR-AUTH-010 Minimum age confirmation at sign-up
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-10 | Test |
+
+The system shall require a visitor to confirm they are at least 18 years old before an account is
+created (Q-10).
+
+**Acceptance criteria**
+
+- **FR-AUTH-010.AC1** Given the age-confirmation control is not checked, when the visitor submits
+  registration, then the client shall block submission, and the API shall reject the request if
+  it is sent anyway.
+
+#### FR-AUTH-011 Acceptance of Terms and Privacy Policy at sign-up
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Partial | Demo |
+
+The system shall record a visitor's acceptance of the Terms of Service and Privacy Policy as part
+of registration.
+
+**Acceptance criteria**
+
+- **FR-AUTH-011.AC1** Given the registration screen, when it is displayed, then it shall show a
+  "by continuing you agree" statement linking to `/terms` and `/privacy`, both opening in a new
+  tab so filled-in fields are not lost.
+- **FR-AUTH-011.AC2** Given a visitor completes registration, when the account is created, then
+  the system shall record that acceptance (who, when, which document version) as a distinct,
+  queryable event, not only inferred from having pressed Continue.
+
+*Status note:* only AC1 exists today — the linked copy on the registration screen. AC2 (a
+recorded acceptance event) is not built, hence **Partial** rather than **Implemented**.
+
+#### FR-AUTH-012 Explicit consent for faith content
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-20 | Test |
+
+The system shall obtain a user's explicit consent to process faith content, separate from
+acceptance of the Terms, before that content can be stored (NFR-PRIV; where it is asked is
+Q-20).
+
+**Acceptance criteria**
+
+- **FR-AUTH-012.AC1** Given the consent control is presented unticked, when the user does not
+  tick it, then the system shall not treat Terms acceptance as consent to process faith content.
+- **FR-AUTH-012.AC2** Given the user consents, when consent is recorded, then the system shall
+  store who consented, when, and which version of the privacy policy they saw.
+
+### 3.2 ACCT — Account
+
+Profile, credential changes, deletion and export. The user's relationship with Amorae as a
+service, separate from their relationship with their partner.
+
+**Goals:** G-05 (Trust/privacy/reliability), G-01 (Activation/pairing)
+**Related:** DEC-05, DEC-07; Q-03, Q-05, Q-09, Q-11, Q-19
+
+#### FR-ACCT-001 View and edit profile
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall let a signed-in user view and edit their display name and timezone.
+
+**Acceptance criteria**
+
+- **FR-ACCT-001.AC1** Given a signed-in user, when they request their profile, then the API shall
+  return `display_name`, `timezone`, and the read-only fields (`id`, `email`, `created_at`,
+  `updated_at`).
+- **FR-ACCT-001.AC2** Given a display name of 1–50 trimmed characters, when the user saves it,
+  then the API shall update it and return the updated profile.
+- **FR-ACCT-001.AC3** Given a timezone that is not a valid IANA zone name, when the user attempts
+  to save it, then the API shall respond 400 `validation_failed` with `fields.timezone` and leave
+  the stored value unchanged.
+
+#### FR-ACCT-002 Change sign-in email with current password
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Test |
+
+The system shall let a signed-in user change the account's email address by re-entering their
+current password (DEC-07).
+
+**Acceptance criteria**
+
+- **FR-ACCT-002.AC1** Given the correct current password and a new email not already in use, when
+  the user submits the change, then the API shall update the email and return the updated
+  profile.
+- **FR-ACCT-002.AC2** Given an incorrect current password, when the change is submitted, then the
+  API shall respond 400 `validation_failed` with `fields.current_password`, never 401 (DEC-07),
+  so the client does not mistake it for session expiry.
+- **FR-ACCT-002.AC3** Given a new email already registered to another account, when the change is
+  submitted, then the API shall respond 409 `email_taken`.
+
+#### FR-ACCT-003 Two-step email change confirmation and old-address notice
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started — Blocked by Q-05 | Test |
+
+The system shall require confirmation of a new email address before it takes effect, and shall
+notify the old address when a change is made (Q-05).
+
+**Acceptance criteria**
+
+- **FR-ACCT-003.AC1** Given a user submits an email change, when the request succeeds, then the
+  system shall email a confirmation link to the new address and shall not switch the sign-in
+  email until that link is used.
+- **FR-ACCT-003.AC2** Given an email change is confirmed, when it takes effect, then the system
+  shall also send a notice to the previous address.
+
+#### FR-ACCT-004 Change password with current password
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started | Test |
+
+The system shall let a signed-in user change their password by re-entering their current
+password (Q-03 recommendation, matching DEC-07's email-change pattern).
+
+**Acceptance criteria**
+
+- **FR-ACCT-004.AC1** Given the correct current password and a new password meeting BR-AUTH-01,
+  when the user submits the change, then the API shall update the password hash and invalidate
+  every other active session for that user.
+- **FR-ACCT-004.AC2** Given an incorrect current password, when the change is submitted, then the
+  API shall respond 400 `validation_failed` with `fields.current_password`.
+
+#### FR-ACCT-005 Account deletion with re-authentication
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let a signed-in user permanently delete their account after re-authenticating
+(Q-03 recommendation).
+
+**Acceptance criteria**
+
+- **FR-ACCT-005.AC1** Given a signed-in user requests deletion and confirms the in-app warning,
+  when the request is submitted, then the system shall remove the user from their couple, delete
+  their authored content per the retention rule in §4(c), and respond 204.
+- **FR-ACCT-005.AC2** Given account deletion is requested, when the confirmation is shown, then
+  the client shall require the current password before submitting, in addition to the
+  confirmation dialog.
+
+*Status note:* today's mock (`DELETE /v1/users/me`) deletes on an in-app confirmation dialog
+alone; AC2's password re-entry does not exist in the mock or in Go. Status is **Mock only**
+because the endpoint and the confirmation UI exist; the re-authentication step is a gap recorded
+here rather than as a separate requirement.
+
+#### FR-ACCT-006 Data export
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started | Test |
+
+The system shall let a signed-in user export their personal and couple-shared content in a
+machine-readable format.
+
+**Acceptance criteria**
+
+- **FR-ACCT-006.AC1** Given a user requests an export, when it is generated, then the system
+  shall produce a JSON file containing every entity the user owns or co-owns, using the same
+  field names as the API contract.
+- **FR-ACCT-006.AC2** Given an export is requested, when it is delivered, then it shall exclude
+  the other partner's account credentials and include only content the requesting user is
+  entitled to see.
+
+#### FR-ACCT-007 Sign-out clears local signed-in state
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The client shall remove all locally held signed-in state, including any queued offline changes,
+when a user signs out.
+
+**Acceptance criteria**
+
+- **FR-ACCT-007.AC1** Given a user signs out, when sign-out completes, then the client shall
+  clear the in-memory query cache and delete any saved offline changes for that user from local
+  storage (DEC-05).
+- **FR-ACCT-007.AC2** Given a user signs out on a shared device, when they or someone else next
+  opens the app, then no content or queued write from the previous session shall be visible or
+  resumable.
+
+#### FR-ACCT-008 Active sessions and sign out other devices
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started — Blocked by Q-19 | Test |
+
+The system shall let a signed-in user see their own active sessions and end every session other
+than the current one.
+
+**Acceptance criteria**
+
+- **FR-ACCT-008.AC1** Given a user with sessions on several devices, when they open their account
+  security settings, then the system shall list each of their own active sessions with its
+  creation time and last use, and never show the partner's sessions.
+- **FR-ACCT-008.AC2** Given the user chooses "sign out other devices", when it completes, then
+  every session except the current one shall be deleted and shall respond 401 on next use.
+
+---
+
+### 3.3 PAIR — Couple pairing
+
+Creating a couple, inviting a partner, joining, and the couple's own shared profile. The gateway
+to every other module: nothing couple-scoped exists until two people are paired.
+
+**Goals:** G-01 (Activation/pairing), G-05 (Trust/privacy/reliability)
+**Related:** DEC-08, DEC-12, DEC-19; Q-07, Q-08, Q-09
+
+**Business rules**
+
+- **BR-PAIR-01** — A couple has exactly two members, and a user belongs to at most one couple in
+  MVP (DEC-12); enforced by `unique(couple_id, user_id)` and `unique(user_id)`.
+- **BR-PAIR-02** — An invite code is 3 letters and 3 digits, stored as `ABC123` and shown as
+  `ABC-123` (DEC-08).
+- **BR-PAIR-03** — An invite code expires 7 days after issue; a couple has one active code at a
+  time, and regenerating a code invalidates the previous one (Q-08 recommendation).
+- **BR-PAIR-04** — A request for a resource belonging to another couple returns 404, never 403
+  (DEC-19). This rule is shared by every couple-scoped module (§3.5–§3.12).
+
+#### FR-PAIR-001 Create couple
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Partial | Test |
+
+The system shall let an unpaired user create a couple, becoming its first member, and issue a
+fresh invite code.
+
+**Acceptance criteria**
+
+- **FR-PAIR-001.AC1** Given an unpaired user, when they create a couple, then the API shall
+  respond 201 with the new couple (the caller as its only member so far) and an invite code valid
+  per BR-PAIR-02/BR-PAIR-03.
+- **FR-PAIR-001.AC2** Given a user who already belongs to a couple, when they attempt to create
+  another, then the API shall reject the request (BR-PAIR-01).
+
+#### FR-PAIR-002 Share invite code and link
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Partial | Demo |
+
+The system shall present the invite code and a shareable join link on the couple's waiting screen
+until a partner joins.
+
+**Acceptance criteria**
+
+- **FR-PAIR-002.AC1** Given a couple with one member, when that member views their couple screen,
+  then the client shall display the invite code formatted `ABC-123` and a link that pre-fills the
+  code on the join screen.
+
+#### FR-PAIR-003 Join couple by code
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Partial | Test |
+
+The system shall let a second, unpaired user join an existing couple by submitting its invite
+code.
+
+**Acceptance criteria**
+
+- **FR-PAIR-003.AC1** Given a valid, unexpired code for a couple with one member, when a
+  different unpaired user submits it, then the API shall add them as the second member and
+  respond 200 with the couple, now showing both partners.
+- **FR-PAIR-003.AC2** Given a code that does not match any active invite, when it is submitted,
+  then the API shall respond 400 `validation_failed` with `fields.code`.
+- **FR-PAIR-003.AC3** Given a code for a couple that already has two members, when it is
+  submitted, then the API shall respond 409 without adding a third member.
+
+#### FR-PAIR-004 Invite expiry and attempt limits
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-08 | Test |
+
+The system shall expire an invite code and limit join attempts per BR-PAIR-03.
+
+**Acceptance criteria**
+
+- **FR-PAIR-004.AC1** Given a code more than 7 days old, when it is submitted, then the API shall
+  reject it as expired even if it was never used.
+- **FR-PAIR-004.AC2** Given repeated incorrect join attempts from one user or one IP, when a
+  threshold is crossed, then the API shall rate-limit further attempts.
+
+#### FR-PAIR-005 Edit couple profile
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Partial | Test |
+
+The system shall let either partner set the couple's display name and relationship start date.
+
+**Acceptance criteria**
+
+- **FR-PAIR-005.AC1** Given a paired couple, when either partner submits a name and/or a start
+  date in `YYYY-MM-DD` form, then the API shall update the couple record and return it to both
+  partners.
+
+*Contract note:* the in-progress Go couples module registers `PATCH /v1/couples/me`, hence
+**Partial**. [`../API.md`](../API.md) lists it under "implemented by the web mock", but the mock
+adapter (`apps/web/src/lib/api/mock/adapter.ts`) has no handler for it; either the mock gains one
+or API.md is corrected when the Go endpoint lands.
+
+#### FR-PAIR-006 Set own role label
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Partial | Test |
+
+The system shall let a partner set their own 1–32 character role label (for example "Husband"),
+shown to their partner but carrying no permission.
+
+**Acceptance criteria**
+
+- **FR-PAIR-006.AC1** Given a signed-in partner, when they submit a label of 1–32 characters,
+  then the API shall store it against their membership and it shall appear on their partner's
+  couple screen.
+
+*Contract note:* as with FR-PAIR-005, `PATCH /v1/couples/role` is registered in the in-progress
+Go couples module but has no mock handler, although API.md lists it as mock-implemented.
+
+#### FR-PAIR-007 Onboarding flags
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Partial | Test |
+
+The system shall track, per person, whether they have completed the install and
+notification-permission onboarding steps, and derive the couple step from membership itself.
+
+**Acceptance criteria**
+
+- **FR-PAIR-007.AC1** Given a signed-in partner, when they complete the install or notifications
+  step, then the API shall persist that flag against their own membership row, independent of
+  their partner's progress.
+- **FR-PAIR-007.AC2** Given a request sets the couple flag directly, when it is processed, then
+  the API shall ignore the submitted value and always report `couple: true` once the caller
+  belongs to a couple.
+
+#### FR-PAIR-008 Leave couple
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-09 | Test |
+
+The system shall let a partner leave their couple, dissolving it for both members per the Q-09
+recommendation.
+
+**Acceptance criteria**
+
+- **FR-PAIR-008.AC1** Given a partner requests to leave, when they confirm, then the system shall
+  end the couple for both members, grant each 30 days of read-only access and export, and then
+  delete the couple's shared content.
+- **FR-PAIR-008.AC2** Given a couple has dissolved this way, when either former partner signs in
+  during the 30-day window, then they shall be able to read and export shared content but not add
+  to it.
+
+### 3.4 PRAY — Weekly prayer
+
+The signature Faith feature: an alternating weekly rhythm of shared prayer points, published by
+whichever partner is due, completed independently by each. The most logic-heavy module; it must
+be deterministic and idempotent, and AI is never involved in whose turn it is.
+
+**Goals:** G-02 (Faith rhythm), G-05 (Trust/privacy/reliability)
+**Related:** DEC-18, DEC-19; Q-07, Q-16
+
+**Business rules**
+
+- **BR-PRAY-01** — The setter for a week is `members[week_index % 2]`, where members are ordered
+  by `joined_at` and `week_index` counts whole weeks since the couple's first prayer week. The
+  result is computed once, at week creation, and stored (`setter_user_id`), so it never shifts
+  retroactively (DEC-18).
+- **BR-PRAY-02** — A prayer week starts Sunday 00:00 in the *couple's* timezone (`couples.timezone`),
+  not each partner's individual timezone (Q-07).
+- **BR-PRAY-03** — Week creation is idempotent: `unique(couple_id, week_start)` with
+  `INSERT ... ON CONFLICT DO NOTHING`, so scheduler retries and overlapping runs never create a
+  duplicate week.
+- **BR-PRAY-04** — A week holds at most 10 prayer points, each with a title/text and an optional
+  scripture reference and verse text; order is the array order (`position`).
+- **BR-PRAY-05** — Once the setter publishes a week, the partner can view it; once the partner has
+  completed any point in a published week, its points become read-only, even to the setter (per
+  [`../API.md`](../API.md)'s contract for `POST /prayers/current/publish`). The current mock
+  adapter does not enforce this restriction on `PUT /prayers/current/points`; recorded as a known
+  conformance gap, not a change to the rule.
+- **BR-PRAY-06** — Completion is per partner and per point
+  (`unique(prayer_point_id, user_id)`), so marking a point twice never creates a duplicate, and
+  one partner's completion is never visible to the other as something they can edit.
+
+#### FR-PRAY-001 View current week
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall show a signed-in partner their couple's current prayer week (Sunday-to-Saturday,
+in the couple's timezone).
+
+**Acceptance criteria**
+
+- **FR-PRAY-001.AC1** Given a couple with a current week already created by the scheduler, when
+  either partner requests it, then the API shall return its status, setter, points (subject to
+  BR-PRAY-05), and each partner's completion state.
+- **FR-PRAY-001.AC2** Given no current week exists yet, when it is requested, then the API shall
+  not create one on this read; week creation is the scheduler's job alone (BR-PRAY-03,
+  FR-PRAY-009).
+
+#### FR-PRAY-002 Setter drafts prayer points
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let the current week's setter write, reorder and save up to 10 draft prayer
+points, each with an optional scripture reference and verse text.
+
+**Acceptance criteria**
+
+- **FR-PRAY-002.AC1** Given the caller is this week's setter and the week is still a draft, when
+  they save up to 10 points, then the API shall store them in the given order and respond with
+  the updated week.
+- **FR-PRAY-002.AC2** Given the caller submits an 11th point, when they save, then the API shall
+  respond 400 `validation_failed` with `fields.points` and shall not save any of the points
+  (BR-PRAY-04).
+- **FR-PRAY-002.AC3** Given the caller is not this week's setter, when they attempt to save
+  points, then the API shall reject the request without changing the week.
+- **FR-PRAY-002.AC4** Given the week's points are read-only under BR-PRAY-05, when any further
+  save is attempted, then the API shall reject it.
+
+#### FR-PRAY-003 Publish week
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let the setter publish their drafted week so their partner can see it.
+
+**Acceptance criteria**
+
+- **FR-PRAY-003.AC1** Given the caller is this week's setter, when they publish, then the API
+  shall set the week's status to `published` and it shall become visible to the partner.
+- **FR-PRAY-003.AC2** Given the week is already published, when publish is called again, then the
+  API shall respond 200 with no change (idempotent).
+- **FR-PRAY-003.AC3** Given the caller is not the setter, when they attempt to publish, then the
+  API shall reject the request.
+
+#### FR-PRAY-004 Partner sees "waiting" while the setter drafts
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Demo |
+
+The system shall show the non-setter partner a "waiting" status, with no points, while the
+current week is still a draft.
+
+**Acceptance criteria**
+
+- **FR-PRAY-004.AC1** Given a week whose setter has not yet published, when the other partner
+  requests it, then the API shall return status `waiting` and shall not include the draft points.
+
+#### FR-PRAY-005 Independent completion per partner
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let each partner mark and unmark their own completion of a published point,
+independent of their partner's.
+
+**Acceptance criteria**
+
+- **FR-PRAY-005.AC1** Given a published point, when a partner marks it complete, then the API
+  shall record that partner's completion only, and marking it again shall not create a duplicate
+  (BR-PRAY-06).
+- **FR-PRAY-005.AC2** Given a partner un-marks a point they completed, when they do, then the API
+  shall remove only their own completion and leave their partner's untouched.
+
+#### FR-PRAY-006 Weekly reflection
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let each partner record their own short reflection on a prayer week.
+
+**Acceptance criteria**
+
+- **FR-PRAY-006.AC1** Given a signed-in partner, when they save a reflection on a week, then the
+  API shall store it against that week and it shall be visible to both partners.
+
+#### FR-PRAY-007 Prayer history
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall list a couple's past prayer weeks, newest first.
+
+**Acceptance criteria**
+
+- **FR-PRAY-007.AC1** Given a couple with more than one past week, when either partner requests
+  history, then the API shall return the weeks ordered by `week_start` descending, excluding the
+  current week.
+
+#### FR-PRAY-008 Week detail
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall show the full detail of one specific prayer week by id.
+
+**Acceptance criteria**
+
+- **FR-PRAY-008.AC1** Given a week id belonging to the caller's couple, when it is requested,
+  then the API shall return its points, completions and reflections.
+- **FR-PRAY-008.AC2** Given a week id belonging to another couple, when it is requested, then the
+  API shall respond 404 (BR-PAIR-04 / DEC-19).
+
+#### FR-PRAY-009 Scheduler creates the week
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-16 | Test |
+
+The background worker shall create each couple's current prayer week automatically, once its
+local Sunday begins, per BR-PRAY-01 through BR-PRAY-03.
+
+**Acceptance criteria**
+
+- **FR-PRAY-009.AC1** Given a couple whose local time has passed Sunday 00:00 and who has no row
+  for that week, when the worker ticks, then it shall insert one row with the computed
+  `setter_user_id` and shall not create a second row on a later tick for the same week
+  (BR-PRAY-03).
+- **FR-PRAY-009.AC2** Given couples in different timezones, when the worker ticks hourly, then
+  each couple's week shall be created at its own local Sunday, not a single global time.
+
+#### FR-PRAY-010 Push notification on new week
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-16 | Test |
+
+The system shall notify both partners by push when a new prayer week is created.
+
+**Acceptance criteria**
+
+- **FR-PRAY-010.AC1** Given the scheduler inserts a new week row, when the insert succeeds, then
+  the worker shall enqueue a `new_prayer_week` push to both partners.
+- **FR-PRAY-010.AC2** Given the scheduler's insert is a no-op (the week already existed), when
+  that happens, then no duplicate notification shall be sent (BR-PRAY-03).
+
+---
+
+### 3.5 EVT — Shared events
+
+Events the couple plans together — dinners, dates, appointments — visible and editable by both
+partners. There is no single-owner event and no separate participants list: both partners are
+implicit participants in everything (DEC-16). All events are couple-scoped; a request for another
+couple's event returns 404 (DEC-19).
+
+**Goals:** G-03 (Shared life planning/growth)
+**Related:** DEC-16, DEC-19
+
+#### FR-EVT-001 Create event
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner create a shared event with a title, date, optional start/end
+time, location, reminder, notes and checklist.
+
+**Acceptance criteria**
+
+- **FR-EVT-001.AC1** Given a title and date, when either partner creates an event, then the API
+  shall store it against the couple and return it with a generated id, visible to both partners
+  immediately.
+
+#### FR-EVT-002 View events
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall list a couple's events to both partners identically.
+
+**Acceptance criteria**
+
+- **FR-EVT-002.AC1** Given a couple with events, when either partner requests the list, then the
+  API shall return the same set and fields to both.
+
+#### FR-EVT-003 Edit event
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner edit any field of a shared event.
+
+**Acceptance criteria**
+
+- **FR-EVT-003.AC1** Given an existing event belonging to the caller's couple, when either partner
+  edits it, then the API shall save the change and it shall be visible to both partners.
+- **FR-EVT-003.AC2** Given an event id belonging to another couple, when an edit is attempted,
+  then the API shall respond 404 (DEC-19).
+
+#### FR-EVT-004 Mark event complete
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner mark a shared event complete, or reopen it.
+
+**Acceptance criteria**
+
+- **FR-EVT-004.AC1** Given an event, when either partner marks it complete, then the API shall
+  set `done` to true; when either partner reopens it, the API shall set `done` back to false.
+
+#### FR-EVT-005 Event checklist
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Mock only | Test |
+
+The system shall let either partner toggle an individual checklist item on an event.
+
+**Acceptance criteria**
+
+- **FR-EVT-005.AC1** Given an event with a checklist item, when either partner toggles it, then
+  the API shall update only that item's `done` flag and leave the rest of the checklist
+  unchanged.
+
+#### FR-EVT-006 Delete event
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started | Test |
+
+The system shall let either partner permanently delete a shared event.
+
+**Acceptance criteria**
+
+- **FR-EVT-006.AC1** Given an event belonging to the caller's couple, when either partner deletes
+  it, then the API shall remove it and it shall no longer appear in the events list for either
+  partner.
+
+*Contract note:* the v2.0 spec required full create/read/update/delete for events, but the current
+contract ([`../API.md`](../API.md)) and the mock only expose create, read, update and completion
+toggling — no delete endpoint exists yet in either. Recorded as a gap against the old spec rather
+than silently dropped.
+
+---
+
+### 3.6 CAL — Couple calendar
+
+A simple, read-focused, mobile-friendly chronological view merging upcoming events and the active
+prayer week. No enterprise calendar complexity: no drag-resize, no overlapping-event grid.
+
+**Goals:** G-03 (Shared life planning/growth), G-04 (Connection and memory)
+**Related:** DEC-19
+
+#### FR-CAL-001 Chronological view
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Demo |
+
+The system shall show a couple's upcoming events and current prayer week together, in date order.
+
+**Acceptance criteria**
+
+- **FR-CAL-001.AC1** Given a couple with events and a current prayer week, when either partner
+  opens the calendar, then the client shall list them merged and sorted by date, nearest first.
+
+*Implementation note:* the calendar has no dedicated backend of its own; it composes the FR-EVT
+and FR-PRAY reads on the client, so its status follows theirs (Mock only) and it is verified by
+demo rather than a distinct API test.
+
+#### FR-CAL-002 Open entry detail
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Demo |
+
+The system shall open an entry's detail screen when it is tapped from the calendar.
+
+**Acceptance criteria**
+
+- **FR-CAL-002.AC1** Given an event or the prayer week entry on the calendar, when a partner taps
+  it, then the client shall navigate to that entry's own detail screen (FR-EVT-002/FR-PRAY-008).
+
+### 3.7 GOAL — Shared goals
+
+Goals both partners work toward together, with a shared running total and a log of who
+contributed what. Deliberately not a gamified productivity product (01 §6).
+
+**Goals:** G-03 (Shared life planning/growth)
+**Related:** DEC-19
+
+**Business rules**
+
+- **BR-GOAL-01** — A goal has one shared running total; individual progress entries carry
+  `user_id` only so the log can show who logged what, not to split the total per partner.
+- **BR-GOAL-02** — A goal's unit is `naira` or `count`, with an optional free-text `unit_label`
+  (for example "chapters").
+
+*Data model note:* the v2.0 spec described a stored `current_value` column, incremented by a
+service. The built contract (`Goal` in `types.ts`) has no such field: the running total is the
+sum of `progress[].amount`, computed on read rather than stored and incremented. See §4(b).
+
+#### FR-GOAL-001 Create goal
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner create a shared goal with a title, optional description
+("why"), a target value and unit, and start/end dates.
+
+**Acceptance criteria**
+
+- **FR-GOAL-001.AC1** Given a title, target and unit, when either partner creates a goal, then
+  the API shall store it against the couple with progress starting empty and `done` false.
+
+#### FR-GOAL-002 View goals
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall list a couple's goals to both partners identically, each with its running total.
+
+**Acceptance criteria**
+
+- **FR-GOAL-002.AC1** Given a couple with goals, when either partner requests the list, then the
+  API shall return the same goals, each with its target, unit and the sum of its progress
+  entries.
+
+#### FR-GOAL-003 View goal detail
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall show a single goal's full detail, including its progress log.
+
+**Acceptance criteria**
+
+- **FR-GOAL-003.AC1** Given a goal id belonging to the caller's couple, when it is requested,
+  then the API shall return the goal with every progress entry (amount, `user_id`, date).
+
+#### FR-GOAL-004 Log progress
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner add a progress entry to a shared goal.
+
+**Acceptance criteria**
+
+- **FR-GOAL-004.AC1** Given a numeric amount, when either partner logs progress, then the API
+  shall append a progress entry carrying their `user_id` and the current date, and the goal's
+  running total shall increase by that amount (BR-GOAL-01).
+
+#### FR-GOAL-005 Edit or complete a goal
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started | Test |
+
+The system shall let either partner edit a goal's fields or mark it done.
+
+**Acceptance criteria**
+
+- **FR-GOAL-005.AC1** Given a goal belonging to the caller's couple, when either partner edits
+  its fields or marks it done, then the API shall save the change and it shall be visible to both
+  partners.
+
+*Contract note:* the v2.0 spec required update, completion and archiving; the current API
+contract exposes only create, read and progress logging for goals — there is no `PATCH`. How a
+goal reaches `done: true` (seen in the seed data) is not yet defined by any documented endpoint.
+Recorded as a gap against the old spec.
+
+---
+
+### 3.8 CHAL — Couple challenges
+
+Short, guided, low-pressure multi-day experiences (for example a 7-day connection challenge),
+optional and never framed with penalty language.
+
+**Goals:** G-03 (Shared life planning/growth)
+**Related:** DEC-19
+
+**Business rules**
+
+- **BR-CHAL-01** — A challenge runs for a fixed number of days, each with a prompt. The v2.0 spec
+  called for independent per-partner completion of each day
+  (`challenge_progress`, `unique(challenge_day_id, user_id)`), but the built contract
+  (`ChallengeDay` in `types.ts`: `{n, text, done, skipped}`) has a single `done`/`skipped` flag
+  per day, not one per partner. Recorded as a regression against the old design, not a deliberate
+  simplification — no `DEC` records this choice. Which model to keep is Q-23.
+
+#### FR-CHAL-001 View current challenge
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall show a couple's current multi-day challenge with each day's prompt and status.
+
+**Acceptance criteria**
+
+- **FR-CHAL-001.AC1** Given a couple with an active challenge, when either partner requests it,
+  then the API shall return its title, start date and every day's prompt, `done` and `skipped`
+  state.
+
+#### FR-CHAL-002 Mark a day done or skipped
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let a partner mark a challenge day done or skipped.
+
+**Acceptance criteria**
+
+- **FR-CHAL-002.AC1** Given a challenge day, when a partner marks it done, then the API shall set
+  that day's `done` flag and it shall be visible to both partners as a single shared state
+  (BR-CHAL-01 records this as a gap against per-partner completion).
+- **FR-CHAL-002.AC2** Given a day marked done, when a partner marks it skipped instead, then the
+  API shall update the day's status accordingly, without penalty language in the UI (01 §6).
+
+#### FR-CHAL-003 Start a challenge
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started | Test |
+
+The system shall let either partner start a new multi-day challenge from a template.
+
+**Acceptance criteria**
+
+- **FR-CHAL-003.AC1** Given a couple with no active challenge, when either partner starts one
+  from a template, then the API shall create it with day 1 through N and respond 201.
+
+*Contract note:* the current API contract has no create endpoint; the mock always serves one
+pre-seeded "current" challenge. Recorded as a gap against the v2.0 spec, which required a couple
+to be able to start a challenge.
+
+---
+
+### 3.9 JRNL — Shared journal
+
+Private, couple-shared journal entries: gratitude, reflection, memory, appreciation or a plan,
+each tagged and dated.
+
+**Goals:** G-04 (Connection and memory)
+**Related:** DEC-19
+
+*Data model note:* the built `JournalEntry` type (`id`, `author_id`, `date`, `tag`, `text`) has no
+`photo`, `related_event` or `updated_at` field, and its tag values (`Gratitude`, `Reflection`,
+`Memory`, `Appreciation`, `Plans`) differ in casing and set from the v2.0 `journal_type` enum
+(which also included `prayer_reflection`). See §4(b).
+
+#### FR-JRNL-001 Add journal entry
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner add a private, couple-shared journal entry with a tag and
+body text.
+
+**Acceptance criteria**
+
+- **FR-JRNL-001.AC1** Given a tag from the defined set and non-empty text, when either partner
+  submits an entry, then the API shall store it with their id as author and today's date, and it
+  shall be visible to both partners.
+
+#### FR-JRNL-002 View journal entries
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall list a couple's journal entries to both partners identically, in date order.
+
+**Acceptance criteria**
+
+- **FR-JRNL-002.AC1** Given a couple with entries, when either partner requests the journal, then
+  the API shall return the same entries to both, newest first.
+
+---
+
+### 3.10 APPR — Appreciation
+
+One partner writes a short, personal note of appreciation to the other. Personal, not social:
+there is no feed, no likes, no reactions.
+
+**Goals:** G-04 (Connection and memory)
+**Related:** DEC-16, DEC-19
+
+**Business rules**
+
+- **BR-APPR-01** — An appreciation has no stored recipient field; because a couple has exactly two
+  members, the recipient is always implicitly "the other partner" (the same two-person
+  simplification as DEC-16).
+- **BR-APPR-02** — The sender can undo (delete) an appreciation shortly after sending it. The
+  client shows an "Undo" action on the send-confirmation toast for **5 seconds**
+  (`apps/web/src/app/(app)/together/appreciation/page.tsx`); the `DELETE` endpoint itself accepts
+  the call at any time, so today the window is enforced only by the client hiding the control, not
+  by the server. The window length and server enforcement are Q-22.
+
+#### FR-APPR-001 Send appreciation
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let a partner send a short appreciation note to their partner.
+
+**Acceptance criteria**
+
+- **FR-APPR-001.AC1** Given non-empty text, when a partner sends an appreciation, then the API
+  shall store it with their id as sender and today's date, and it shall become visible to both
+  partners.
+
+#### FR-APPR-002 Notify only the recipient
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-16 | Test |
+
+The system shall notify only the receiving partner when an appreciation is sent, not the sender.
+
+**Acceptance criteria**
+
+- **FR-APPR-002.AC1** Given an appreciation is sent, when it is stored, then the system shall
+  queue exactly one push notification, addressed to the recipient only.
+
+*Status note:* sending itself is Mock only (FR-APPR-001); this requirement covers push delivery,
+which depends on the worker and push-sending infrastructure (FR-NOTF-007, Q-16) and is Not
+started.
+
+#### FR-APPR-003 Sender undo
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let the sender withdraw an appreciation shortly after sending it, per BR-APPR-02.
+
+**Acceptance criteria**
+
+- **FR-APPR-003.AC1** Given an appreciation was just sent, when the sender taps Undo on the
+  confirmation toast within 5 seconds, then the client shall delete it and it shall disappear
+  from both partners' view.
+- **FR-APPR-003.AC2** Given more than 5 seconds have passed, when the sender wants to remove it,
+  then the client shall no longer offer Undo (the server does not yet enforce this as a time
+  limit; see BR-APPR-02).
+
+### 3.11 MEM — Memories
+
+A private, couple-shared timeline of moments — read as a quiet archive, not a feed.
+
+**Goals:** G-04 (Connection and memory)
+**Related:** DEC-19; Q-06
+
+#### FR-MEM-001 Add memory
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner add a memory with a title, date, optional location and
+optional note.
+
+**Acceptance criteria**
+
+- **FR-MEM-001.AC1** Given a title and date, when either partner adds a memory, then the API
+  shall store it against the couple with `has_photo` false and return it with a generated id.
+
+#### FR-MEM-002 View memories
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall list a couple's memories to both partners identically, as a quiet archive rather
+than a feed.
+
+**Acceptance criteria**
+
+- **FR-MEM-002.AC1** Given a couple with memories, when either partner requests the list, then
+  the API shall return the same memories to both.
+
+#### FR-MEM-003 Attach a photo
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started — Blocked by Q-06 | Test |
+
+The system shall let either partner attach one photo to a memory.
+
+**Acceptance criteria**
+
+- **FR-MEM-003.AC1** Given a memory and an image file under the configured size cap, when a
+  partner uploads it, then the system shall store it in private object storage, strip EXIF and
+  GPS data, and set `has_photo` true (Q-06 recommendation).
+
+---
+
+### 3.12 DATE — Important dates and milestones
+
+Birthdays, anniversaries, the relationship start date, and other milestones, modelled as one
+entity distinguished by type (DEC-17), with an optional reminder.
+
+**Goals:** G-04 (Connection and memory)
+**Related:** DEC-17, DEC-19; Q-16
+
+**Business rules**
+
+- **BR-DATE-01** — Milestones, birthdays and anniversaries are one entity, distinguished by type
+  rather than separate tables (DEC-17).
+
+*Data model note:* DEC-17 and the v2.0 spec describe a discrete `type` enum (`birthday`,
+`anniversary`, `relationship_start`, `engagement`, `wedding`, `milestone`, `custom`); the built
+`Milestone` type (`types.ts`) has no `type` field, only a free-text `sub` (subtitle) and a
+`reminder` boolean. The distinguishing "type" is not currently a structured field anywhere in the
+contract. See §4(b).
+
+#### FR-DATE-001 Add an important date
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let either partner add an important date with a title, date, optional subtitle
+and optional reminder flag.
+
+**Acceptance criteria**
+
+- **FR-DATE-001.AC1** Given a title and date, when either partner adds it, then the API shall
+  store it against the couple and return it with a generated id.
+
+#### FR-DATE-002 View important dates
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall list a couple's important dates to both partners identically.
+
+**Acceptance criteria**
+
+- **FR-DATE-002.AC1** Given a couple with important dates, when either partner requests the list,
+  then the API shall return the same dates to both, in an order the client can render
+  chronologically.
+
+#### FR-DATE-003 Reminder delivery
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started — Blocked by Q-16 | Test |
+
+The system shall notify both partners ahead of an important date flagged for a reminder.
+
+**Acceptance criteria**
+
+- **FR-DATE-003.AC1** Given an important date with `reminder` true, when its date approaches,
+  then the worker shall enqueue a push notification to both partners in time to be useful.
+
+---
+
+### 3.13 NOTF — Notifications
+
+Per-user push notification preferences and delivery, carrying reminders and alerts from every
+other module without exposing their content.
+
+**Goals:** G-05 (Trust/privacy/reliability), and indirectly G-02/G-03/G-04 (it carries their
+reminders)
+**Related:** DEC-19; Q-07, Q-16
+
+#### FR-NOTF-001 Per-user notification preferences
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let each user set their own notification preferences, independent of their
+partner's.
+
+**Acceptance criteria**
+
+- **FR-NOTF-001.AC1** Given a signed-in user, when they change any of `new_week`,
+  `prayer_reminder`, `event_reminders`, `important_dates`, `appreciation`, `journal`, `goals` or
+  `challenges`, then the API shall save it against that user only and shall not affect their
+  partner's preferences.
+
+#### FR-NOTF-002 Reminder time in the user's own timezone
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let each user set an `HH:MM` reminder time, interpreted in their own timezone,
+not the couple's.
+
+**Acceptance criteria**
+
+- **FR-NOTF-002.AC1** Given a user sets `reminder_time` to a value matching `HH:MM`, when it is
+  saved, then the API shall store it, and any personal reminder shall fire at that clock time in
+  the user's own timezone (`users.timezone`) — distinct from the couple's timezone used by the
+  prayer scheduler (Q-07).
+- **FR-NOTF-002.AC2** Given a value that does not match `HH:MM`, when it is submitted, then the
+  API shall reject it.
+
+#### FR-NOTF-003 Subscribe to push
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Mock only | Test |
+
+The system shall let a user subscribe their browser to push notifications.
+
+**Acceptance criteria**
+
+- **FR-NOTF-003.AC1** Given the user has granted browser notification permission, when the client
+  subscribes, then it shall POST the browser's `PushSubscription` to the API, which shall store
+  it against that user and respond 204.
+
+#### FR-NOTF-004 Remove dead subscriptions
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started | Test |
+
+The system shall remove a push subscription once the push service reports it as gone.
+
+**Acceptance criteria**
+
+- **FR-NOTF-004.AC1** Given a push send receives a 404 or 410 from the push service, when that
+  response is received, then the worker shall delete the corresponding subscription so no further
+  sends are attempted against it.
+
+#### FR-NOTF-005 No private content on the lock screen
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started | Inspection |
+
+The system shall use generic notification copy that does not reveal prayer, journal or
+appreciation content on a lock screen.
+
+**Acceptance criteria**
+
+- **FR-NOTF-005.AC1** Given any notification category, when it is composed, then its title and
+  body shall describe the type of activity (for example "Adeola sent you an appreciation note")
+  without quoting or previewing the private content itself.
+
+#### FR-NOTF-006 Quiet by default
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Partial | Demo |
+
+The system shall not request push permission or send a notification until the app has explained
+the value of that category to the user.
+
+**Acceptance criteria**
+
+- **FR-NOTF-006.AC1** Given a user has not yet interacted with a feature that offers push (for
+  example prayer reminders), when they first reach the relevant screen, then the client shall
+  explain what the notification is for before, or as part of, requesting permission — never on
+  first launch, unprompted.
+
+*Status note:* this is a UI/copy rule with no dedicated backend; verified by demo. Status is
+**Partial**: the settings screen exposes per-category toggles (mostly on by default, except goals
+and challenges, which default off), but the "explain before requesting permission" flow has not
+been reviewed end to end.
+
+#### FR-NOTF-007 Push delivery
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started — Blocked by Q-16 | Test |
+
+The worker shall send a push notification for each enabled category, respecting each user's own
+preferences and reminder time.
+
+**Acceptance criteria**
+
+- **FR-NOTF-007.AC1** Given a triggering event for an enabled category (new prayer week, prayer
+  reminder, event reminder, appreciation, journal activity, goal update, challenge reminder,
+  important-date reminder), when it occurs, then the worker shall send exactly one push per
+  subscribed device for that user, and none for a category the user has turned off.
+
+### 3.14 PWA — Install, offline and updates
+
+Amorae is a Progressive Web App first, iPhone-first: installable, tolerant of weak or absent
+networks, and clear about what is and is not safe to do offline.
+
+**Goals:** G-05 (Trust/privacy/reliability); enables every other module under weak networks
+**Related:** DEC-04, DEC-05, DEC-14; Q-01
+
+**Business rules**
+
+- **BR-PWA-01** — The service worker caches only content-hashed static assets and brand assets; it
+  never caches pages, API responses or personal data (DEC-04).
+- **BR-PWA-02** — An offline write is saved only if its mutation is registered as resumable. It is
+  stored under the signed-in user's id in `localStorage`, for at most 7 days, and the query cache
+  itself is never persisted (DEC-05).
+- **BR-PWA-03** — The resumable write set today, read from `apps/web/src/features/prayers/writes.ts`,
+  `apps/web/src/features/together/writes.ts` and `apps/web/src/features/settings/writes.ts`, all
+  registered together in `apps/web/src/components/providers.tsx`, is: prayer completion toggle,
+  save draft prayer points, **publish a prayer week**, save a weekly reflection, save an event,
+  complete/reopen an event, toggle an event checklist item, create a goal, log goal progress,
+  mark/skip a challenge day, add a journal entry, send an appreciation, **undo (delete) an
+  appreciation**, add a memory, add a milestone, and save notification preferences. Account and
+  pairing actions (register, login, create/join a couple, delete account) have no `writes.ts` and
+  are never queued offline.
+
+#### FR-PWA-001 Installable
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The system shall be installable as a standalone app from a web manifest with a full icon set.
+
+**Acceptance criteria**
+
+- **FR-PWA-001.AC1** Given a supporting browser, when the manifest is fetched, then it shall
+  declare name "Amorae", standalone display, portrait orientation, background and theme colour
+  `#F7F4EF` (DEC-14), and 192/512 and maskable icons.
+- **FR-PWA-001.AC2** Given the app is installed, when it is launched from the home screen, then
+  it shall open standalone (no browser chrome) at its start URL.
+
+#### FR-PWA-002 iOS guided install
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The client shall guide an iOS user through Add to Home Screen manually, since iOS offers no
+`beforeinstallprompt` event.
+
+**Acceptance criteria**
+
+- **FR-PWA-002.AC1** Given an iOS visitor without the app installed, when they reach the install
+  step, then the client shall show step-by-step instructions rather than an automatic prompt, and
+  shall not repeat them aggressively on every visit.
+
+#### FR-PWA-003 Offline page on cold navigation
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The system shall show a static offline page when a cold (uncached) navigation is attempted with
+no network (DEC-04).
+
+**Acceptance criteria**
+
+- **FR-PWA-003.AC1** Given the device is offline and the app has not already loaded the requested
+  page in this session, when the user navigates to it, then the service worker shall serve the
+  static `/offline` page rather than a browser error.
+- **FR-PWA-003.AC2** Given the offline page is shown, when connectivity returns, then a retry
+  control shall reload the originally requested page.
+
+#### FR-PWA-004 Subtle offline indicator
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The client shall show a quiet, non-blocking indicator when the device is offline, never a
+full-screen error.
+
+**Acceptance criteria**
+
+- **FR-PWA-004.AC1** Given the device goes offline while content is already loaded, when the
+  state changes, then the client shall show a status banner ("Offline · Showing your saved
+  content") without hiding the content underneath.
+- **FR-PWA-004.AC2** Given the device comes back online after queued changes synced, when they
+  finish, then the client shall show a confirmation banner naming how many changes synced.
+
+#### FR-PWA-005 Offline writes
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The client shall let a signed-in user continue making the writes listed in BR-PWA-03 while
+offline, queuing them for later delivery.
+
+**Acceptance criteria**
+
+- **FR-PWA-005.AC1** Given the device is offline, when the user performs a write in BR-PWA-03's
+  set, then the client shall pause the mutation rather than fail it, and shall reflect the change
+  optimistically where the screen already shows one.
+- **FR-PWA-005.AC2** Given a write outside BR-PWA-03's set is attempted offline (for example
+  registering, or creating a couple), when it is attempted, then the client shall surface that it
+  requires a connection rather than queue it silently.
+
+#### FR-PWA-006 Replay on reconnect
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The client shall automatically send every queued write once the device reconnects.
+
+**Acceptance criteria**
+
+- **FR-PWA-006.AC1** Given one or more paused writes, when the browser reports it is back online,
+  then the client shall resume and send them, in the order each write's scope defines (for
+  example prayer completions send one at a time, in order).
+
+#### FR-PWA-007 Clear queued writes on logout, session expiry and deletion
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The client shall delete every locally queued write for a user when they sign out, their session
+expires, or their account is deleted.
+
+**Acceptance criteria**
+
+- **FR-PWA-007.AC1** Given any of those three events, when it occurs, then the client shall clear
+  the in-memory cache and remove the saved offline-changes entry for that user from local
+  storage, so nothing queued can be sent under a different session.
+
+#### FR-PWA-008 Warn on logout with unsynced changes
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The client shall warn a user before logging them out if they have unsynced offline changes.
+
+**Acceptance criteria**
+
+- **FR-PWA-008.AC1** Given one or more paused, unsynced writes, when the user asks to log out,
+  then the client shall name how many changes have not synced and state that logging out now will
+  lose them, offering to stay logged in instead.
+
+#### FR-PWA-009 Client idempotency keys for queued writes
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started | Test |
+
+Before a queued, non-idempotent write is sent to the real (non-mock) API, the client shall attach
+a client-generated idempotency key so a retried send cannot be applied twice.
+
+**Acceptance criteria**
+
+- **FR-PWA-009.AC1** Given a queued write that is not naturally idempotent (for example creating
+  an event), when it is first attempted, then the client shall generate and attach a stable key
+  that survives being saved and restored from local storage.
+- **FR-PWA-009.AC2** Given the same write is retried after a partial failure, when it is sent
+  again, then the API shall recognise the repeated key and shall not create a second record.
+
+*Status note:* this is required before non-idempotent writes in BR-PWA-03 go live against the
+real Go API; today they run only against the mock, which does not need it.
+
+#### FR-PWA-010 Conflict rule: last write wins
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started | Analysis |
+
+When two writes to the same resource conflict, the system shall resolve them by server
+timestamp, the later write winning.
+
+**Acceptance criteria**
+
+- **FR-PWA-010.AC1** Given both partners edit the same resource while one was offline, when the
+  offline write is finally sent, then the API shall apply whichever write reaches it with the
+  later server timestamp and discard the earlier one's conflicting fields.
+
+*Note:* completions and checklist toggles are naturally idempotent and so never conflict under
+this rule; it matters only for fields like an event's title or a journal entry's text.
+
+#### FR-PWA-011 Online-only actions
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Partial | Test |
+
+The client shall require an active connection for irreversible or coordination-sensitive actions
+rather than queue them offline.
+
+**Acceptance criteria**
+
+- **FR-PWA-011.AC1** Given the device is offline, when a user attempts to publish a prayer week
+  or permanently delete a resource, then the client shall block the action and explain that it
+  needs a connection.
+
+*Status note:* this is the intended rule carried over from the v2.0 spec, but it does not match
+today's code: `publish` (FR-PRAY-003) and `undoAppreciation` (FR-APPR-003, a delete) are both in
+the registered, resumable write set (BR-PWA-03) and are queued offline like any other write
+today. Status is recorded as **Partial** — account/couple actions are correctly blocked, but
+these two specific actions are not. Which of the two should stay queueable is Q-22.
+
+#### FR-PWA-012 Cold offline reading
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Not started — Blocked by Q-01 | Test |
+
+The system shall let a user read their couple's current prayer week and upcoming events after a
+cold start with no network.
+
+**Acceptance criteria**
+
+- **FR-PWA-012.AC1** Given the app was not already open when the device went offline, when the
+  user opens it with no network, then the client shall show the last-synced prayer week and
+  events rather than only the static offline page.
+
+*Note:* DEC-04 deliberately does not cache personal data today. This requirement applies only if
+Q-01 chooses option (b), an encrypted cache; Q-01's recommendation for MVP is option (a), in
+which case this requirement becomes **Won't** for MVP.
+
+#### FR-PWA-013 App update prompt
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Partial | Demo |
+
+The client shall detect a new deployed version and bring the user onto it without losing unsaved
+work.
+
+**Acceptance criteria**
+
+- **FR-PWA-013.AC1** Given a new service worker is available, when the browser next checks
+  (`updateViaCache: "none"` forces revalidation), then the client shall fetch it in the
+  background.
+
+*Status note:* today the new worker takes over silently on a later full reload; there is no
+in-app "update available, tap to refresh" prompt. Status **Partial** reflects the background
+check existing without a user-facing prompt.
+
+---
+
+### 3.15 AI — Optional AI assistance
+
+Optional writing help behind the prayer feature: draft suggestions, rewording, reflection
+summaries and verified scripture suggestions. Every feature here is Post-MVP, opt-in, and the
+product is fully functional with AI disabled (DEC-15, 01 §6 "Human before AI").
+
+**Goals:** G-02 (Faith rhythm), G-05 (Trust/privacy/reliability)
+**Related:** DEC-15; Q-18
+
+**Business rules**
+
+- **BR-AI-01** — AI must never claim divine authority, promise prayer outcomes, manipulate
+  emotionally, invent Bible references, auto-publish generated content, or replace user judgement;
+  every AI output requires the user's explicit review before it is saved or published (DEC-15).
+- **BR-AI-02** — Daily/weekly caps: 5 prayer-point generations per user per day, 10 rewrite
+  requests per user per day, 1 weekly-reflection generation per user per week; no background
+  generation — only on explicit request.
+
+#### FR-AI-001 Prayer point assistant
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Could | Post-MVP | Not started | Test |
+
+The system shall let a user request AI-suggested draft prayer points from a described situation.
+
+**Acceptance criteria**
+
+- **FR-AI-001.AC1** Given a user describes a situation, when they request suggestions, then the
+  AI service shall return draft points the user can edit or discard, and none shall be saved
+  until the user explicitly keeps them (BR-AI-01).
+- **FR-AI-001.AC2** Given the user has already made 5 generation requests today, when they
+  request a 6th, then the system shall decline with a clear message (BR-AI-02).
+
+#### FR-AI-002 Improve my prayer
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Could | Post-MVP | Not started | Test |
+
+The system shall let a user ask AI to refine the wording of a rough prayer point they wrote.
+
+**Acceptance criteria**
+
+- **FR-AI-002.AC1** Given a user's draft text, when they request a rewrite, then the AI service
+  shall return a suggested rewording without altering the user's saved point until they accept
+  it.
+- **FR-AI-002.AC2** Given the user has already made 10 rewrite requests today, when they request
+  an 11th, then the system shall decline (BR-AI-02).
+
+#### FR-AI-003 Weekly reflection assistant
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Could | Post-MVP | Not started | Test |
+
+The system shall let a user ask AI to help summarise their own reflection on a prayer week.
+
+**Acceptance criteria**
+
+- **FR-AI-003.AC1** Given a user's own notes, when they request a summary, then the AI service
+  shall return a draft reflection the user must review and explicitly save (BR-AI-01).
+- **FR-AI-003.AC2** Given the user has already used this once this week, when they request it
+  again, then the system shall decline until the following week (BR-AI-02).
+
+#### FR-AI-004 Scripture suggestions with verified references
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | Post-MVP | Not started | Test |
+
+The system shall let a user request a scripture suggestion related to a prayer topic, showing
+only references the system has verified as real.
+
+**Acceptance criteria**
+
+- **FR-AI-004.AC1** Given a topic, when a suggestion is requested, then the AI service shall check
+  any Bible reference it proposes against a verified source before it is shown, and shall omit
+  any reference it cannot verify rather than display an invented one (BR-AI-01).
+
+#### FR-AI-005 Opt-in with data-use notice
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | Post-MVP | Not started | Test |
+
+The system shall require a user to explicitly opt in to AI features, after being told that their
+prayer content leaves Amorae to reach the AI provider (Q-18).
+
+**Acceptance criteria**
+
+- **FR-AI-005.AC1** Given a user has not opted in, when they open any AI feature, then the client
+  shall show the data-use notice and require an explicit choice before the feature is enabled,
+  per user.
+- **FR-AI-005.AC2** Given AI is opted out or the feature flag is off, when the user uses the rest
+  of the app, then every non-AI feature shall work exactly as it does with AI unavailable
+  (DEC-15).
+
+## 4. Data requirements
+
+### 4(a) Data classification
+
+| Class | Description | Examples |
+|---|---|---|
+| **Public** | Safe for anyone, including logged-out visitors, to see. | Marketing/welcome copy, the Terms and Privacy page text itself, brand assets, app icons. |
+| **Internal** | Operational data about the system, not about a person. | Request logs (request id, client IP, route, latency), Prometheus metrics, rate-limit counters. |
+| **Personal** | Identifies or is about one user or one couple, but is not itself sensitive in the GDPR/NDPA sense. | Account fields (email, display_name, timezone, avatar_url), couple membership and role labels, invite codes, events, goals, challenges, notification preferences, push subscription endpoints. |
+| **Sensitive personal** | Reveals something the law treats with extra care — religious belief, or intimate relationship detail. | Prayer points, reflections and scripture engagement (reveals religious belief); journal entries and appreciations (reveal relationship and emotional detail); `relationship_start_date` and couple profile (reveal relationship status); memory photos, once built (may reveal identity or location via EXIF before it is stripped, Q-06). |
+
+Sensitive personal data drives stricter handling requirements in
+[03-non-functional-requirements.md](./03-non-functional-requirements.md) (encryption at rest,
+no content in logs, no content on a lock screen — FR-NOTF-005) rather than anything unique to
+this document; it is classified here because the entities that carry it are defined here.
+
+### 4(b) Logical data model
+
+Every table is scoped to one `couple_id` (directly, or through a parent that is) except `users`,
+`sessions` and `push_subscriptions`, which are scoped to one `user_id`. Couple scoping is enforced
+server-side from the caller's membership, never trusted from the client, and a cross-couple id
+returns 404 (BR-PAIR-04 / DEC-19).
+
+**Built** — the physical schema in `apps/api/migrations/*.sql` is the source of truth; this
+summarises it rather than repeating the SQL.
+
+| Entity | Purpose | Key attributes | Ownership | Key constraints |
+|---|---|---|---|---|
+| `users` | One person's account. | `id`, `email`, `display_name`, `password_hash`, `avatar_url?`, `timezone` (default `UTC`), `last_login_at?` | Self | `email` unique |
+| `sessions` | An active login. | `token_hash` (SHA-256 of the opaque token, PK), `user_id`, `expires_at` | Self, not user-visible | FK `user_id` cascades on delete; indexed on `user_id` and `expires_at` |
+| `couples` | The shared account two partners belong to. | `id`, `name?`, `timezone` (default `UTC`), `relationship_start_date?`, `created_by` | Couple | none beyond PK; membership caps size (see below) |
+| `couple_members` | Who belongs to which couple, and their per-person state. | `couple_id`, `user_id`, `role` (default `partner`), `joined_at`, `updated_at`, `onboarding_install`, `onboarding_notifications` | Couple + self (onboarding flags are per person) | `unique(couple_id, user_id)`; `unique(user_id)` (BR-PAIR-01, one couple per user); member order = `joined_at` ascending (BR-PRAY-01) |
+| `couple_invitations` | An open or resolved invite. | `id`, `couple_id`, `code` (unique), `status` (`pending`\|`accepted`\|`revoked`\|`expired`), `created_by`, `expires_at`, `accepted_at?` | Couple | `code` unique |
+
+*Difference from the v2.0 draft:* the built `couple_invitations` table has no `accepted_by`
+column (only `accepted_at`); the v2.0 draft schema included one. Recorded here rather than
+silently carried forward.
+
+**Proposed** — everything else. Names are aligned with `apps/web/src/lib/api/types.ts` (the
+contract the web mock and, eventually, Go both implement); differences from the v2.0 draft schema
+are called out because they change what a future migration needs to build.
+
+| Entity | Purpose | Key attributes | Ownership | Notes / differences from v2.0 |
+|---|---|---|---|---|
+| `PrayerWeek` | One couple's week of prayer. | `id`, `week_start`, `week_end`, `setter_id`, `status` (`draft`\|`published`\|`waiting`), `points[]`, `my_completed[]`, `partner_completed[]`, `reflection?` | Couple | `unique(couple_id, week_start)` (BR-PRAY-03). `week_end` is new; `setter_id` was `setter_user_id`; `status` gained `waiting` (computed for the non-setter, not a stored draft/published-only enum); completions are exposed as two id arrays per caller rather than a normalised join table. |
+| `PrayerPoint` | One point within a week. | `id`, `title`, `text`, `scripture?`, `verse?`, `position` | Couple (via week) | Max 10 per week (BR-PRAY-04). `title` and `verse` are new versus v2.0; `scripture` is new (v2.0 had no reference field at all). |
+| `Event` | A shared calendar entry. | `id`, `title`, `date`, `start_time?`, `end_time?`, `location?`, `reminder?`, `notes?`, `checklist[]`, `done` | Couple | v2.0 used `starts_at`/`ends_at` timestamps and a separate `event_reminders` table; the built type uses a plain `date` plus time-of-day strings and folds the reminder into one optional field. `notes` replaces `recap_note` with different, pre-event semantics. `status` (enum) became a single `done` boolean. |
+| `Goal` | A shared goal. | `id`, `title`, `why?`, `target`, `unit` (`naira`\|`count`), `unit_label?`, `progress[]`, `start_date`, `end_date`, `done` | Couple | No stored `current_value` (BR-GOAL-01); v2.0's separate `goal_items` checklist does not exist in the built type. `target_unit` (free text) became a closed `unit` enum plus `unit_label`. |
+| `GoalProgress` | One logged contribution. | `id`, `user_id`, `amount`, `date` | Couple (via goal) | `user_id` is for the log only (BR-GOAL-01), not a per-partner split. |
+| `Challenge` + `ChallengeDay` | A multi-day guided challenge. | `id`, `title`, `started_on`, `days[{n, text, done, skipped}]` | Couple | v2.0 modelled three tables (`challenges`, `challenge_days`, `challenge_progress` with per-user completion); the built type has one shared `done`/`skipped` per day (BR-CHAL-01). |
+| `JournalEntry` | A shared journal entry. | `id`, `author_id`, `date`, `tag`, `text` | Couple | `tag` is `Gratitude`\|`Reflection`\|`Memory`\|`Appreciation`\|`Plans` — different casing and set from v2.0's `journal_type` (which also had `prayer_reflection`). No `photo_url`, `related_event_id` or `updated_at`. |
+| `Appreciation` | A note from one partner to the other. | `id`, `from_id`, `date`, `text` | Couple | No recipient field (BR-APPR-01); no `read_at` (v2.0 had one for a "seen" state). |
+| `Memory` | One entry in the memories archive. | `id`, `title`, `date`, `location?`, `note?`, `has_photo` | Couple | v2.0 had `photo_url`, `related_event_id`, `created_by`, `updated_at`; none of these are in the built type. Photo storage itself is Q-06. |
+| `Milestone` (`important_dates`) | A birthday, anniversary or milestone. | `id`, `title`, `date`, `sub?`, `reminder?` | Couple | BR-DATE-01. No structured `type` field exists in the built type, unlike DEC-17's description and v2.0's `important_date_type` enum; `sub` is free text, and there is no `is_recurring` flag. |
+| `PushSubscription` | One browser's push endpoint. | `id`, `user_id`, `endpoint` (unique), `p256dh`, `auth`, `user_agent?`, `created_at`, `last_used_at?` | Self | Matches the v2.0 draft; not yet built. |
+| `NotificationPrefs` | One user's notification settings. | `new_week`, `prayer_reminder`, `reminder_time`, `event_reminders`, `important_dates`, `appreciation`, `journal`, `goals`, `challenges` | Self | v2.0 modelled this as one `jsonb` map; the built type is a flat object with the same semantics, one row per user. |
+
+### 4(c) Retention and deletion
+
+| Entity / event | Retention rule |
+|---|---|
+| Sessions | Purged 7 days after `expires_at` (Q-11). |
+| A deleted account | Hard-deleted within 30 days of the delete request; backups holding it roll off within 35 days (Q-11). |
+| A dissolved couple (leave couple, Q-09 option (a)) | Both former partners get 30 days of read-only access and export to the couple's shared content; after that window, couple-owned content (prayer weeks/points/completions, events, goals, challenges, journal, appreciations, memories, important dates) is deleted. Each partner's own account and personal profile data are unaffected and follow the account's own lifecycle. |
+| Application logs | Kept 30 days; never contain request or resource content (Q-11). |
+| Push subscription rows | Removed as soon as the push service reports them gone (404/410) via FR-NOTF-004, not on a fixed schedule. |
+| Memory photos (once built, Q-06) | Follow the owning memory's own deletion; EXIF and GPS data are stripped on upload and never retained anywhere. |
+
+## 5. External interface requirements
+
+### 5.1 User interface
+
+The full interface contract — design tokens, typography, components and their states, the screen
+inventory, interaction and content rules — is [04-design-specification.md](./04-design-specification.md).
+This document does not restate it.
+
+### 5.2 HTTP API
+
+The Go API is the source of truth for the wire contract; [`../API.md`](../API.md) documents it in
+full, including the "proposed" endpoints the web mock currently answers. This document does not
+reproduce the endpoint list or payload examples — only the conventions that shape every
+requirement above:
+
+- Every response is wrapped in a `{ "data": ... }` envelope on success, or
+  `{ "error": { "code", "message", "fields"?, "request_id" } }` on failure. `code` is stable and
+  meant for programs to branch on; `message` and `fields` are safe to show a user; internal
+  details (stack traces, database errors, internal field names) never reach the client.
+- IDs are UUIDv7 strings; timestamps are RFC 3339, UTC, everywhere.
+- Request bodies are capped at 1 MiB, and unknown JSON fields are rejected outright.
+- Every response carries an `X-Request-ID` header, for correlating logs across the BFF and the
+  API; a client may send its own to keep the same id end to end.
+- Standard status codes: 400 validation, 401 unauthenticated/invalid credentials, 403 forbidden,
+  404 not found *or not yours*, 409 conflict, 429 rate limited (with `Retry-After`), 500 internal
+  (always the generic `internal_error` message, looked up by `request_id`).
+- A request for another couple's resource returns 404, never 403 (DEC-19), so a client cannot use
+  the status code to confirm a resource exists.
+- Authenticated endpoints take `Authorization: Bearer <token>`; the browser never holds or sends
+  this token directly (DEC-02) — the Next.js BFF attaches it server-side from the httpOnly
+  session cookie.
+- Rate limits: 20 requests per client IP per minute across `/v1/auth/*`, and 10 login attempts
+  per email per 15 minutes, counted whether or not the account exists (DEC-11).
+
+### 5.3 Web Push
+
+VAPID key pair; the browser subscribes through the Push API and posts the subscription to
+`POST /v1/notifications/subscribe` (FR-NOTF-003). Sending pushes and managing keys is the
+background worker's job (Q-16) and is Not started (FR-NOTF-007).
+
+### 5.4 Email
+
+No provider is chosen yet (Q-04). Every transactional email — password reset (FR-AUTH-008),
+verification (FR-AUTH-009), and the email-change notices (FR-ACCT-003) — goes through a single
+`Mailer` interface so the provider can be swapped without touching feature code.
+
+### 5.5 Object storage
+
+A private, S3-compatible bucket for memory photos, with presigned uploads, a 10 MB cap, images
+only, and EXIF/GPS stripped server-side (Q-06 recommendation). Not yet built (FR-MEM-003).
+
+### 5.6 AI provider
+
+Behind a Go interface (`AIService`) so the provider is swappable and the product works fully with
+it disabled (DEC-15). Requires a provider under zero-retention, no-training terms, opt-in per
+user with a data-use notice (Q-18). Post-MVP; not yet built (§3.15).
+
+---
+
+## 6. Traceability matrix
+
+Every functional requirement defined in §3, once. "TBD" in the API column means no endpoint is
+documented yet, even as a proposed one; "—" means the requirement has no distinct API surface of
+its own (a client-only behaviour, or one composed from other requirements' endpoints).
+
+| FR ID | Goal | API endpoint(s) | Status | Verification evidence |
+|---|---|---|---|---|
+| FR-AUTH-001 | G-01 | `POST /v1/auth/register` | Implemented | Go integration tests (auth) |
+| FR-AUTH-002 | G-01 | `POST /v1/auth/login` | Implemented | Go integration tests (auth) |
+| FR-AUTH-003 | G-05 | `POST /v1/auth/logout` | Implemented | Go integration tests (auth) |
+| FR-AUTH-004 | G-05 | (session check on every authenticated endpoint) | Implemented | Go integration tests (auth) |
+| FR-AUTH-005 | G-05 | TBD — Blocked by Q-03 | Not started | None yet |
+| FR-AUTH-006 | G-05 | `POST /v1/auth/register` | Implemented | Go integration tests (auth) |
+| FR-AUTH-007 | G-05 | `POST /v1/auth/login`, `PUT /v1/users/me/email` | Implemented | Go integration tests (auth) |
+| FR-AUTH-008 | G-05 | TBD — Blocked by Q-04 | Not started | None yet |
+| FR-AUTH-009 | G-05 | TBD — Blocked by Q-05 | Not started | None yet |
+| FR-AUTH-010 | G-05 | TBD — Blocked by Q-10 | Not started | None yet |
+| FR-AUTH-011 | G-05 | — (registration screen copy) | Partial | Manual demo 2026-09-22 |
+| FR-AUTH-012 | G-05 | TBD — Blocked by Q-20 | Not started | None yet |
+| FR-ACCT-001 | G-05 | `GET`, `PATCH /v1/users/me` | Implemented | Go integration tests (users) |
+| FR-ACCT-002 | G-05 | `PUT /v1/users/me/email` | Implemented | Go integration tests (users) |
+| FR-ACCT-003 | G-05 | TBD — Blocked by Q-05 | Not started | None yet |
+| FR-ACCT-004 | G-05 | TBD | Not started | None yet |
+| FR-ACCT-005 | G-05 | `DELETE /v1/users/me` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-ACCT-006 | G-05 | TBD | Not started | None yet |
+| FR-ACCT-007 | G-05 | — (client only) | Implemented | Manual demo 2026-09-22 |
+| FR-ACCT-008 | G-05 | TBD — Blocked by Q-19 | Not started | None yet |
+| FR-PAIR-001 | G-01 | `POST /v1/couples` | Partial | Manual demo 2026-09-22 (web against mock); Go unit tests (couples, in development) |
+| FR-PAIR-002 | G-01 | `GET /v1/couples/me` | Partial | Manual demo 2026-09-22 |
+| FR-PAIR-003 | G-01 | `POST /v1/couples/join` | Partial | Manual demo 2026-09-22 (web against mock); Go unit tests (couples, in development) |
+| FR-PAIR-004 | G-01 | TBD — Blocked by Q-08 | Not started | None yet |
+| FR-PAIR-005 | G-01 | `PATCH /v1/couples/me` | Partial | Go handler in the in-progress couples module; no tests yet |
+| FR-PAIR-006 | G-01 | `PATCH /v1/couples/role` | Partial | Go handler in the in-progress couples module; no tests yet |
+| FR-PAIR-007 | G-01 | `PATCH /v1/couples/me/onboarding` | Partial | Go handler and migration in progress; manual demo 2026-09-22 (web against mock) |
+| FR-PAIR-008 | G-05 | TBD — Blocked by Q-09 | Not started | None yet |
+| FR-PRAY-001 | G-02 | `GET /v1/prayers/current` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-002 | G-02 | `PUT /v1/prayers/current/points` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-003 | G-02 | `POST /v1/prayers/current/publish` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-004 | G-02 | `GET /v1/prayers/current` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-005 | G-02 | `POST`, `DELETE /v1/prayers/points/:id/complete` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-006 | G-02 | `PATCH /v1/prayers/weeks/:id/reflection` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-007 | G-02 | `GET /v1/prayers/history` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-008 | G-02 | `GET /v1/prayers/weeks/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-009 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-PRAY-010 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-EVT-001 | G-03 | `POST /v1/events` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-EVT-002 | G-03 | `GET /v1/events` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-EVT-003 | G-03 | `PATCH /v1/events/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-EVT-004 | G-03 | `POST`, `DELETE /v1/events/:id/complete` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-EVT-005 | G-03 | `PATCH /v1/events/:id/checklist/:item` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-EVT-006 | G-03 | TBD | Not started | None yet |
+| FR-CAL-001 | G-03 | `GET /v1/events`, `GET /v1/prayers/current` | Mock only | Manual demo 2026-09-22 |
+| FR-CAL-002 | G-03 | — (client navigation) | Mock only | Manual demo 2026-09-22 |
+| FR-GOAL-001 | G-03 | `POST /v1/goals` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-GOAL-002 | G-03 | `GET /v1/goals` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-GOAL-003 | G-03 | `GET /v1/goals/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-GOAL-004 | G-03 | `POST /v1/goals/:id/progress` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-GOAL-005 | G-03 | TBD | Not started | None yet |
+| FR-CHAL-001 | G-03 | `GET /v1/challenges/current` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-CHAL-002 | G-03 | `PATCH /v1/challenges/current/days/:n` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-CHAL-003 | G-03 | TBD | Not started | None yet |
+| FR-JRNL-001 | G-04 | `POST /v1/journal` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-JRNL-002 | G-04 | `GET /v1/journal` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-APPR-001 | G-04 | `POST /v1/appreciations` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-APPR-002 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-MEM-001 | G-04 | `POST /v1/memories` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-MEM-002 | G-04 | `GET /v1/memories` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-MEM-003 | G-04 | TBD — Blocked by Q-06 | Not started | None yet |
+| FR-DATE-001 | G-04 | `POST /v1/milestones` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-DATE-002 | G-04 | `GET /v1/milestones` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-DATE-003 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-NOTF-001 | G-05 | `GET`, `PATCH /v1/notifications/preferences` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-NOTF-002 | G-05 | `PATCH /v1/notifications/preferences` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-NOTF-003 | G-05 | `POST /v1/notifications/subscribe` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-NOTF-004 | G-05 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-NOTF-005 | G-05 | — (notification copy) | Not started | None yet |
+| FR-NOTF-006 | G-05 | — (client only) | Partial | Manual demo 2026-09-22 |
+| FR-NOTF-007 | G-05 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-PWA-001 | G-05 | — (web manifest) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-002 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-003 | G-05 | — (service worker) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-004 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-005 | G-05 | — (client, over BR-PWA-03's endpoints) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-006 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-007 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-008 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
+| FR-PWA-009 | G-05 | TBD | Not started | None yet |
+| FR-PWA-010 | G-05 | TBD | Not started | None yet |
+| FR-PWA-011 | G-05 | — (client) | Partial | Manual demo 2026-09-22 |
+| FR-PWA-012 | G-05 | TBD — Blocked by Q-01 | Not started | None yet |
+| FR-PWA-013 | G-05 | — (client) | Partial | Manual demo 2026-09-22 |
+| FR-AI-001 | G-02 | TBD | Not started | None yet |
+| FR-AI-002 | G-02 | TBD | Not started | None yet |
+| FR-AI-003 | G-02 | TBD | Not started | None yet |
+| FR-AI-004 | G-02 | TBD | Not started | None yet |
+| FR-AI-005 | G-05 | TBD | Not started | None yet |
+
+## Appendix A: Where v2.0 content moved
+
+The v2.0 "Engineering Specification" covered architecture, security, testing, deployment and
+scalability alongside functional requirements. This rewrite keeps only functional requirements,
+the data model and traceability; everything else has a new, dedicated home:
+
+| v2.0 section | Moved to |
+|---|---|
+| §1 Architecture overview, §5 Backend architecture | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and the ADRs ([0001](../adr/0001-modular-monolith.md), [0002](../adr/0002-bff-and-opaque-sessions.md), [0003](../adr/0003-stdlib-first.md), [0004](../adr/0004-pwa-service-worker.md)) |
+| §7 Security | [03-non-functional-requirements.md](./03-non-functional-requirements.md) (NFR-SEC) |
+| §10 Non-functional requirements (performance, offline, data) | [03-non-functional-requirements.md](./03-non-functional-requirements.md) |
+| §11 Testing | [03-non-functional-requirements.md](./03-non-functional-requirements.md) (NFR-MAINT) and Q-15 |
+| §12 Environment and deployment | [03-non-functional-requirements.md](./03-non-functional-requirements.md) (NFR-OPS) and [`../ARCHITECTURE.md`](../ARCHITECTURE.md) |
+| §13 Scalability and extensibility | [03-non-functional-requirements.md](./03-non-functional-requirements.md) (NFR-SCALE) and [`../ARCHITECTURE.md`](../ARCHITECTURE.md) |
+| §14 Open questions | [05-decisions-and-open-questions.md](./05-decisions-and-open-questions.md) §2 |
+| §15 Decisions log | [05-decisions-and-open-questions.md](./05-decisions-and-open-questions.md) §1 — specifically DEC-16 (dropped `event_participants`), DEC-17 (`important_dates` unified by type), DEC-18 (`setter_user_id` frozen at creation), DEC-19 (404, not 403, cross-couple) |
+
+Functional content — the requirements themselves, the data model's entity list, the scheduler
+rules and the AI rules and caps — was kept and is now in §3, §4 and the business rules above,
+reconciled against the code as built.
+
+---
+
+## Change log
+
+| Version | Date | Change |
+|---|---|---|
+| 3.0 | 2026-09-22 | Full rewrite as an ISO/IEC/IEEE 29148-style Software Requirements Specification (`AMR-REQ-02`). Every requirement now carries a permanent ID, Priority, Release, Implementation status and Verification method, with Given/When/Then acceptance criteria and a traceability matrix. Reconciled against the code as built on 2026-09-22 (couples module Partial/in development; prayers, events, goals, challenges, journal, appreciations, memories, milestones, notification preferences and account deletion are Mock only; scheduler, push delivery, email, object storage and AI are Not started). Recorded, rather than silently resolved, the gaps this reconciliation found between the v2.0 spec, [`../API.md`](../API.md), `types.ts` and the actual mock/Go behaviour — see the business-rule and contract notes throughout §3 and the differences column in §4(b). Non-functional, architecture, testing, deployment and scalability content moved out to their own documents (Appendix A); decisions and open questions now live solely in [05](./05-decisions-and-open-questions.md), cited by ID rather than restated. |
+| 2.0 | 2026-09-21 | Split out of the combined spec. Resolved vague feature lists into Must / Should / Later with acceptance criteria. Added full data model (columns, types, enums, constraints), API conventions and example payloads, a deterministic scheduler algorithm, concrete security controls, offline sync rules, non-functional targets, and a scalability section. |
+

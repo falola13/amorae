@@ -1,8 +1,8 @@
 import "server-only";
 
-// Read lazily (not at module load) so a misconfigured API_URL only breaks
-// the request that actually needs it, with a clear error, instead of
-// crashing the whole server at boot.
+import { isMockApi } from "@/lib/config";
+
+// Read lazily so a misconfigured value only breaks the request that needs it.
 function readApiUrl(): string {
   const value = process.env.API_URL ?? "http://localhost:8088";
   try {
@@ -13,19 +13,16 @@ function readApiUrl(): string {
   return value;
 }
 
-// Strict on purpose: this flag guards the session cookie. A lenient parse
-// (`value === "true"`) would read COOKIE_SECURE=1 or TRUE as false and send
-// the session over plain HTTP, so anything but true/false is an error.
-function readCookieSecure(): boolean {
-  const value = process.env.COOKIE_SECURE?.trim().toLowerCase();
-  if (value === undefined || value === "") return process.env.NODE_ENV === "production";
+// Strict on purpose: these flags guard security settings, and a lenient parse
+// would read COOKIE_SECURE=1 or TRUE as false.
+function readBool(name: string, fallback: boolean): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (value === undefined || value === "") return fallback;
   if (value === "true") return true;
   if (value === "false") return false;
-  throw new Error(`COOKIE_SECURE must be "true" or "false", got "${process.env.COOKIE_SECURE}"`);
+  throw new Error(`${name} must be "true" or "false", got "${process.env[name]}"`);
 }
 
-// Optional. Shared with the API so it believes the visitor IP this server
-// forwards (see lib/api/client.ts). Must match the API's BFF_SECRET.
 function readBffSecret(): string | undefined {
   const value = process.env.BFF_SECRET?.trim();
   if (!value) return undefined;
@@ -38,9 +35,24 @@ export const env = {
     return readApiUrl();
   },
   get COOKIE_SECURE(): boolean {
-    return readCookieSecure();
+    return readBool("COOKIE_SECURE", process.env.NODE_ENV === "production");
   },
   get BFF_SECRET(): string | undefined {
     return readBffSecret();
+  },
+  /**
+   * Whether the auth actions should issue a mock session. Mock sign-in
+   * accepts any email and password, so a production build refuses it unless
+   * ALLOW_MOCK_AUTH=true says the deployment is deliberately a demo.
+   */
+  get MOCK_AUTH(): boolean {
+    if (!isMockApi) return false;
+    if (process.env.NODE_ENV === "production" && !readBool("ALLOW_MOCK_AUTH", false)) {
+      throw new Error(
+        "NEXT_PUBLIC_API_MOCK is on in a production build. Mock sign-in accepts any password; " +
+          "set ALLOW_MOCK_AUTH=true only for a deliberate public demo.",
+      );
+    }
+    return true;
   },
 };

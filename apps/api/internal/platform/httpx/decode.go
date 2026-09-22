@@ -37,6 +37,26 @@ func Decode(w http.ResponseWriter, r *http.Request, dst any) error {
 	return nil
 }
 
+// DecodeOptional is Decode, except a missing or empty body leaves dst zeroed.
+// Use it when every field on dst is optional (POST /couples).
+func DecodeOptional(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(dst); err != nil {
+		if err == io.EOF {
+			return nil
+		}
+		return invalidJSON()
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		return invalidJSON()
+	}
+	return nil
+}
+
 func invalidJSON() error {
 	return apperr.Invalid("invalid_json", "Request body must be valid JSON.")
 }

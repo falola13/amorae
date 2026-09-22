@@ -1,61 +1,44 @@
 "use client";
 
-import Link from "next/link";
-import { useActionState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
-import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { idleFormState, type FormState } from "@/lib/forms";
+import { Alert, Button, Field, LinkButton } from "@/components/ui/kit";
+import { Bottom, ShowButton } from "@/components/ui/onboarding-bits";
+import { loginSchema, type LoginInput } from "@/lib/api/schemas";
 import { loginAction } from "../actions";
+import { routes } from "@/lib/routes";
 
-interface LoginFormProps {
-  next: string;
-}
+export function LoginForm({ next, expired }: { next: string; expired?: boolean }) {
+  const [show, setShow] = useState(false);
+  const [message, setMessage] = useState<string | null>(expired ? "Your session expired. Please log in again." : null);
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues: { next } });
 
-export function LoginForm({ next }: LoginFormProps) {
-  const [state, formAction, pending] = useActionState<FormState, FormData>(
-    loginAction,
-    idleFormState,
-  );
+  const onSubmit = async (input: LoginInput) => {
+    setMessage(null);
+    const err = await loginAction(input); // redirects on success
+    if (err) {
+      setMessage(err.message);
+      for (const [k, v] of Object.entries(err.fields ?? {})) setError(k as keyof LoginInput, { message: v });
+    }
+  };
 
   return (
-    <form action={formAction} className="flex flex-col gap-4" noValidate>
-      <input type="hidden" name="next" value={next} />
-      {state.status === "error" && state.message ? (
-        <Alert message={state.message} />
-      ) : null}
-      <Input
-        label="Email"
-        name="email"
-        type="email"
-        defaultValue={state.values?.email}
-        autoComplete="email"
-        required
-        error={state.fields?.email}
-      />
-      <Input
-        label="Password"
-        name="password"
-        type="password"
-        autoComplete="current-password"
-        minLength={8}
-        maxLength={72}
-        required
-        error={state.fields?.password}
-      />
-      <Button type="submit" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
-      </Button>
-      <p className="text-center text-sm text-fg-muted">
-        Need an account?{" "}
-        <Link
-          href="/register"
-          className="font-medium text-accent hover:underline"
-        >
-          Register
-        </Link>
-      </p>
+    <form method="post" onSubmit={handleSubmit(onSubmit)} className="flex grow flex-col" noValidate>
+      <input type="hidden" {...register("next")} />
+      <div className="flex grow flex-col gap-[18px] px-6">
+        {message ? <Alert message={message} /> : null}
+        <Field label="Email" type="email" autoComplete="email" inputMode="email" error={errors.email?.message} {...register("email")} />
+        <Field label="Password" type={show ? "text" : "password"} autoComplete="current-password" error={errors.password?.message} trailing={<ShowButton shown={show} onClick={() => setShow((s) => !s)} />} {...register("password")} />
+        {/* No reset flow exists yet (the API has no endpoint), so this is a plain
+            note rather than a link to nowhere. Make it a link when it lands. */}
+        <p className="m-0 -mt-2.5 flex h-11 items-center text-[15px] text-stone">Forgot your password? Reset is coming soon.</p>
+      </div>
+      <Bottom>
+        <Button type="submit" loading={isSubmitting}>Log in</Button>
+        <LinkButton href={routes.register} variant="text">Create an account instead</LinkButton>
+      </Bottom>
     </form>
   );
 }

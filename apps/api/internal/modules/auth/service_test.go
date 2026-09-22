@@ -44,6 +44,31 @@ func (f *fakeUserRepo) GetByEmail(_ context.Context, email string) (user.User, e
 	return u, nil
 }
 
+func (f *fakeUserRepo) GetByID(_ context.Context, id uuid.UUID) (user.User, error) {
+	for _, u := range f.byEmail {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return user.User{}, user.ErrNotFound
+}
+
+// UpdateEmail mirrors the Postgres repository: ErrEmailTaken on a clash.
+func (f *fakeUserRepo) UpdateEmail(_ context.Context, id uuid.UUID, email string, at time.Time) (user.User, error) {
+	if other, taken := f.byEmail[email]; taken && other.ID != id {
+		return user.User{}, user.ErrEmailTaken
+	}
+	for old, u := range f.byEmail {
+		if u.ID == id {
+			delete(f.byEmail, old)
+			u.Email, u.UpdatedAt = email, at
+			f.byEmail[email] = u
+			return u, nil
+		}
+	}
+	return user.User{}, user.ErrNotFound
+}
+
 type fakeSessionRepo struct {
 	byHash    map[string]Session
 	createErr error // when set, Create fails with it (simulates a DB error)
@@ -208,10 +233,15 @@ func TestService_Register_PasswordLengthBoundaries(t *testing.T) {
 		password string
 		wantErr  bool
 	}{
-		{"7 bytes rejected", "seven@b.com", strings.Repeat("a", 7), true},
-		{"8 bytes accepted", "eight@b.com", strings.Repeat("a", 8), false},
+		{"9 characters rejected", "nine@b.com", strings.Repeat("a", 9), true},
+		{"10 characters accepted", "ten@b.com", strings.Repeat("a", 10), false},
 		{"72 bytes accepted", "seventytwo@b.com", strings.Repeat("a", 72), false},
 		{"73 bytes rejected", "seventythree@b.com", strings.Repeat("a", 73), true},
+		// Characters, not bytes, for the minimum: 5 emoji are 20 bytes but 5 characters.
+		{"5 emoji rejected", "emoji@b.com", strings.Repeat("🙏", 5), true},
+		{"10 accented accepted", "accent@b.com", strings.Repeat("é", 10), false},
+		// Bytes, not characters, for the maximum: 37 × "é" is 37 characters but 74 bytes.
+		{"74 bytes of accents rejected", "long@b.com", strings.Repeat("é", 37), true},
 	}
 
 	for _, tc := range cases {
@@ -403,5 +433,77 @@ func TestService_Login_RateLimitedPerAccountBeforeBcrypt(t *testing.T) {
 	_, err = svc.Login(context.Background(), LoginInput{Email: "other@example.com", Password: "guess"})
 	if appErr, _ := apperr.As(err); appErr != nil && appErr.Kind == apperr.KindRateLimited {
 		t.Fatal("one account's limit blocked a different account")
+	}
+}
+
+func registerForEmailChange(t *testing.T) (*Service, *fakeUserRepo, user.User) {
+	t.Helper()
+	svc, users, _ := newTestService(t, sequentialToken("t1", "t2"))
+	res, err := svc.Register(context.Background(), RegisterInput{Email: "old@example.com", Password: "correct horse", DisplayName: "Ada"})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	return svc, users, res.User
+}
+
+func TestService_ChangeEmail_OK(t *testing.T) {
+	svc, users, u := registerForEmailChange(t)
+
+	got, err := svc.ChangeEmail(context.Background(), u.ID, ChangeEmailInput{Email: "  New@Example.com ", CurrentPassword: "correct horse"})
+	if err != nil {
+		t.Fatalf("ChangeEmail: %v", err)
+	}
+	if got.Email != "new@example.com" {
+		t.Errorf("Email = %q, want normalised new@example.com", got.Email)
+	}
+	if _, stillOld := users.byEmail["old@example.com"]; stillOld {
+		t.Error("old email still maps to the account")
+	}
+}
+
+func TestService_ChangeEmail_WrongPasswordIsAFieldErrorNot401(t *testing.T) {
+	svc, users, u := registerForEmailChange(t)
+
+	_, err := svc.ChangeEmail(context.Background(), u.ID, ChangeEmailInput{Email: "new@example.com", CurrentPassword: "not the password"})
+
+	appErr, ok := apperr.As(err)
+	if !ok || appErr.Kind != apperr.KindInvalid || appErr.Fields["current_password"] == "" {
+		t.Fatalf("err = %v, want validation_failed with a current_password field (a 401 would log the web user out)", err)
+	}
+	if _, moved := users.byEmail["new@example.com"]; moved {
+		t.Fatal("email changed despite the wrong password")
+	}
+}
+
+func TestService_ChangeEmail_TakenAndInvalidInput(t *testing.T) {
+	svc, users, u := registerForEmailChange(t)
+	users.byEmail["taken@example.com"] = user.User{ID: uuid.New(), Email: "taken@example.com"}
+
+	_, err := svc.ChangeEmail(context.Background(), u.ID, ChangeEmailInput{Email: "taken@example.com", CurrentPassword: "correct horse"})
+	if appErr, ok := apperr.As(err); !ok || appErr.Kind != apperr.KindConflict {
+		t.Fatalf("taken email: err = %v, want email_taken", err)
+	}
+
+	_, err = svc.ChangeEmail(context.Background(), u.ID, ChangeEmailInput{Email: "not-an-email", CurrentPassword: ""})
+	appErr, ok := apperr.As(err)
+	if !ok || appErr.Fields["email"] == "" || appErr.Fields["current_password"] == "" {
+		t.Fatalf("bad input: err = %v, want both email and current_password field errors", err)
+	}
+}
+
+func TestService_ChangeEmail_RateLimitedPerAccount(t *testing.T) {
+	users := newFakeUserRepo()
+	limiter := ratelimit.New(1, 15*time.Minute, fixedNow)
+	svc, err := NewService(users, newFakeSessionRepo(), NewBcryptHasher(bcrypt.MinCost), fakeTxRunner{}, time.Hour, fixedNow, NewToken, limiter)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	id := uuid.New()
+
+	_, _ = svc.ChangeEmail(context.Background(), id, ChangeEmailInput{Email: "a@b.com", CurrentPassword: "guess-1"})
+	_, err = svc.ChangeEmail(context.Background(), id, ChangeEmailInput{Email: "a@b.com", CurrentPassword: "guess-2"})
+
+	if appErr, ok := apperr.As(err); !ok || appErr.Kind != apperr.KindRateLimited {
+		t.Fatalf("second attempt err = %v, want rate_limited", err)
 	}
 }

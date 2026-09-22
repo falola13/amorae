@@ -1,7 +1,7 @@
 // Brand constants shared by everything that can't read CSS variables: the
 // web app manifest, the <meta name="theme-color"> tags, and the Safari
-// pinned-tab colour. globals.css holds the same palette as design tokens;
-// keep the two in step (docs/BRAND.md is the source of truth).
+// pinned-tab colour. globals.css holds the full token set; keep the two in
+// step (docs/BRAND.md is the source of truth).
 export const brand = {
   name: "Amorae",
   tagline: "Two hearts, one faith.",
@@ -11,8 +11,5 @@ export const brand = {
     background: "#F7F4EF",
     ink: "#24201F",
     softWhite: "#FFFDFA",
-    // The dark-mode page background, used for the dark theme-color so the
-    // browser chrome matches the page instead of flashing the light colour.
-    darkBackground: "#1A1716",
   },
 } as const;

@@ -124,3 +124,42 @@ func TestPostgresRepository_Update(t *testing.T) {
 		t.Errorf("reloaded DisplayName = %q, want Updated Name", reloaded.DisplayName)
 	}
 }
+
+func TestPostgresRepository_UpdateEmailAndTimezone(t *testing.T) {
+	db := dbtest.New(t)
+	repo := user.NewPostgresRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	a, _ := user.New(uniqueEmail(t), "Ada", "hash", now)
+	b, _ := user.New(uniqueEmail(t), "Bo", "hash", now)
+	for _, u := range []user.User{a, b} {
+		if _, err := repo.Create(ctx, u); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+	}
+
+	fresh := uniqueEmail(t)
+	got, err := repo.UpdateEmail(ctx, a.ID, fresh, now)
+	if err != nil || got.Email != fresh {
+		t.Fatalf("UpdateEmail: got %q, err %v", got.Email, err)
+	}
+	if _, err := repo.UpdateEmail(ctx, a.ID, b.Email, now); err != user.ErrEmailTaken {
+		t.Fatalf("UpdateEmail to another account's email: err = %v, want ErrEmailTaken", err)
+	}
+	if _, err := repo.UpdateEmail(ctx, uuid.New(), uniqueEmail(t), now); err != user.ErrNotFound {
+		t.Fatalf("UpdateEmail unknown id: err = %v, want ErrNotFound", err)
+	}
+
+	if got.Timezone != user.DefaultTimezone {
+		t.Errorf("new user timezone = %q, want %q", got.Timezone, user.DefaultTimezone)
+	}
+	got.Timezone = "Africa/Lagos"
+	if _, err := repo.Update(ctx, got); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	reread, _ := repo.GetByID(ctx, a.ID)
+	if reread.Timezone != "Africa/Lagos" {
+		t.Errorf("timezone after Update = %q, want Africa/Lagos", reread.Timezone)
+	}
+}

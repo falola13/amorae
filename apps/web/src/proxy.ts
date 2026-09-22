@@ -3,29 +3,26 @@ import type { NextRequest } from "next/server";
 
 const SESSION_COOKIE = "amorae_session";
 
-// Optimistic guard only. A *missing* cookie is a reliable signal (bounce to
-// /login), but a *present* cookie proves nothing — it could be expired or
-// revoked, and Proxy can't call the API to check. The dashboard page is the
-// real gate: it calls getCurrentUser() and redirects to
-// /login?reason=expired on a 401.
+// Optimistic guard only. A missing cookie is a reliable signal; a present
+// cookie proves nothing (it may be expired or revoked), so the signed-in
+// shell re-checks with GET /users/me and sends a 401 back through /login.
 //
-// This never redirects an already-logged-in-looking visitor away from
-// /login — if it did, a stale cookie plus a dead API session would loop
-// forever (login can't be reached to clear the cookie that's causing the
-// loop). Logging in simply overwrites the cookie instead.
-export function proxy(request: NextRequest) {
-  if (request.cookies.has(SESSION_COOKIE)) {
-    return NextResponse.next();
-  }
+// It never redirects a logged-in-looking visitor away from /login or
+// /welcome, so a stale cookie can't trap anyone in a loop.
+const PUBLIC = ["/welcome", "/login", "/register", "/offline", "/terms", "/privacy", "/api/", "/_next/", "/icons/", "/splash/", "/brand/", "/manifest.webmanifest", "/sw.js", "/robots.txt", "/favicon"];
 
-  // Keep the query string (e.g. the PWA's ?source=pwa, or a deep link's
-  // ?tab=...) so the user lands exactly where they were headed. The login
-  // action re-validates `next` before redirecting to it.
+export function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+  if (PUBLIC.some((p) => pathname === p || pathname.startsWith(p))) return NextResponse.next();
+  if (request.cookies.has(SESSION_COOKIE)) return NextResponse.next();
+
+  // Home goes to the welcome screen; deep links go to login and come back.
+  if (pathname === "/") return NextResponse.redirect(new URL("/welcome", request.url));
   const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+  loginUrl.searchParams.set("next", pathname + search);
   return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
-  matcher: ["/dashboard", "/dashboard/:path*"],
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };

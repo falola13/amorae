@@ -1,69 +1,148 @@
 @import "tailwindcss";
 
-/* Design tokens, built from the brand palette in docs/BRAND.md (plum
-   #5B2A4A, background #F7F4EF, ink #24201F, soft white #FFFDFA).
-   Components use these (bg-bg, text-fg, text-accent, ...) and never raw
-   colours, so the palette lives in exactly one place. src/lib/brand.ts
-   mirrors the few values that the manifest and theme-color need. */
+/* Design tokens, one to one with the Amorae design system board
+   (docs/BRAND.md is the palette's source of truth). Components use these
+   names and never raw colours. The older aliases (bg-elevated, fg, accent,
+   danger, success) stay so existing components keep working. */
 @theme {
   --color-bg: #f7f4ef;
+  --color-paper: #f2ede5;
+  --color-surface: #fffdfa;
+  --color-ink: #24201f;
+  --color-stone: #6b635c;
+  --color-line: #e4ddd3;
+  --color-edge: #8f857b;
+  --color-faint: #ddd4c8;
+  --color-photo: #eae3d9;
+  --color-plum: #5b2a4a;
+  --color-plum-dark: #47203a;
+  --color-plum-tint: #f1e8ee;
+  --color-plum-soft: #b59aab;
+  --color-green: #3f6b52;
+  --color-green-tint: #e4ede6;
+  --color-amber: #7f5210;
+  --color-amber-tint: #f6ebd6;
+  --color-red: #9b3b32;
+  --color-red-tint: #f6e7e4;
+
+  /* Aliases kept for the original template components. */
   --color-bg-elevated: #fffdfa;
   --color-fg: #24201f;
-  --color-fg-muted: #6b625e;
-  --color-border: #e6dfd6;
+  --color-fg-muted: #6b635c;
+  --color-border: #e4ddd3;
   --color-accent: #5b2a4a;
-  --color-accent-hover: #4a2140;
+  --color-accent-hover: #47203a;
   --color-accent-fg: #fffdfa;
-  --color-danger: #b3261e;
-  --color-danger-bg: #fbeae8;
-  --color-success: #2f6b3a;
-  --color-success-bg: #e8f2ea;
+  --color-danger: #9b3b32;
+  --color-danger-bg: #f6e7e4;
+  --color-success: #3f6b52;
+  --color-success-bg: #e4ede6;
+
+  /* Type scale */
+  --text-micro: 12px;
+  --text-micro--line-height: 1.4;
+  --text-micro--letter-spacing: 0.08em;
+  --text-micro--font-weight: 700;
+  --text-support: 14px;
+  --text-support--line-height: 1.5;
+  --text-body: 16px;
+  --text-body--line-height: 1.55;
+  --text-bodylg: 17px;
+  --text-bodylg--line-height: 1.55;
+  --text-reading: 21px;
+  --text-reading--line-height: 1.6;
+  --text-section: 20px;
+  --text-section--line-height: 1.3;
+  --text-section--letter-spacing: -0.015em;
+  --text-section--font-weight: 600;
+  --text-title: 28px;
+  --text-title--line-height: 1.18;
+  --text-title--letter-spacing: -0.022em;
+  --text-title--font-weight: 600;
+  --text-display: 34px;
+  --text-display--line-height: 1.18;
+  --text-display--letter-spacing: -0.025em;
+  --text-display--font-weight: 600;
+
+  --radius-input: 12px;
+  --radius-btn: 14px;
+  --radius-card: 16px;
+  --radius-sheet: 24px;
+
+  --animate-breathe: breathe 1.8s ease-in-out infinite;
+  --animate-rise: rise 0.24s ease-out both;
+  --animate-page: rise 0.2s ease-out both;
+  --animate-sheet: sheet 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade: fade 0.24s ease-out both;
+  --animate-draw: draw 0.32s 0.08s ease-out forwards;
+
+  @keyframes breathe { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes sheet { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
 }
 
-/* `inline` makes Tailwind reference these variables where they're used
-   instead of resolving them at build time. That's required because
-   --font-manrope and --font-inter only exist at runtime, defined by
-   next/font's class on <html> (see app/layout.tsx). */
+/* `inline` so Tailwind references the variable next/font defines on <html>. */
 @theme inline {
-  --font-display: var(--font-manrope);
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Dark mode keeps the brand's warmth: ink surfaces, and the soft plum-white
-   the favicon switches to (#E9D5E1) as the accent. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #1a1716;
-    --color-bg-elevated: #24201f;
-    --color-fg: #f7f4ef;
-    --color-fg-muted: #b3aaa4;
-    --color-border: #3a3432;
-    --color-accent: #e9d5e1;
-    --color-accent-hover: #f3e6ee;
-    --color-accent-fg: #3d1b31;
-    --color-danger: #ff8a80;
-    --color-danger-bg: #3b1616;
-    --color-success: #8fd19e;
-    --color-success-bg: #16301c;
-  }
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html {
+  background-color: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   background-color: var(--color-bg);
-  color: var(--color-fg);
-  /* viewport-fit=cover (app/layout.tsx) lets the page run under the notch
-     and home indicator; these insets keep content clear of both. They are
-     0 everywhere else. */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
+  color: var(--color-ink);
+  font-size: 16px;
+  line-height: 1.55;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+  /* viewport-fit=cover (app/layout.tsx) lets pages run under the notch; the
+     side insets are padded here, top and bottom by each screen so the tab
+     bar and sheets can draw edge to edge. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
-@layer base {
-  /* Manrope reads best a step heavier than Tailwind's reset leaves headings. */
-  h1,
-  h2,
-  h3 {
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
+/* Installed: behave like an app. Prayers, notes and inputs stay selectable. */
+@media (display-mode: standalone) {
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  p, article, input, textarea, [data-selectable] { -webkit-user-select: text; user-select: text; }
+}
+
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role="switch"]:focus-visible {
+  outline: 2px solid var(--color-plum);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+input::placeholder, textarea::placeholder { color: var(--color-stone); opacity: 1; }
+/* 16px minimum keeps iOS Safari from zooming on focus. */
+input, textarea, select { font-size: max(16px, 1em); }
+
+@utility press {
+  transition: transform 0.12s ease-out, filter 0.12s ease-out;
+  &:active { transform: scale(0.98); filter: brightness(0.86); }
+}
+@utility tabular { font-variant-numeric: tabular-nums; }
+@utility pb-safe { padding-bottom: max(var(--safe-bottom), 16px); }
+@utility pt-safe { padding-top: calc(var(--safe-top) + 12px); }
+@utility draw-check { stroke-dasharray: 32; stroke-dashoffset: 32; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .draw-check { stroke-dashoffset: 0 !important; }
 }

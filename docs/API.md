@@ -64,6 +64,7 @@ interface User {
   id: string;
   email: string;
   display_name: string;
+  timezone: string;   // IANA zone, e.g. "Africa/Lagos"; "UTC" for new accounts
   created_at: string;
   updated_at: string;
 }
@@ -89,7 +90,9 @@ interface AuthResult {
 - `429 rate_limited`: see *Rate limits*
 
 Rules: the email is trimmed, lower-cased and must be a bare address. The password is
-8–72 bytes. The display name is trimmed and 1–50 characters.
+at least 10 characters (Unicode characters, so an emoji counts as one) and at most
+72 bytes (bcrypt's limit; accents and emoji take 2–4 bytes). The web app applies the
+identical rule. The display name is trimmed and 1–50 characters.
 
 ### `POST /v1/auth/login`
 
@@ -113,11 +116,31 @@ Rules: the email is trimmed, lower-cased and must be a bare address. The passwor
 ### `PATCH /v1/users/me` (auth)
 
 ```json
-{ "display_name": "Ada L." }
+{ "display_name": "Ada L.", "timezone": "Africa/Lagos" }
 ```
 
 - `200` → `{ "data": User }`
-- `400 validation_failed`
+- `400 validation_failed`: `fields` may contain `display_name`, `timezone`
+- `timezone` is optional (omit or `""` to leave it unchanged) and must be an IANA zone name.
+- `email` is **not** accepted here (it's rejected as an unknown field): use the endpoint below.
+
+### `PUT /v1/users/me/email` (auth)
+
+Changing the email changes what the account logs in with, so it needs the current
+password: a session left open on someone else's device isn't enough to take the
+account over.
+
+```json
+{ "email": "ada.new@example.com", "current_password": "correct horse battery" }
+```
+
+- `200` → `{ "data": User }`
+- `400 validation_failed`: `fields.email`, or `fields.current_password` when it's missing
+  or wrong. A wrong password is a 400 field error, never a 401, because clients treat
+  401 as "session expired".
+- `409 email_taken`
+- `429 rate_limited`: shares the per-account limit with login, so the password can't be
+  guessed here either. Also subject to the per-IP limit on auth routes.
 
 ## Operational endpoints (no envelope)
 
@@ -126,3 +149,59 @@ Rules: the email is trimmed, lower-cased and must be a bare address. The passwor
 | `GET /healthz` | Liveness. `200 {"status":"ok"}` whenever the process can serve. |
 | `GET /readyz` | Readiness. `200 {"status":"ready"}`, or `503 {"status":"unavailable"}` if Postgres is unreachable. |
 | `GET /metrics` | Prometheus metrics, served on a **separate listener** (`METRICS_ADDR`, default `127.0.0.1:9090`), never on the API port. |
+
+## Proposed endpoints (implemented by the web mock, not yet by Go)
+
+`apps/web/src/lib/api/mock/adapter.ts` answers these with the same envelopes
+and status codes, and `apps/web/src/lib/api/types.ts` has the shapes. Every
+resource is scoped to the caller's couple; a request for another couple's
+resource is a 404, never a 403, so ids do not leak.
+
+### Users and couples
+
+| Endpoint | Notes |
+| --- | --- |
+| `DELETE /v1/users/me` | 204; removes the user from the couple and deletes their content |
+| `GET /v1/couples/me` | `Couple`: flat `id`, `name`, `me`, `partner` (null until joined), `invite_code`, `started_on`, `onboarding` flags |
+| `POST /v1/couples` | 201 `Couple`; creates the couple with the caller as first member and a fresh invite code |
+| `POST /v1/couples/join` `{ code }` | 200 `Couple`, now with `partner` filled in; 400 `validation_failed` with `fields.code` when it does not match; 409 when the couple is full |
+| `PATCH /v1/couples/me` `{ name?, relationship_start_date? }` | 200 `Couple`; dates are `YYYY-MM-DD` |
+| `PATCH /v1/couples/role` `{ role }` | 200 `Couple`; sets the caller's own label, 1–32 characters |
+| `PATCH /v1/couples/me/onboarding` | `{ couple?, install?, notifications? }`; 200 `Couple`. `install` and `notifications` are stored per person; `couple` is accepted but derived from membership, so it is always `true` in the response |
+
+### Prayers
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET /v1/prayers/current` | `PrayerWeek` for this couple's current Sunday-to-Saturday week; the scheduler creates it, the API never does on read |
+| `GET /v1/prayers/history` | past weeks, newest first |
+| `GET /v1/prayers/weeks/:id` | |
+| `PUT /v1/prayers/current/points` `{ points: PrayerPoint[] }` | setter only, draft only; ≤10 points, order = array order |
+| `POST /v1/prayers/current/publish` | setter only; after this, points are read-only once the partner has completed any |
+| `POST` / `DELETE /v1/prayers/points/:id/complete` | the caller's own completion; the other partner's is untouched |
+| `PATCH /v1/prayers/weeks/:id/reflection` `{ reflection }` | the caller's reflection |
+
+`PrayerWeek.status` is `draft` (setter still writing), `published`, or
+`waiting` (the other partner sees this while the setter writes).
+
+### Together
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET`, `POST /v1/events` · `GET`, `PATCH /v1/events/:id` | `Event` belongs to the couple |
+| `POST` / `DELETE /v1/events/:id/complete` | |
+| `PATCH /v1/events/:id/checklist/:item` `{ done }` | |
+| `GET`, `POST /v1/goals` · `GET /v1/goals/:id` | `unit` is `naira` or `count` |
+| `POST /v1/goals/:id/progress` `{ amount }` | one shared total; progress rows carry `user_id` for the log only |
+| `GET /v1/challenges/current` · `PATCH /v1/challenges/current/days/:n` `{ done?, skipped? }` | |
+| `GET`, `POST /v1/journal` | `{ tag, text }` |
+| `GET`, `POST /v1/appreciations` · `DELETE /v1/appreciations/:id` | delete is the sender's undo, within a short window |
+| `GET`, `POST /v1/memories` | photo upload is a later addition |
+| `GET`, `POST /v1/milestones` | |
+
+### Notifications
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET`, `PATCH /v1/notifications/preferences` | `NotificationPrefs`; `reminder_time` is `HH:MM` in the user's timezone |
+| `POST /v1/notifications/subscribe` | the browser's `PushSubscription.toJSON()`; 204 |

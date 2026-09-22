@@ -1,0 +1,119 @@
+# Amorae: Decisions and Open Questions
+
+| | |
+|---|---|
+| **Document ID** | AMR-REQ-05 |
+| **Version** | 3.0 |
+| **Status** | Draft for review |
+| **Owner** | Product (decisions affecting architecture are co-owned with Engineering) |
+| **Last updated** | 2026-09-22 |
+
+This is the single register of decisions (`DEC-NN`) and open questions (`Q-NN`) for the
+requirement set. The other documents cite these IDs instead of restating them. Architecture
+decisions with lasting technical weight also have an ADR in [`docs/adr/`](../adr/); the
+register links to it rather than duplicating the reasoning.
+
+Rules:
+
+- IDs are permanent. A reversed decision gets status **Superseded** and a pointer to its
+  replacement; it is never deleted or renumbered.
+- An open question is closed by recording the answer as a new `DEC` and setting the question
+  to **Resolved → DEC-NN**.
+- "Due" is a release gate from the release plan in
+  [`01-product-requirements.md`](./01-product-requirements.md), not a calendar date, because the
+  schedule is not fixed yet.
+
+---
+
+## 1. Decisions
+
+All decisions below are **Accepted** as of 2026-09-22 unless marked otherwise.
+
+| ID | Decision | Rationale | Reference |
+|----|----------|-----------|-----------|
+| DEC-01 | The API is a single Go binary organised as a modular monolith. Feature modules depend on interfaces they declare, and `internal/app` is the only place that wires them together. | One team, one deployable, and module boundaries that can be split later without rewriting callers. | [ADR 0001](../adr/0001-modular-monolith.md) |
+| DEC-02 | The browser never calls the Go API. Next.js acts as a backend-for-frontend (BFF). It holds an opaque session token in the httpOnly `amorae_session` cookie (SameSite=Lax, Secure in production) and forwards it as `Authorization: Bearer`. Sessions are random 32-byte tokens, and only their SHA-256 hash is stored. There are no JWTs and no refresh endpoint. | The token is unreachable from JavaScript. Revocation is one row delete. There is no key rotation or refresh flow to get wrong. | [ADR 0002](../adr/0002-bff-and-opaque-sessions.md) |
+| DEC-03 | Standard library first: the stdlib `net/http` router, pgx with hand-written SQL, goose migrations embedded in the binary, and stdlib `testing`. | Fewer dependencies to audit and upgrade. The stdlib router has covered method and path patterns since Go 1.22. | [ADR 0003](../adr/0003-stdlib-first.md) |
+| DEC-04 | The service worker caches only content-hashed static assets and brand assets. It never caches pages, API responses or anything personal. Offline navigations get a static `/offline` page. | A couple's prayers and journal must not stay readable on a shared or lost device after logout. See Q-01 for the trade-off. | [ADR 0004](../adr/0004-pwa-service-worker.md) |
+| DEC-05 | Offline writes are TanStack Query paused mutations. Only writes registered as resumable are saved, per signed-in user, in `localStorage`, for up to 7 days. They replay on reconnect and are cleared on logout, session expiry and account deletion. The query cache is never persisted. | Reuses the client's existing mutation layer instead of a second, custom IndexedDB queue. Keeps personal reads off disk (DEC-04). | [ARCHITECTURE](../ARCHITECTURE.md) |
+| DEC-06 | Password policy: at least 10 characters, counted as Unicode code points, with no composition rules. The maximum is 72 bytes while bcrypt is the hash (see Q-02). The web client and the API apply the identical rule. | Follows current NIST and OWASP guidance to prefer length over composition rules. Counting code points keeps emoji and accented passwords fair. | [API](../API.md) |
+| DEC-07 | Changing the sign-in email is its own endpoint (`PUT /v1/users/me/email`) and requires the current password. A wrong password is a 400 field error, never a 401. The endpoint shares the per-account attempt limit with login. | A session left open on someone else's device must not be enough to take the account over. | [API](../API.md) |
+| DEC-08 | Invite codes are 3 letters and 3 digits, stored as `ABC123` and shown as `ABC-123`. | Easy to read aloud and type on a phone. Supersedes the v2.0 example `AB12-CD34`. | Q-08 covers lifetime and attempt limits. |
+| DEC-09 | CSRF defence: SameSite=Lax cookie, the origin check on Next.js Server Actions, and a BFF proxy that rejects state-changing requests whose `Sec-Fetch-Site` or `Origin` is cross-site. There are no CSRF tokens. | These controls cover the same threat without per-form token plumbing, because the cookie is SameSite and never reaches Go directly. | [ARCHITECTURE](../ARCHITECTURE.md) |
+| DEC-10 | The Go API is served under `/v1`. Browsers call same-origin `/api/v1/*`, which the BFF proxies to `/v1/*`. The proxy refuses any path outside `/v1`. | Follows from DEC-02. | [API](../API.md) |
+| DEC-11 | MVP rate limits are in memory, per API process: 10 login attempts per email per 15 minutes (checked before any hashing, whether or not the account exists), and 20 requests per client IP per minute across `/v1/auth/*`. Both return 429 with `Retry-After`. The client IP is trusted only when the BFF's shared secret is present. | Enough for one instance. The limits are only correct while exactly one API instance runs (see Q-13). | [API](../API.md) |
+| DEC-12 | One couple per user in MVP, exactly two members per couple. The schema uses a membership table, so this is a constraint and not a structural limit. | Keeps pairing and authorisation simple without closing off other relationship shapes later. | v2.0 decisions log |
+| DEC-13 | Prayer is a first-class feature but not the product's identity. There is no religious iconography in the logo or the navigation. | Positioning: Amorae is about the couple's whole shared life. | [01 PRD](./01-product-requirements.md) |
+| DEC-14 | `apps/web/src/app/globals.css` and [`docs/BRAND.md`](../BRAND.md) are the source of truth for visual tokens. Background `#F7F4EF`, plum `#5B2A4A`, one typeface (Manrope). The manifest theme and background colour are `#F7F4EF`. | Supersedes the v2.0 values (warm white `#F6F4EF`, "Inter or Manrope", a charcoal theme colour). | [04 Design](./04-design-specification.md) |
+| DEC-15 | AI is optional, sits behind a Go interface and a feature flag, and the product is fully functional with it off. AI output is never saved or published without the user's review. | Principle "Human before AI". An AI provider outage can't break core features. | [02 FR](./02-functional-requirements.md) |
+| DEC-16 | There is no `event_participants` table: both partners are implicit participants in every event. | Adds nothing for a two-person couple. Revisit only if events ever include outside people. | v2.0 decisions log |
+| DEC-17 | Milestones, birthdays and anniversaries are one `important_dates` entity with a `type`. | Fewer tables, same capability. | v2.0 decisions log |
+| DEC-18 | A prayer week's setter is computed once, when the week is created, and stored (`setter_user_id`). | The rotation never shifts retroactively. | v2.0 decisions log |
+| DEC-19 | A request for another couple's resource returns 404, never 403. | Prevents resource enumeration. | [API](../API.md) |
+| DEC-20 | No Redis or other cache or queue in MVP. Postgres is the only stateful dependency. | Fewer moving parts. Q-13 and Q-16 are the points where this is revisited. | [ARCHITECTURE](../ARCHITECTURE.md) |
+
+---
+
+## 2. Open questions
+
+Each question carries a recommendation so a decision can be taken quickly. Requirements that
+depend on an unanswered question say so ("Blocked by Q-NN").
+
+| ID | Question | Options | Recommendation | Owner | Due | Blocks |
+|----|----------|---------|----------------|-------|-----|--------|
+| Q-01 | Should personal content be readable when the app starts offline ("cold offline")? | (a) No, keep DEC-04: content stays readable offline only while the app is still open, and a cold start shows `/offline`. (b) Cache the current prayer week and upcoming events in IndexedDB, encrypted with a key held in memory, cleared on logout. (c) Cache API responses unencrypted. | **(a) for MVP.** Measure how often the offline page is shown, and revisit (b) after MVP if it matters. Reject (c): it breaks the privacy principle on shared devices. | Product + Engineering | Phase 2 exit | FR-PWA offline-read requirements |
+| Q-02 | Keep bcrypt or move to argon2id before launch? | (a) Keep bcrypt cost 12, with its 72-byte cap. (b) Move to argon2id (in `golang.org/x/crypto`, a module already in use, so no new dependency), verify existing bcrypt hashes and rehash them on login. | **(b), before the first real user.** There are no production accounts yet, so the switch costs about a day now and a migration later. It also removes the 72-byte cap. | Engineering | Before public launch | NFR-SEC password storage |
+| Q-03 | Should sessions also expire when idle, and which actions need the password again? | (a) Keep 30 days absolute only. (b) Add a 14-day idle expiry (update last use at most hourly), keeping the 30-day absolute limit. | **(b).** Also require the current password for password change and account deletion, as email change already does. | Engineering + Product | Phase 1 exit | NFR-SEC session management, FR-ACCT |
+| Q-04 | Which transactional email provider? | Postmark, Amazon SES, Resend, or another provider that offers a DPA and a suitable processing region. | Choose on DPA, region and deliverability, and send only through a `Mailer` interface so the provider can be swapped. | Engineering | Phase 1 exit | Password reset, email verification, email-change notice |
+| Q-05 | When is email verification required, and how does an email change work? | (a) Verification is optional. (b) Send on sign-up without blocking use; require a verified address before it can be used for password reset. | **(b).** Also make email change two-step: confirm the new address before switching, and notify the old one. Today the change applies at once, so a typo can lock the user out. | Product + Engineering | Phase 1 exit (needs Q-04) | FR-AUTH, FR-ACCT |
+| Q-06 | Where are memory photos stored, and under what limits? | (a) Private S3-compatible bucket with presigned uploads. (b) Store bytes in Postgres. | **(a).** Private bucket, short-lived signed URLs, images only, 10 MB cap, EXIF and GPS stripped on the server. | Engineering | Phase 4 start | FR-MEM photos |
+| Q-07 | Which timezone defines a couple's week, and who sets it? | `couples.timezone` exists, default `UTC`. (a) The creator's device timezone at couple creation, editable by either partner. (b) Each partner's own timezone. | **(a).** The scheduler uses the couple's timezone. Personal reminders use each user's own timezone. | Product | Phase 2 start | FR-PRAY scheduler, FR-DATE, FR-NOTF |
+| Q-08 | How long does an invite code live, and how are guesses limited? | The in-progress code sets a 7-day expiry. | **7 days, one active code per couple, regenerating invalidates the previous one, and join attempts are limited per user and per IP.** There are about 17.6 million codes, so the limit is what makes guessing impractical. | Engineering | Phase 1 exit | FR-PAIR |
+| Q-09 | What happens to shared content when a partner leaves the couple or deletes their account? There is no "leave couple" today. | (a) The couple dissolves: both partners get 30 days of read-only access and export, then couple content is deleted. (b) The remaining partner keeps shared content; the leaver's authored items are deleted. (c) Both keep a read-only copy indefinitely. | **(a).** Add a "leave couple" action. Neither partner can keep or lock the other out of a shared history they both wrote. Authored personal data follows the account. | Product | Phase 1 exit (affects the data model) | FR-PAIR, FR-ACCT, NFR-PRIV |
+| Q-10 | What is the minimum age? | The draft terms say 18. | **18**, stated in the terms and confirmed at sign-up. | Product + Legal | Before public launch | FR-AUTH sign-up |
+| Q-11 | What is the retention schedule? | | Expired sessions purged 7 days after expiry. Deleted accounts hard-deleted within 30 days, with backups rolling off within 35 days. Application logs kept 30 days, never containing content. | Product + Engineering | Before public launch | NFR-PRIV retention |
+| Q-12 | Hosting provider and region, sub-processors, and the basis for cross-border transfer. | | Pick the region before launch and list every sub-processor on the privacy page. | Product + Engineering | Before public launch | NFR-PRIV, NFR-OPS, Terms/Privacy pages |
+| Q-13 | When is a shared rate limiter needed? | (a) Postgres-backed. (b) Redis. | Run exactly **one** API instance until a shared limiter exists. Choose (a) first, in keeping with DEC-20. | Engineering | Before running more than one API instance | NFR-SCALE, NFR-SEC rate limiting |
+| Q-14 | How are the success metrics measured without third-party trackers? | (a) First-party aggregate SQL and Prometheus business counters. (b) Self-hosted privacy-friendly analytics. (c) A third-party analytics SDK. | **(a).** The privacy page promises no third-party trackers. Metrics are counts, never content. | Product | Phase 1 exit | PRD success metrics |
+| Q-15 | Which web test tooling? | | **Vitest and Testing Library** for units, **Playwright** for end-to-end critical flows in CI. | Engineering | Phase 1 exit | NFR-MAINT test coverage |
+| Q-16 | How does the background worker run (weekly prayer scheduler, reminders, push delivery)? | (a) A `cmd/worker` entry point in the same Go module, using a Postgres job table with `FOR UPDATE SKIP LOCKED` and an hourly tick. (b) An external queue. | **(a)**, in keeping with DEC-20. VAPID keys come from the secret store. | Engineering | Phase 2 start | FR-PRAY scheduler, FR-NOTF |
+| Q-17 | Legal readiness. | | Choose a contact address, assess whether a DPO registration is needed under the NDPA, get lawyer review of the Terms and Privacy pages, and publish a data-rights procedure. | Product + Legal | Before public launch | Launch |
+| Q-18 | AI provider and data handling (after MVP). | (a) A local or open-weight model. (b) An external provider under zero-retention, no-training terms. | Opt-in per user, with an explicit notice that prayer content leaves Amorae. Choose a provider only with zero retention and no training on inputs. | Product + Engineering | Phase 5 start | FR-AI |
+| Q-19 | What safety controls protect a partner from being monitored or controlled by the other while both are still paired? Q-09 covers leaving. | (a) None beyond leaving. (b) A list of your own active sessions with "sign out other devices", an email notice to the account owner on email or password change, and a standing rule against covert monitoring features. | **(b).** Never add read receipts, location sharing or "last seen" for a partner. Sessions list and sign-out-everywhere are a Should for MVP. | Product | Private beta gate | FR-ACCT, NFR-SEC, NFR-PRIV |
+| Q-20 | Where is explicit consent for faith content asked? Prayer and faith content can reveal religious belief (sensitive data under the NDPA, special-category data under GDPR Art. 9). | (a) At sign-up, as its own unticked checkbox separate from the Terms. (b) At first use of a faith feature, after pairing. | **(a).** Journal and appreciation text can reveal belief too, not only prayer. Record the timestamp and policy version. Withdrawing consent means deleting faith content. | Product + Legal | Phase 1 exit | NFR-PRIV consent, FR-AUTH sign-up |
+| Q-21 | Is a dark theme in scope for MVP? `docs/BRAND.md` defines a dark-mode plum tint, but `globals.css` has no dark palette. | (a) Light only for MVP. (b) Build a dark palette now. | **(a).** Keep the BRAND.md tint for the mark on dark backgrounds only. Revisit after MVP, when every text pair has been checked for contrast in both themes. | Design | Phase 1 exit | 04 tokens |
+| Q-22 | Which writes may queue offline? Today publishing a prayer week and undoing an appreciation both queue offline. v2.0 said both were online-only, and nothing on the server enforces the 5-second undo window. | (a) Both online-only. (b) Both queueable. (c) Publish may queue; undo is online-only and time-limited on the server. | **(c).** Publishing is setter-only and idempotent, so a late send is harmless. A queued undo can land long after the partner has read the note, which isn't an undo. Hide Undo while offline and have the server refuse a delete after the window. | Product + Engineering | Phase 2 exit | FR-PWA online-only actions, FR-APPR undo |
+| Q-23 | Should each partner mark challenge days separately? v2.0 had per-partner completion; the built contract has one shared done/skipped flag per day, so one partner can tick a day for both. | (a) One shared flag (as built). (b) Per-partner completion, like prayer points. | **(b).** It matches the two-person principle and the prayer model, and a shared flag misreports what each person did. Decide before the Go endpoint is built, since it changes the schema. | Product | Phase 3 start | FR-CHAL |
+
+---
+
+## 3. Changes from the v2.0 specification
+
+The v2.0 spec (2026-09-21) was written before the code. Where the code has since taken a
+different, deliberate path, this table records the current position, so neither version is
+silently assumed.
+
+| v2.0 said | Current position | Where it's settled |
+|-----------|------------------|--------------------|
+| Hash passwords with argon2id | bcrypt cost 12 as built; recommendation is to switch before launch | Q-02 |
+| Cookie session sent straight to the API; rotate on login; idle and absolute expiry | Opaque token behind the BFF; new token on every login; 30-day absolute expiry only | DEC-02, Q-03 |
+| `POST /auth/refresh` | No refresh endpoint; opaque server sessions | DEC-02 |
+| API under `/api/v1` | Go serves `/v1`; browsers use `/api/v1` through the BFF | DEC-10 |
+| chi or echo, sqlc, golang-migrate, testify | stdlib router, pgx with hand-written SQL, goose, stdlib testing | DEC-03 |
+| CSRF token on state-changing requests | SameSite cookie plus origin checks | DEC-09 |
+| Auth: 10 requests per minute per IP; general API: 100 per minute per user | Auth: 20 per minute per IP plus 10 login attempts per 15 minutes per account; the general per-user limit is not built yet (NFR-SEC) | DEC-11 |
+| Invite code example `AB12-CD34` | `ABC-123` | DEC-08 |
+| Service worker caches API reads (stale-while-revalidate) for offline reading | No personal data cached; cold offline reading is an open question | DEC-04, Q-01 |
+| Offline queue in IndexedDB, with a client idempotency key on every write | Persisted paused mutations in `localStorage`; idempotency keys are not built yet (FR-PWA) | DEC-05 |
+| Manifest theme colour deep charcoal; warm white `#F6F4EF`; Inter or Manrope | `#F7F4EF` theme and background; Manrope only | DEC-14 |
+| Audit log of security-sensitive actions | Not built; kept as a requirement (NFR-SEC, NFR-OBS) | 03 NFR |
+| (not covered) Account deletion, data export, leaving a couple | Now required | NFR-PRIV, Q-09 |
+| (not covered) Email change | Its own endpoint, requiring the current password | DEC-07, Q-05 |
+
+---
+
+## Change log
+
+| Version | Date | Change |
+|---------|------|--------|
+| 3.0 | 2026-09-22 | New document. Brings the v2.0 decisions logs and open questions into one register, records the decisions the code has already made, and adds recommendations, owners and release gates to every open question. |

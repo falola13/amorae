@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
+	"github.com/falola13/amorae/apps/api/internal/platform/authctx"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
 )
 
@@ -15,6 +18,7 @@ type service interface {
 	Register(ctx context.Context, input RegisterInput) (AuthResult, error)
 	Login(ctx context.Context, input LoginInput) (AuthResult, error)
 	Logout(ctx context.Context, token string) error
+	ChangeEmail(ctx context.Context, userID uuid.UUID, input ChangeEmailInput) (user.User, error)
 }
 
 // Handler is transport only: decode, call the service, map to a DTO,
@@ -37,6 +41,9 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.Handle("POST /auth/register", http.HandlerFunc(h.register))
 	r.Handle("POST /auth/login", http.HandlerFunc(h.login))
 	r.Handle("POST /auth/logout", http.HandlerFunc(h.logout))
+	// Lives here, not in the user module, because it's a credential change:
+	// it re-checks the password, which only auth knows how to do.
+	r.HandleAuthed("PUT /users/me/email", http.HandlerFunc(h.changeEmail))
 }
 
 // authResultDTO matches AuthResult{"token","expires_at","user"} in the HTTP
@@ -123,4 +130,31 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.NoContent(w)
+}
+
+type changeEmailRequest struct {
+	Email           string `json:"email"`
+	CurrentPassword string `json:"current_password"`
+}
+
+func (h *Handler) changeEmail(w http.ResponseWriter, r *http.Request) {
+	userID, ok := authctx.UserID(r.Context())
+	if !ok {
+		httpx.Error(w, r, ErrUnauthenticated)
+		return
+	}
+
+	var req changeEmailRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	u, err := h.svc.ChangeEmail(r.Context(), userID, ChangeEmailInput{Email: req.Email, CurrentPassword: req.CurrentPassword})
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.Data(w, http.StatusOK, user.ToDTO(u))
 }

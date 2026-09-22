@@ -101,3 +101,38 @@ func TestService_UpdateProfile_RejectsInvalidDisplayName(t *testing.T) {
 		t.Fatalf("UpdateProfile() error = %v, want validation_failed", err)
 	}
 }
+
+func TestService_UpdateProfile_Timezone(t *testing.T) {
+	original := User{ID: uuid.New(), DisplayName: "Ada", Timezone: DefaultTimezone}
+	svc := NewService(newFakeRepository(original), fixedNow)
+
+	got, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{DisplayName: "Ada", Timezone: "Africa/Lagos"})
+	if err != nil {
+		t.Fatalf("valid zone: %v", err)
+	}
+	if got.Timezone != "Africa/Lagos" {
+		t.Errorf("Timezone = %q, want Africa/Lagos", got.Timezone)
+	}
+
+	got, err = svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{DisplayName: "Ada"})
+	if err != nil || got.Timezone != "Africa/Lagos" {
+		t.Errorf("empty timezone should leave it unchanged: got %q, err %v", got.Timezone, err)
+	}
+
+	for _, bad := range []string{"Mars/Olympus", "Local", "   "} {
+		_, err = svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{DisplayName: "", Timezone: bad})
+		f := fieldsOf(t, err)
+		if f["timezone"] == "" || f["display_name"] == "" {
+			t.Errorf("timezone %q: fields = %v, want both timezone and display_name errors at once", bad, f)
+		}
+	}
+}
+
+func fieldsOf(t *testing.T, err error) map[string]string {
+	t.Helper()
+	appErr, ok := apperr.As(err)
+	if !ok {
+		t.Fatalf("err = %v, want a validation error", err)
+	}
+	return appErr.Fields
+}

@@ -2,63 +2,75 @@
 
 import { redirect } from "next/navigation";
 
+import { loginSchema, registerSchema, type LoginInput, type RegisterInput } from "@/lib/api/schemas";
 import { clearSession, getSessionToken, setSession } from "@/lib/auth/session";
-import { toFormState, type FormState } from "@/lib/forms";
+import { env } from "@/lib/env";
+import { toActionError, type ActionError } from "@/lib/forms";
 import { safeNext } from "@/lib/safe-next";
 import { login, logout, register } from "./api";
+import { routes } from "@/lib/routes";
 
-export async function loginAction(
-  _prevState: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
-  const next = safeNext(formData.get("next"));
+// Auth stays on Server Actions because only the server may set the httpOnly
+// session cookie (docs/adr/0002). The forms validate with React Hook Form +
+// Zod first; the same Zod schema runs again here.
+
+const MOCK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function loginAction(input: LoginInput): Promise<ActionError | undefined> {
+  const parsed = loginSchema.safeParse(input);
+  if (!parsed.success) return { message: "Check the highlighted fields.", fields: zodFields(parsed.error) };
+  const next = safeNext(parsed.data.next);
+
+  if (env.MOCK_AUTH) {
+    await setSession("mock-session", new Date(Date.now() + MOCK_TTL_MS).toISOString());
+    redirect(next);
+  }
 
   let result;
   try {
-    result = await login(email, password);
+    result = await login(parsed.data.email, parsed.data.password);
   } catch (error) {
-    return toFormState(error, { email });
+    return toActionError(error);
   }
-
-  // redirect() throws, so it must run after the try/catch — inside it, the
-  // throw would be caught and reported as a form error instead of
-  // navigating.
   await setSession(result.token, result.expires_at);
   redirect(next);
 }
 
-export async function registerAction(
-  _prevState: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
-  const displayName = String(formData.get("display_name") ?? "");
+export async function registerAction(input: RegisterInput): Promise<ActionError | undefined> {
+  const parsed = registerSchema.safeParse(input);
+  if (!parsed.success) return { message: "Check the highlighted fields.", fields: zodFields(parsed.error) };
+
+  if (env.MOCK_AUTH) {
+    await setSession("mock-session", new Date(Date.now() + MOCK_TTL_MS).toISOString());
+    redirect(routes.couple({ fresh: true }));
+  }
 
   let result;
   try {
-    result = await register(email, password, displayName);
+    result = await register(parsed.data.email, parsed.data.password, parsed.data.display_name);
   } catch (error) {
-    return toFormState(error, { email, display_name: displayName });
+    return toActionError(error);
   }
-
   await setSession(result.token, result.expires_at);
-  redirect("/dashboard");
+  redirect(routes.couple());
 }
 
 export async function logoutAction(): Promise<void> {
   const token = await getSessionToken();
-  if (token) {
+  if (token && !env.MOCK_AUTH) {
     try {
       await logout(token);
     } catch {
-      // The cookie is cleared below regardless of whether the API call
-      // succeeded — a failed logout request must never strand the user in
-      // a logged-in-looking state.
+      // The cookie is cleared regardless: a failed logout call must never
+      // strand the user in a logged-in-looking state.
     }
   }
   await clearSession();
-  redirect("/login");
+  redirect(routes.welcome);
+}
+
+function zodFields(error: { issues: { path: PropertyKey[]; message: string }[] }): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const i of error.issues) { const k = String(i.path[0] ?? ""); if (k && !out[k]) out[k] = i.message; }
+  return out;
 }

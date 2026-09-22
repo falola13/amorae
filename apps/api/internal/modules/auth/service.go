@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -24,7 +25,9 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, u user.User) (user.User, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
+	GetByID(ctx context.Context, id uuid.UUID) (user.User, error)
 	SetLastLoginAt(ctx context.Context, id uuid.UUID, at time.Time) error
+	UpdateEmail(ctx context.Context, id uuid.UUID, email string, at time.Time) (user.User, error)
 }
 
 type SessionRepository interface {
@@ -55,10 +58,26 @@ var (
 	ErrUnauthenticated    = apperr.Unauthenticated("unauthenticated", "Authentication required.")
 )
 
+// The password rule, shared with the web app (apps/web/src/lib/api/schemas.ts):
+// at least 10 characters, counted as Unicode characters (so an emoji is one,
+// as a person would count it), and at most 72 bytes, because bcrypt ignores
+// everything after 72 bytes and a password must never be silently truncated.
 const (
-	minPasswordBytes = 8
-	maxPasswordBytes = 72 // bcrypt ignores bytes beyond 72; reject instead of silently truncating
+	minPasswordChars = 10
+	maxPasswordBytes = 72
 )
+
+// passwordProblem returns a user-facing reason the password breaks the rule,
+// or "" if it's fine.
+func passwordProblem(password string) string {
+	switch {
+	case utf8.RuneCountInString(password) < minPasswordChars:
+		return fmt.Sprintf("Use at least %d characters.", minPasswordChars)
+	case len(password) > maxPasswordBytes:
+		return "That’s a little long. Try a shorter password."
+	}
+	return ""
+}
 
 type Service struct {
 	users    UserRepository
@@ -126,8 +145,8 @@ type AuthResult struct {
 // without a way to log in, and vice versa.
 func (s *Service) Register(ctx context.Context, input RegisterInput) (AuthResult, error) {
 	fields := map[string]string{}
-	if n := len(input.Password); n < minPasswordBytes || n > maxPasswordBytes {
-		fields["password"] = fmt.Sprintf("Must be between %d and %d characters.", minPasswordBytes, maxPasswordBytes)
+	if problem := passwordProblem(input.Password); problem != "" {
+		fields["password"] = problem
 	}
 
 	u, err := user.New(input.Email, input.DisplayName, "", s.now())
@@ -255,6 +274,56 @@ func (s *Service) Authenticate(ctx context.Context, token string) (uuid.UUID, er
 	}
 
 	return session.UserID, nil
+}
+
+type ChangeEmailInput struct {
+	Email           string
+	CurrentPassword string
+}
+
+// errWrongCurrentPassword is a field error, not a 401: the caller IS signed
+// in, and web clients treat any 401 as "session expired, log out".
+var errWrongCurrentPassword = apperr.Validation(map[string]string{"current_password": "That password isn’t right."})
+
+// ChangeEmail moves the account to a new email, after re-checking the
+// current password. The email is the account's identity (it's what login
+// asks for), so a stolen session alone must not be enough to take it over.
+// Attempts share the per-account login limit, so the password can't be
+// guessed through this endpoint either.
+func (s *Service) ChangeEmail(ctx context.Context, userID uuid.UUID, input ChangeEmailInput) (user.User, error) {
+	if ok, retryAfter := s.attempts.Allow("reauth:" + userID.String()); !ok {
+		return user.User{}, apperr.RateLimited(retryAfter)
+	}
+
+	fields := map[string]string{}
+	email, err := user.ValidateEmail(input.Email)
+	if err != nil {
+		appErr, ok := apperr.As(err)
+		if !ok {
+			return user.User{}, err
+		}
+		for k, v := range appErr.Fields {
+			fields[k] = v
+		}
+	}
+	if input.CurrentPassword == "" {
+		fields["current_password"] = "Enter your current password."
+	}
+	if len(fields) > 0 {
+		return user.User{}, apperr.Validation(fields)
+	}
+
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return user.User{}, err
+	}
+	if err := s.hasher.Compare(u.PasswordHash, input.CurrentPassword); err != nil {
+		return user.User{}, errWrongCurrentPassword
+	}
+	if email == u.Email {
+		return u, nil
+	}
+	return s.users.UpdateEmail(ctx, userID, email, s.now())
 }
 
 // Logout deletes the session for token. Deleting a row that doesn't exist

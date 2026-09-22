@@ -1,33 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
+import { Providers } from "@/components/providers";
 import { brand } from "@/lib/brand";
 import { startupImages } from "@/lib/pwa/startup-images";
 
 import "./globals.css";
 
-// Manrope for headings: the closest open font to the outlined wordmark.
-const manrope = Manrope({
-  subsets: ["latin"],
+// One face across the product, per the design system: Manrope 400 to 700.
+// Self-hosted (SIL OFL, src/fonts) so an installed app never waits on a
+// third-party request and the offline shell still has its type.
+const manrope = localFont({
+  src: [{ path: "../fonts/manrope-latin-variable.woff2", weight: "200 800", style: "normal" }],
   variable: "--font-manrope",
   display: "swap",
 });
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
-// The PWA <head>. The manifest link comes from app/manifest.ts automatically.
 export const metadata: Metadata = {
   applicationName: brand.name,
-  title: {
-    template: `%s · ${brand.name}`,
-    default: brand.name,
-  },
+  title: { template: `%s · ${brand.name}`, default: brand.name },
   description: brand.description,
   icons: {
     icon: [
@@ -43,14 +36,7 @@ export const metadata: Metadata = {
     ],
     other: [{ rel: "mask-icon", url: "/icons/safari-pinned-tab.svg", color: brand.colors.plum }],
   },
-  appleWebApp: {
-    capable: true,
-    title: brand.name,
-    statusBarStyle: "default",
-    startupImage: startupImages,
-  },
-  // Next emits the standard mobile-web-app-capable tag for `capable`; iOS
-  // still reads the apple- prefixed one before it will use startup images.
+  appleWebApp: { capable: true, title: brand.name, statusBarStyle: "default", startupImage: startupImages },
   other: { "apple-mobile-web-app-capable": "yes" },
   formatDetection: { telephone: false },
 };
@@ -58,20 +44,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // Lets the app draw edge to edge on notched phones; globals.css pads the
-  // body by the safe-area insets so nothing sits under the notch or home bar.
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: brand.colors.background },
-    { media: "(prefers-color-scheme: dark)", color: brand.colors.darkBackground },
-  ],
+  themeColor: brand.colors.background,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable}`}>
-      <body className="flex min-h-dvh flex-col bg-bg font-sans text-fg antialiased">
-        {children}
+    <html lang="en" className={manrope.variable}>
+      <body className="flex min-h-dvh flex-col bg-bg font-sans text-ink antialiased">
+        <Providers>{children}</Providers>
         <ServiceWorkerRegistrar />
       </body>
     </html>

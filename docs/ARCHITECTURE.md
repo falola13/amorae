@@ -4,6 +4,11 @@ This document explains how the template is put together and, more importantly,
 why. If a change you're about to make contradicts something here, either the
 change is wrong or this document is out of date. Fix whichever one it is.
 
+What the system must do, and how well, is specified in
+[`requirements/`](requirements/README.md). This document is the "how" those
+requirements point to. Open decisions and questions are tracked in
+[`requirements/05-decisions-and-open-questions.md`](requirements/05-decisions-and-open-questions.md).
+
 ## At a glance
 
 ```mermaid
@@ -174,8 +179,14 @@ err := s.tx.InTx(ctx, func(ctx context.Context) error {
   index hit). Expired sessions are rejected and deleted opportunistically.
 - Login runs a bcrypt comparison even when the email doesn't exist, so response
   time doesn't reveal which emails have accounts.
-- Passwords are 8–72 bytes. The upper bound is bcrypt's input limit, enforced
-  so longer passwords aren't silently truncated.
+- Passwords are at least 10 characters (counted as Unicode characters) and at
+  most 72 bytes. The upper bound is bcrypt's input limit, enforced so longer
+  passwords aren't silently truncated. The web app's Zod schema counts the same
+  way, so both sides always agree.
+- Changing the email (`PUT /v1/users/me/email`, in the auth module because it's
+  a credential change) re-checks the current password and shares the
+  per-account attempt limit with login. A wrong password is a 400 field error,
+  not a 401, which web clients would read as "session expired".
 
 ### Rate limiting
 
@@ -214,19 +225,65 @@ scaling table.
 
 ```
 src/
-  app/                 routes only: (auth)/login, (auth)/register, (app)/dashboard
-  proxy.ts             optimistic guard: no cookie → /login (the API is the real check)
-  features/<name>/     api.ts (server-only calls) · actions.ts (Server Actions) · components/
-  lib/api/             client.ts (the ONLY place that calls fetch) · errors.ts · types.ts
-  lib/auth/session.ts  the ONLY place that touches the session cookie
-  components/ui/       presentational primitives, no data access
+  app/                    routes only. (auth)/welcome,login,register · (onboarding)/couple,join,invite,install,notifications
+                          · "/" Home · (app)/together,prayers,history,settings · api/v1/[...path] (BFF front door)
+  proxy.ts                optimistic guard: no cookie → /welcome or /login?next= (the API is the real check)
+  features/<name>/        api.ts (axios calls) · hooks.ts (React Query) · actions.ts (Server Actions, auth only) · components/
+  lib/api/http.ts         the ONLY browser HTTP client (axios → /api/v1) · apiPath`` encodes every id in a URL
+  lib/api/client.ts       the ONLY server-side fetch (Server Actions)
+  lib/api/envelope.ts     the Go envelopes → data / ApiError, shared by both clients
+  lib/api/upstream.ts     headers every server→Go call carries (visitor IP + BFF secret), shared by client + proxy
+  lib/api/mock/           axios adapter + localStorage store that answers the v1 contract until the Go modules exist
+  lib/api/schemas.ts      Zod schemas: React Hook Form validates with them, Server Actions re-parse with them
+  lib/api/types.ts        the contract (snake_case, mirrors docs/API.md)
+  lib/query/              client.ts (QueryClient + global policies) · mutations.ts (defineWrite/useWrite)
+                          · offline.ts · persist.ts (offline changes across restarts) · keys.ts
+  lib/legal.ts            facts the Terms and Privacy pages share (updated date, contact, session length)
+  lib/store/              Zustand, client-only state: ui (prayer-mode session, install prompt) · toast
+  lib/routes.ts           every in-app URL as a typed builder
+  lib/config.ts           public build-time config (isMockApi)
+  lib/auth/session.ts     the ONLY place that touches the session cookie
+  components/ui/          kit.tsx (design system) · query-state.tsx (loading / error / ready for every screen)
+  components/layout/      app shell, tab bar, network banner, toaster
 ```
+
+State is split by kind, and each kind has one home:
+
+| Kind | Where | Why |
+| --- | --- | --- |
+| Server state (weeks, events, goals, journal…) | React Query, keys in `lib/query/keys.ts` | Caching, optimistic updates (marking a prayer, flipping a switch), invalidation after mutations |
+| Changes made offline | React Query paused mutations (`lib/query/client.ts`), saved per user by `lib/query/persist.ts` | Mutations pause while offline, survive a restart, and resume on reconnect; `lib/query/offline.ts` exposes online status and pending changes to the UI |
+| Client state that outlives a screen | Zustand (`lib/store`) | The prayer-mode session; the deferred install prompt; the current toast |
+| Form state | React Hook Form + Zod (`lib/api/schemas.ts`) | Field errors that say how to fix the problem; the same schema runs again in the Server Action |
+| Session | httpOnly cookie, Server Actions only | ADR 0002: the token never reaches JavaScript |
+
+The browser calls `/api/v1/<path>` on this origin through the axios client. The
+route handler at `app/api/v1/[...path]/route.ts` attaches the cookie's bearer
+token and forwards to `<API_URL>/v1/<path>`, so ADR 0002 still holds with a
+client-side data layer: no CORS, no token in JS, one server-side hop.
+
+The proxy only ever reaches `/v1`: it rejects path segments that could climb
+out (`x%2F..%2F..%2Freadyz` arrives decoded as one segment and would
+otherwise resolve to the API's `/readyz`), and it refuses state-changing
+requests from another site (the `Sec-Fetch-Site`/`Origin` rule Go's
+`http.CrossOriginProtection` uses), a second line behind `SameSite=Lax`.
+
+**Mock mode** (`NEXT_PUBLIC_API_MOCK`, on by default in `.env.example`) lets
+the front end run end to end before the Go modules for prayers, events, goals
+and the rest exist. One build-time flag (`lib/config.ts`) drives both halves:
+sign-in issues a local session for any email and password, and the axios
+transport is swapped for `lib/api/mock/adapter.ts`, loaded lazily so it never
+ships to real users. It answers the contract in `docs/API.md` from a
+localStorage store with the same envelopes and status codes. Because mock
+sign-in accepts any password, a production build refuses it unless
+`ALLOW_MOCK_AUTH=true` marks a deliberate demo. Call sites, hooks and screens
+do not change when the real endpoints land: turn the flag off.
 
 The frontend follows the same rules as the backend:
 
-- **Single choke points.** One module calls `fetch` and one module touches the
-  cookie. Timeouts, error mapping, auth headers and cache policy each live in
-  exactly one place.
+- **Single choke points.** One module makes browser HTTP calls, one makes
+  server-side calls, one touches the cookie. Timeouts, error mapping and auth
+  headers each live in exactly one place.
 - **Features depend on `lib/api`, not the other way round.** A feature can be deleted
   by removing its folder and its routes.
 - **Server-only by construction.** Anything that sees the token imports
@@ -234,6 +291,26 @@ The frontend follows the same rules as the backend:
   than a leaked token.
 - **Contract types live in `lib/api/types.ts`** and mirror the Go DTOs in
   [`docs/API.md`](API.md). When the contract changes, both sides change in the same PR.
+- **Every screen renders server data through `<QueryState>`.** It is the one
+  place that decides loading / failed-with-retry / offline / ready, so no page
+  can leave a failed request as a skeleton that spins forever. Page chrome
+  (top bar, title) stays outside it.
+- **Mutation errors have one handler.** The QueryClient toasts the API's
+  user-safe message for any failed write. A form that shows errors inline
+  opts out with `meta: { handlesError: true }`. Pages never hand-roll toasts.
+- **Every write is declared once.** Each feature lists its writes in
+  `features/<name>/writes.ts` with `defineWrite({ mutationKey, mutationFn,
+  invalidates })`. Screens use them through `useWrite(def)`; the QueryClient
+  registers the same definitions (`components/providers.tsx`) so a change made
+  offline can still be sent after the app restarts. Only optimistic updates
+  (marking a prayer, flipping a switch) spell out `useMutation`, and they still
+  take their key and API call from the definition.
+- **No hand-written URLs.** Links use `routes.*` (`lib/routes.ts`); API calls
+  build paths with `apiPath` so an id from the address bar can't add path
+  segments.
+- **Route files are thin.** They read params and compose feature components;
+  derivations (what's "tonight", who set the week) are pure functions in the
+  feature folder, not inline JSX.
 
 ### Progressive web app
 
@@ -252,6 +329,30 @@ The worker has one rule: **it never caches anything personal.** Pages, RSC
 payloads and API calls always go to the network. Only content-hashed static
 files and brand assets are cached. When the network is down, navigations get
 the offline page.
+
+Inside a running session the app degrades more gently than that: React Query
+keeps the last data in memory (`networkMode: "offlineFirst"`), a quiet banner
+replaces the content-blocking error, and changes made offline are paused
+mutations: their optimistic updates show at once and React Query sends them on
+reconnect.
+
+Paused changes also survive the app being closed (`lib/query/persist.ts`,
+using `@tanstack/react-query-persist-client`):
+
+- Only paused, registered writes are saved to `localStorage`. The query cache
+  never is, so a couple's prayers and journal don't sit on the device.
+- They're saved under the signed-in user's id and restored only for that user,
+  so one person's pending changes can't be sent from someone else's session.
+- They're kept for at most 7 days, and cleared on logout, session expiry and
+  account deletion (`clearSignedInState`). The logout confirmation warns when
+  changes haven't synced yet.
+- The one privacy cost: while a change is pending, its content (say, a journal
+  entry typed offline) sits in this browser's storage until it's sent.
+
+The design spec (section 20)
+asks for previously loaded prayers to stay readable across a *cold* offline
+launch too; that needs the worker to cache per-user data, which this ADR rules
+out. Decide one way or the other before launch (see ADR 0004).
 
 To test it, run the production build (`docker compose up --build`), open
 http://localhost:3000 in Chrome, and use DevTools → Application → Service
@@ -296,7 +397,8 @@ Say you're adding `matches`:
 
 These are real product needs. They're left out because the right answer depends
 on decisions that haven't been made yet, and a guessed default is worse than an
-obvious gap:
+obvious gap. Each one is tracked as a requirement or an open question in
+[`requirements/`](requirements/README.md):
 
 - **Email verification and password reset.** Both need an email provider and a
   worker. Verification is also what fully closes account enumeration: today

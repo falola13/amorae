@@ -1,11 +1,8 @@
-const FALLBACK = "/dashboard";
+const FALLBACK = "/";
 const BASE = "http://amorae.invalid";
 
-// Only a same-origin path is a safe post-login redirect target. Prefix checks
-// alone are not enough: browsers normalise "\" to "/" and strip tabs and
-// newlines, so "/\\evil.com" or "/\t/evil.com" become the off-site
-// "//evil.com". Resolving with the URL parser (which applies the same rules)
-// and checking the origin catches every variant.
+// Only a same-origin path is a safe post-login redirect target. Resolving
+// with the URL parser catches "\\evil.com" and friends the way browsers do.
 export function safeNext(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/")) return FALLBACK;
   try {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
+	"github.com/falola13/amorae/apps/api/internal/platform/authctx"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
 )
 
@@ -37,6 +38,10 @@ func (f *fakeAuthService) Login(_ context.Context, input LoginInput) (AuthResult
 func (f *fakeAuthService) Logout(_ context.Context, token string) error {
 	f.gotLogoutToken = token
 	return f.err
+}
+
+func (f *fakeAuthService) ChangeEmail(_ context.Context, _ uuid.UUID, _ ChangeEmailInput) (user.User, error) {
+	return f.result.User, f.err
 }
 
 func TestHandler_Register_ValidationFailedBodyIncludesFieldsAndRequestID(t *testing.T) {
@@ -136,5 +141,42 @@ func TestHandler_Logout_NoContent(t *testing.T) {
 	}
 	if svc.gotLogoutToken != "tok-1" {
 		t.Errorf("service received token %q, want tok-1", svc.gotLogoutToken)
+	}
+}
+
+func TestHandler_ChangeEmail_WrongPasswordIs400NotUnauthenticated(t *testing.T) {
+	h := NewHandler(&fakeAuthService{err: errWrongCurrentPassword})
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/users/me/email", bytes.NewBufferString(`{"email":"new@b.com","current_password":"nope"}`))
+	req = req.WithContext(authctx.WithUserID(req.Context(), uuid.New()))
+	rec := httptest.NewRecorder()
+
+	h.changeEmail(rec, req)
+
+	// A 401 here would make web clients treat the session as expired and log out.
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body: %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Error struct {
+			Fields map[string]string `json:"fields"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if body.Error.Fields["current_password"] == "" {
+		t.Errorf("fields = %v, want a current_password message", body.Error.Fields)
+	}
+}
+
+func TestHandler_ChangeEmail_RejectsUnknownFields(t *testing.T) {
+	h := NewHandler(&fakeAuthService{})
+	req := httptest.NewRequest(http.MethodPut, "/v1/users/me/email", bytes.NewBufferString(`{"email":"new@b.com","current_password":"x","password":"sneaky"}`))
+	req = req.WithContext(authctx.WithUserID(req.Context(), uuid.New()))
+	rec := httptest.NewRecorder()
+
+	h.changeEmail(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 invalid_json for an unknown field", rec.Code)
 	}
 }

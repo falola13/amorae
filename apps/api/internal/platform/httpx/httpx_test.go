@@ -127,6 +127,21 @@ func TestDecode_RejectsOversizeBody(t *testing.T) {
 	assertInvalidJSON(t, err)
 }
 
+func TestDecodeOptional_EmptyBody(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	var dst struct {
+		Name *string `json:"name"`
+	}
+	if err := DecodeOptional(rec, req, &dst); err != nil {
+		t.Fatalf("DecodeOptional() rejected an empty body: %v", err)
+	}
+	if dst.Name != nil {
+		t.Errorf("Name = %v, want nil", dst.Name)
+	}
+}
+
 func TestDecode_AcceptsValidBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"email":"a@b.com"}`))
 	rec := httptest.NewRecorder()

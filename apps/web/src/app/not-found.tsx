@@ -1,15 +1,14 @@
 import Link from "next/link";
 
-import { buttonClassName } from "@/components/ui/button";
+import { Icon } from "@/components/icons";
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-      <h1 className="font-display text-3xl text-fg">Page not found</h1>
-      <p className="text-fg-muted">The page you&apos;re looking for doesn&apos;t exist or has moved.</p>
-      <Link href="/" className={buttonClassName("primary")}>
-        Back home
-      </Link>
-    </main>
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col justify-center gap-3.5 bg-bg px-6">
+      <Icon name="alert" size={28} strokeWidth={1.4} className="text-red" />
+      <h1 className="m-0 text-[24px] font-semibold leading-tight tracking-[-0.02em]">That page isn&rsquo;t here</h1>
+      <p className="m-0 text-body text-stone">Nothing of yours is lost. Head back to your space.</p>
+      <Link href="/" className="press mt-2.5 flex h-[54px] items-center justify-center rounded-btn bg-plum text-[16px] font-semibold text-surface no-underline">Go home</Link>
+    </div>
   );
 }

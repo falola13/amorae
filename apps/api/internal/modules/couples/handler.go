@@ -3,7 +3,6 @@ package couples
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -15,7 +14,11 @@ import (
 
 type service interface {
 	Create(ctx context.Context, createdBy uuid.UUID, creatorName string, input CoupleCreateInput) (COUPLES, error)
-	Join(ctx context.Context, userID uuid.UUID, code string) (COUPLES, error)
+	Join(ctx context.Context, userID uuid.UUID, code string) (Mine, error)
+	GetMine(ctx context.Context, userID uuid.UUID) (Mine, error)
+	UpdateCouples(ctx context.Context, userID uuid.UUID, update UpdateDto) (Mine, error)
+	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Mine, error)
+	UpdateOnboarding(ctx context.Context, userID uuid.UUID, patch OnboardingDto) (Mine, error)
 }
 
 type users interface {
@@ -32,13 +35,18 @@ func NewHandler(svc service, users users) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
+	r.HandleAuthed("GET /couples/me", http.HandlerFunc(h.getMe))
 	r.HandleAuthed("POST /couples", http.HandlerFunc(h.create))
 	r.HandleAuthed("POST /couples/join", http.HandlerFunc(h.join))
+	r.HandleAuthed("PATCH /couples/me", http.HandlerFunc(h.updateCouple))
+	r.HandleAuthed("PATCH /couples/role", http.HandlerFunc(h.updateRole))
+	r.HandleAuthed("PATCH /couples/me/onboarding", http.HandlerFunc(h.updateOnboarding))
+
 }
 
 type createRequest struct {
-	Name                  *string    `json:"name"`
-	RelationshipStartDate *time.Time `json:"relationship_start_date"`
+	Name                  *string `json:"name"`
+	RelationshipStartDate *string `json:"relationship_start_date"`
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -55,21 +63,33 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req createRequest
-	if err := httpx.Decode(w, r, &req); err != nil {
+	if err := httpx.DecodeOptional(w, r, &req); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
 
-	result, err := h.svc.Create(r.Context(), createdBy, u.DisplayName, CoupleCreateInput{
+	if _, err := h.svc.Create(r.Context(), createdBy, u.DisplayName, CoupleCreateInput{
 		Name:                  req.Name,
 		RelationshipStartDate: req.RelationshipStartDate,
-	})
+		Timezone:              u.Timezone,
+	}); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	mine, err := h.svc.GetMine(r.Context(), createdBy)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
 
-	httpx.Data(w, http.StatusCreated, ToDTO(result))
+	dto, err := h.mineDTO(r.Context(), createdBy, mine)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.Data(w, http.StatusCreated, dto)
 }
 
 type joinRequest struct {
@@ -89,11 +109,150 @@ func (h *Handler) join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.Join(r.Context(), userID, req.Code)
+	mine, err := h.svc.Join(r.Context(), userID, req.Code)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
 
-	httpx.Data(w, http.StatusOK, ToDTO(result))
+	dto, err := h.mineDTO(r.Context(), userID, mine)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.Data(w, http.StatusOK, dto)
+}
+
+func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := authctx.UserID(r.Context())
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+
+	mine, err := h.svc.GetMine(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto, err := h.mineDTO(r.Context(), userID, mine)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.Data(w, http.StatusOK, dto)
+}
+
+func (h *Handler) mineDTO(ctx context.Context, userID uuid.UUID, mine Mine) (MineDTO, error) {
+	me, err := h.users.Get(ctx, userID)
+	if err != nil {
+		return MineDTO{}, err
+	}
+
+	var partner *user.User
+	for _, m := range mine.Members {
+		if m.ID == userID {
+			continue
+		}
+		p, err := h.users.Get(ctx, m.ID)
+		if err != nil {
+			return MineDTO{}, err
+		}
+		partner = &p
+		break
+	}
+
+	return ToMineDTO(mine, me, partner), nil
+}
+
+func (h *Handler) updateCouple(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+
+	var req UpdateDto
+	if err := httpx.DecodeOptional(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	mine, err := h.svc.UpdateCouples(ctx, userID, req)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto, err := h.mineDTO(ctx, userID, mine)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.Data(w, http.StatusOK, dto)
+}
+
+func (h *Handler) updateRole(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+
+	var role struct {
+		Role string `json:"role"`
+	}
+	if err := httpx.Decode(w, r, &role); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	mine, err := h.svc.UpdateRole(ctx, userID, role.Role)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto, err := h.mineDTO(ctx, userID, mine)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.Data(w, http.StatusOK, dto)
+}
+
+func (h *Handler) updateOnboarding(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+
+	var req OnboardingDto
+	if err := httpx.DecodeOptional(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	mine, err := h.svc.UpdateOnboarding(ctx, userID, req)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto, err := h.mineDTO(ctx, userID, mine)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	httpx.Data(w, http.StatusOK, dto)
 }

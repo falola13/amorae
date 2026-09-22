@@ -5,8 +5,11 @@ feature and the fiftieth follow the same rules.
 
 - **`apps/api`**: Go 1.26 modular monolith. Stdlib router, pgx, goose migrations,
   structured logs, Prometheus metrics, graceful shutdown.
-- **`apps/web`**: Next.js 16 App Router as a backend-for-frontend. Server Actions,
-  an httpOnly session cookie, Tailwind 4.
+- **`apps/web`**: Next.js 16 App Router as a backend-for-frontend. React Query over
+  an axios client (through a same-origin `/api/v1` route handler), Zustand for
+  client state, React Hook Form + Zod for forms, Server Actions for auth, an
+  httpOnly session cookie, Tailwind 4. The full Amorae product UI, built from the
+  design canvas.
 - **Working vertical slice**: register → log in → view and edit profile → log out,
   with the auth, validation, error-handling and transaction patterns every later
   feature reuses.
@@ -14,10 +17,31 @@ feature and the fiftieth follow the same rules.
   current iPhone and iPad, and a service worker with an offline page that
   never caches personal data. See the brand guide in [`docs/BRAND.md`](docs/BRAND.md).
 
+What Amorae must do, and how well, is specified in
+[`docs/requirements/`](docs/requirements/README.md): product requirements,
+functional and non-functional requirements, the design specification, and the
+register of decisions and open questions.
+
 Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before adding code. It covers
 the dependency rule, how SOLID maps onto the files, and the scaling path. The
 HTTP contract is in [`docs/API.md`](docs/API.md), and the decisions behind it
 are in [`docs/adr/`](docs/adr).
+
+## Quick start (front end only, mock API)
+
+The Go API has auth and users today; the prayer and Together modules are
+still to come. Until then the web app runs end to end against a built-in mock:
+
+```bash
+cp apps/web/.env.example apps/web/.env.local     # NEXT_PUBLIC_API_MOCK is on
+npm --prefix apps/web install
+npm run dev:web                                   # http://localhost:3000
+```
+
+Log in with any email and a 10+ character password. Settings has a "Try the
+week states" switch to preview the three Home states. Turn the mock flag off
+once the Go endpoints in `docs/API.md` exist. Mock sign-in accepts any
+password, so a production build refuses it unless `ALLOW_MOCK_AUTH=true`.
 
 ## Quick start (everything in Docker)
 
@@ -72,6 +96,7 @@ apps/
   api/        Go API: cmd/, internal/{app,config,platform,modules}, migrations/
   web/        Next.js: src/{app,features,lib,components}
 docs/
+  requirements/     what and how well: PRD, SRS, NFRs, design spec, decisions
   ARCHITECTURE.md   how and why
   API.md            HTTP contract
   adr/              architecture decision records

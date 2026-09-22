@@ -26,11 +26,14 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
+// userColumns is every column a User is read from, in scanUser's order.
+const userColumns = `id, email, display_name, password_hash, timezone, created_at, updated_at, last_login_at`
+
 func (r *PostgresRepository) Create(ctx context.Context, u User) (User, error) {
 	_, err := r.db.Q(ctx).Exec(ctx, `
-		INSERT INTO users (id, email, display_name, password_hash, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, u.ID, u.Email, u.DisplayName, u.PasswordHash, u.CreatedAt, u.UpdatedAt)
+		INSERT INTO users (id, email, display_name, password_hash, timezone, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, u.ID, u.Email, u.DisplayName, u.PasswordHash, u.Timezone, u.CreatedAt, u.UpdatedAt)
 	if err != nil {
 		return User{}, translateWriteErr(err)
 	}
@@ -38,24 +41,30 @@ func (r *PostgresRepository) Create(ctx context.Context, u User) (User, error) {
 }
 
 func (r *PostgresRepository) GetByEmail(ctx context.Context, email string) (User, error) {
-	return r.scanOne(ctx, `
-		SELECT id, email, display_name, password_hash, created_at, updated_at
-		FROM users WHERE email = $1
-	`, email)
+	return r.scanOne(ctx, `SELECT `+userColumns+` FROM users WHERE email = $1`, email)
 }
 
 func (r *PostgresRepository) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
-	return r.scanOne(ctx, `
-		SELECT id, email, display_name, password_hash, created_at, updated_at
-		FROM users WHERE id = $1
-	`, id)
+	return r.scanOne(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id)
+}
+
+// UpdateEmail changes only the email. A clash with another account comes
+// back as ErrEmailTaken (translateWriteErr), the same as at registration.
+func (r *PostgresRepository) UpdateEmail(ctx context.Context, id uuid.UUID, email string, at time.Time) (User, error) {
+	u, err := r.scanOne(ctx, `
+		UPDATE users SET email = $2, updated_at = $3 WHERE id = $1
+		RETURNING `+userColumns, id, email, at)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return User{}, translateWriteErr(err)
+	}
+	return u, err
 }
 
 func (r *PostgresRepository) Update(ctx context.Context, u User) (User, error) {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
-		UPDATE users SET display_name = $2, updated_at = $3
+		UPDATE users SET display_name = $2, timezone = $3, updated_at = $4
 		WHERE id = $1
-	`, u.ID, u.DisplayName, u.UpdatedAt)
+	`, u.ID, u.DisplayName, u.Timezone, u.UpdatedAt)
 	if err != nil {
 		return User{}, translateWriteErr(err)
 	}
@@ -80,10 +89,10 @@ func (r *PostgresRepository) SetLastLoginAt(ctx context.Context, id uuid.UUID, a
 	return nil
 }
 
-func (r *PostgresRepository) scanOne(ctx context.Context, query string, arg any) (User, error) {
+func (r *PostgresRepository) scanOne(ctx context.Context, query string, args ...any) (User, error) {
 	var u User
-	err := r.db.Q(ctx).QueryRow(ctx, query, arg).
-		Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
+	err := r.db.Q(ctx).QueryRow(ctx, query, args...).
+		Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.Timezone, &u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return User{}, ErrNotFound

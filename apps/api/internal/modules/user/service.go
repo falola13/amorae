@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
 // Repository is declared here, by the consumer (Service), not by whatever
@@ -30,14 +32,33 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (User, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
+// UpdateProfileInput holds the non-sensitive profile fields. Email is not
+// here on purpose: changing it needs the current password, so it's its own
+// use case (auth.Service.ChangeEmail).
 type UpdateProfileInput struct {
 	DisplayName string `json:"display_name"`
+	// Timezone is optional: empty leaves it unchanged.
+	Timezone string `json:"timezone"`
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateProfileInput) (User, error) {
+	fields := map[string]string{}
+
 	displayName, err := ValidateDisplayName(input.DisplayName)
-	if err != nil {
+	if err := collectFields(fields, err); err != nil {
 		return User{}, err
+	}
+
+	var timezone string
+	if input.Timezone != "" {
+		timezone, err = ValidateTimezone(input.Timezone)
+		if err := collectFields(fields, err); err != nil {
+			return User{}, err
+		}
+	}
+
+	if len(fields) > 0 {
+		return User{}, apperr.Validation(fields)
 	}
 
 	u, err := s.repo.GetByID(ctx, id)
@@ -46,7 +67,26 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateP
 	}
 
 	u.DisplayName = displayName
+	if timezone != "" {
+		u.Timezone = timezone
+	}
 	u.UpdatedAt = s.now()
 
 	return s.repo.Update(ctx, u)
+}
+
+// collectFields merges a validation error's field messages into fields, so
+// every invalid field is reported at once. Any other error is returned as is.
+func collectFields(fields map[string]string, err error) error {
+	if err == nil {
+		return nil
+	}
+	appErr, ok := apperr.As(err)
+	if !ok || appErr.Kind != apperr.KindInvalid {
+		return err
+	}
+	for k, v := range appErr.Fields {
+		fields[k] = v
+	}
+	return nil
 }

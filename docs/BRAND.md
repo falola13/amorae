@@ -18,9 +18,9 @@ Code reads these from two places. Keep them in step:
 - `apps/web/src/lib/brand.ts`: the manifest, theme-color meta tags and the
   Safari pinned-tab colour, which can't read CSS.
 
-Type: headings are set in Manrope, the closest open font to the wordmark,
-and body text in Inter. The wordmark itself is outlined in the SVGs, so it
-needs no font.
+Type: everything is set in Manrope, the closest open font to the wordmark,
+self-hosted from `apps/web/src/fonts`. The wordmark itself is outlined in the
+SVGs, so it needs no font.
 
 ## The mark
 

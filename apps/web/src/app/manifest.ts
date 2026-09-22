@@ -2,18 +2,15 @@ import type { MetadataRoute } from "next";
 
 import { brand } from "@/lib/brand";
 
-// Served at /manifest.webmanifest, and Next links it from <head>
-// automatically. Written in TypeScript rather than as a static file so the
-// colours come from the same constants as the theme-color meta tags.
+// Served at /manifest.webmanifest and linked from <head> automatically.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
     name: brand.name,
     short_name: brand.name,
     description: brand.description,
-    // Launch into the app, not the marketing page. Signed-out users are
-    // bounced to /login by src/proxy.ts, so this is safe for both.
-    start_url: "/dashboard?source=pwa",
+    // Launch into Home. Signed-out users are bounced to /welcome by src/proxy.ts.
+    start_url: "/?source=pwa",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
@@ -29,9 +26,9 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       { src: "/icons/badge-96.png", sizes: "96x96", type: "image/png", purpose: "monochrome" },
     ],
-    // Shortcuts ("Open prayer" → /prayers, "Add an event" →
-    // /together/events/new, icon /icons/shortcut-96.png) are designed but
-    // left out until those routes exist: an installed app whose shortcuts
-    // open a 404 is worse than one with no shortcuts.
+    shortcuts: [
+      { name: "Open prayer", url: "/prayers/mode?source=shortcut", icons: [{ src: "/icons/shortcut-96.png", sizes: "96x96" }] },
+      { name: "Add an event", url: "/together/events/new?source=shortcut", icons: [{ src: "/icons/shortcut-96.png", sizes: "96x96" }] },
+    ],
   };
 }

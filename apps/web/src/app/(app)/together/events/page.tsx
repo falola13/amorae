@@ -1,0 +1,38 @@
+'use client';
+
+import { useEvents } from '@/features/together/hooks';
+import { iso, relativeDay, time12 } from '@/lib/dates';
+import { routes } from '@/lib/routes';
+import { DateRow } from '@/components/ui/date-row';
+import { today } from '@/lib/today';
+import { Main } from '@/components/layout/screen';
+import { QueryState } from '@/components/ui/query-state';
+import { BottomActions, EmptyState, LinkButton, Section, Skeleton, Title, TopBar } from '@/components/ui/kit';
+
+export default function Events() {
+  const events = useEvents(); const todayIso = iso(today());
+  return (
+    <>
+      <TopBar back="Our space" backHref={routes.together} />
+      <Main>
+        <div className="pt-2"><Title>Events</Title></div>
+        <QueryState queries={[events]} loading={<Skeleton />}>
+          {(eventsData) => {
+            if (eventsData.length === 0) {
+              return <EmptyState ghost="lines" title="Nothing planned yet." text="Add something you’d love to do together." cta={<LinkButton href={routes.eventNew()} icon="plus">Add an event</LinkButton>} />;
+            }
+            const up = eventsData.filter((e) => !e.done && e.date >= todayIso).sort((a, b) => (a.date + (a.start_time ?? '')).localeCompare(b.date + (b.start_time ?? '')));
+            const past = eventsData.filter((e) => e.done || e.date < todayIso).sort((a, b) => b.date.localeCompare(a.date));
+            return (
+              <>
+                {up.length ? <Section label="Coming up" className="mt-5">{up.map((e) => <DateRow key={e.id} date={e.date} title={e.title} sub={`${relativeDay(e.date, todayIso)}, ${time12(e.start_time)}${e.date === todayIso && e.location ? ` · ${e.location}` : ''}`} href={routes.event(e.id)} />)}</Section> : null}
+                {past.length ? <Section label="Earlier" className="mb-4 mt-6">{past.map((e) => <DateRow key={e.id} date={e.date} title={e.title} sub="Done together" past href={routes.event(e.id)} action="Save a moment from it" />)}</Section> : null}
+              </>
+            );
+          }}
+        </QueryState>
+      </Main>
+      <BottomActions><LinkButton href={routes.eventNew()} icon="plus">Add an event</LinkButton></BottomActions>
+    </>
+  );
+}

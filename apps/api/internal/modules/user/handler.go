@@ -51,8 +51,12 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 	httpx.Data(w, http.StatusOK, ToDTO(u))
 }
 
+// Email is deliberately absent: changing it needs the current password, so
+// it has its own endpoint (PUT /users/me/email, in the auth module). Sending
+// "email" here is rejected as an unknown field.
 type updateMeRequest struct {
 	DisplayName string `json:"display_name"`
+	Timezone    string `json:"timezone"`
 }
 
 func (h *Handler) updateMe(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +72,7 @@ func (h *Handler) updateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := h.svc.UpdateProfile(r.Context(), id, UpdateProfileInput{DisplayName: req.DisplayName})
+	u, err := h.svc.UpdateProfile(r.Context(), id, UpdateProfileInput{DisplayName: req.DisplayName, Timezone: req.Timezone})
 	if err != nil {
 		httpx.Error(w, r, err)
 		return

@@ -9,6 +9,7 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	_ "time/tzdata" // embeds the IANA zone database for ValidateTimezone
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -35,10 +36,14 @@ type User struct {
 	Email        string     `json:"email"`
 	DisplayName  string     `json:"display_name"`
 	PasswordHash string     `json:"-"`
+	Timezone     string     `json:"timezone"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
 }
+
+// DefaultTimezone matches the users.timezone column default.
+const DefaultTimezone = "UTC"
 
 // New validates email and displayName and constructs a User ready to
 // persist. passwordHash is taken as-is — hashing the plaintext password is
@@ -68,9 +73,31 @@ func New(email, displayName, passwordHash string, now time.Time) (User, error) {
 		Email:        email,
 		DisplayName:  displayName,
 		PasswordHash: passwordHash,
+		Timezone:     DefaultTimezone,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}, nil
+}
+
+// ValidateEmail normalizes and checks an email the same way New does, for
+// use cases that change only the email (auth.Service.ChangeEmail).
+func ValidateEmail(email string) (string, error) {
+	email = NormalizeEmail(email)
+	if !validEmail(email) {
+		return "", apperr.Validation(map[string]string{"email": "Enter a valid email address."})
+	}
+	return email, nil
+}
+
+// ValidateTimezone accepts an IANA zone name ("Africa/Lagos"). The zone
+// database is embedded (the time/tzdata import), so validation doesn't depend
+// on the host having one: the distroless runtime image, for example.
+func ValidateTimezone(tz string) (string, error) {
+	tz = strings.TrimSpace(tz)
+	if _, err := time.LoadLocation(tz); err != nil || tz == "" || tz == "Local" {
+		return "", apperr.Validation(map[string]string{"timezone": "Choose a timezone from the list."})
+	}
+	return tz, nil
 }
 
 // NormalizeEmail is exported so auth can normalize an email the same way
