@@ -22,6 +22,8 @@ type Repository interface {
 	UpdateRole(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, role string) error
 	UpdateOnboarding(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, install *bool, notifications *bool) error
 	ReplaceInvite(ctx context.Context, userID uuid.UUID, code string, expiresAt, at time.Time) error
+	Dissolve(ctx context.Context, userID uuid.UUID, at time.Time) error
+	GetArchivedForUser(ctx context.Context, userID uuid.UUID, now time.Time) ([]Mine, error)
 }
 
 // AttemptLimiter caps join attempts per person, so invite codes can't be
@@ -34,12 +36,14 @@ type AttemptLimiter interface {
 type Events interface {
 	CoupleCreated()
 	CouplePaired()
+	CoupleEnded()
 }
 
 type noEvents struct{}
 
 func (noEvents) CoupleCreated() {}
 func (noEvents) CouplePaired()  {}
+func (noEvents) CoupleEnded()   {}
 
 // How long an invite code stays usable. Read through the service clock so a
 // test can move time past it.
@@ -256,4 +260,26 @@ func (s *Service) UpdateOnboarding(ctx context.Context, userID uuid.UUID, patch 
 		return Mine{}, err
 	}
 	return s.GetMine(ctx, userID)
+}
+
+// LeaveCouple ends the caller's couple for both partners, and answers with
+// what is left of it: no live couple, and an archive entry carrying the date
+// its window closes.
+//
+// The couple id is not a parameter. It is read from the caller's membership,
+// exactly as every other write in this service does, which leaves no id for a
+// client to substitute.
+func (s *Service) LeaveCouple(ctx context.Context, userID uuid.UUID) ([]Mine, error) {
+	if err := s.repo.Dissolve(ctx, userID, s.now()); err != nil {
+		return nil, err
+	}
+	s.events.CoupleEnded()
+	return s.Archived(ctx, userID)
+}
+
+// Archived is what the caller used to be part of and can still read: ended,
+// not yet purged, and inside the retention window. Usually empty, and at most
+// one entry for anyone who has left a single couple.
+func (s *Service) Archived(ctx context.Context, userID uuid.UUID) ([]Mine, error) {
+	return s.repo.GetArchivedForUser(ctx, userID, s.now())
 }

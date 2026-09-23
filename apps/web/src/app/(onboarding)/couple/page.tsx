@@ -9,7 +9,7 @@ import { SafeTop } from "@/components/layout/screen";
 import { Button, LinkButton, Micro, Para, Title, TopBar } from "@/components/ui/kit";
 import { Bottom, Fact } from "@/components/ui/onboarding-bits";
 import { logoutAction } from "@/features/auth/actions";
-import { useCouple, useCreateCouple } from "@/features/couple/hooks";
+import { useCouple, useCreateCouple, useEndedCouples } from "@/features/couple/hooks";
 import { clearSignedInState } from "@/lib/query/persist";
 import { routes } from "@/lib/routes";
 
@@ -17,6 +17,11 @@ export default function CreateCouplePage() {
   const router = useRouter();
   const create = useCreateCouple();
   const couple = useCouple();
+  // Someone who just ended a space lands here, because they are in no couple.
+  // Without this they would see "start a space" and no sign of where theirs
+  // went, while it is still sitting there on a clock.
+  const ended = useEndedCouples();
+  const pastSpace = ended.data?.[0];
   const qc = useQueryClient();
 
   // Coming back here with a space already made (the browser's back button, a
@@ -75,6 +80,11 @@ export default function CreateCouplePage() {
         <LinkButton href={routes.join()} variant="text">
           I have an invitation code
         </LinkButton>
+        {pastSpace ? (
+          <LinkButton href={routes.settingsPastSpace} variant="text">
+            Your past space
+          </LinkButton>
+        ) : null}
         <Button
           variant="text"
           onClick={async () => {

@@ -116,9 +116,17 @@ func (r *PostgresRepository) Join(ctx context.Context, userID uuid.UUID, code st
 			return ErrInviteInvalid
 		}
 
-		_, err = r.db.Q(ctx).Exec(ctx, `SELECT id FROM couples WHERE id = $1 FOR UPDATE`, coupleID)
-		if err != nil {
+		// Locks the couple, and reads the one thing that makes an otherwise
+		// valid code useless: the couple it belongs to has ended. Dissolving
+		// revokes pending invites, so this is the second lock on that door.
+		var dissolvedAt *time.Time
+		if err := r.db.Q(ctx).QueryRow(ctx, `
+			SELECT dissolved_at FROM couples WHERE id = $1 FOR UPDATE
+		`, coupleID).Scan(&dissolvedAt); err != nil {
 			return fmt.Errorf("locking couple: %w", err)
+		}
+		if dissolvedAt != nil {
+			return ErrInviteInvalid
 		}
 
 		var members int
@@ -160,11 +168,11 @@ func (r *PostgresRepository) GetForUser(ctx context.Context, userID uuid.UUID, n
 	var c COUPLES
 	var start *time.Time
 	err := r.db.Q(ctx).QueryRow(ctx, `
-		SELECT c.id, COALESCE(c.name, ''), c.timezone, c.relationship_start_date, c.created_by, c.created_at, c.updated_at
+		SELECT c.id, COALESCE(c.name, ''), c.timezone, c.relationship_start_date, c.created_by, c.created_at, c.updated_at, c.dissolved_at
 		FROM couple_members m
 		JOIN couples c ON c.id = m.couple_id
-		WHERE m.user_id = $1
-	`, userID).Scan(&c.ID, &c.Name, &c.Timezone, &start, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt)
+		WHERE m.user_id = $1 AND m.ended_at IS NULL
+	`, userID).Scan(&c.ID, &c.Name, &c.Timezone, &start, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt, &c.DissolvedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Mine{}, ErrNotFound
@@ -175,25 +183,9 @@ func (r *PostgresRepository) GetForUser(ctx context.Context, userID uuid.UUID, n
 		c.RelationshipStartDate = *start
 	}
 
-	rows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT user_id, role, onboarding_install, onboarding_notifications
-		FROM couple_members WHERE couple_id = $1 ORDER BY joined_at ASC
-	`, c.ID)
+	members, err := r.membersOf(ctx, c.ID)
 	if err != nil {
-		return Mine{}, fmt.Errorf("listing members: %w", err)
-	}
-	defer rows.Close()
-
-	var members []Member
-	for rows.Next() {
-		var m Member
-		if err := rows.Scan(&m.ID, &m.Role, &m.Onboarding.Install, &m.Onboarding.Notifications); err != nil {
-			return Mine{}, fmt.Errorf("scanning member: %w", err)
-		}
-		members = append(members, m)
-	}
-	if err := rows.Err(); err != nil {
-		return Mine{}, fmt.Errorf("listing members: %w", err)
+		return Mine{}, err
 	}
 
 	var code string
@@ -245,6 +237,164 @@ func (r *PostgresRepository) UpdateRole(ctx context.Context, id uuid.UUID, coupl
 	}
 
 	return nil
+}
+
+// Dissolve ends the caller's couple for both partners.
+//
+// Three things happen together or not at all: the couple gets its end date,
+// both memberships are marked ended, and any invite still pending is revoked
+// so a stranger holding the code cannot walk into a couple that no longer
+// exists.
+//
+// The memberships are kept, not deleted — they are how both partners go on
+// reading and exporting until PurgeDissolvedBefore removes the couple. Ending
+// them is what frees each person to start again (Q-24).
+func (r *PostgresRepository) Dissolve(ctx context.Context, userID uuid.UUID, at time.Time) error {
+	return r.db.InTx(ctx, func(ctx context.Context) error {
+		// Conditional on the couple still being live, so two partners tapping
+		// "leave" at the same moment settle on one end date rather than the
+		// later one restarting the other's window.
+		var coupleID uuid.UUID
+		err := r.db.Q(ctx).QueryRow(ctx, `
+			UPDATE couples c
+			SET dissolved_at = $2, dissolved_by = $1, updated_at = $2
+			FROM couple_members m
+			WHERE m.couple_id = c.id AND m.user_id = $1
+			  AND m.ended_at IS NULL AND c.dissolved_at IS NULL
+			RETURNING c.id
+		`, userID, at).Scan(&coupleID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("ending couple: %w", err)
+		}
+
+		if _, err := r.db.Q(ctx).Exec(ctx, `
+			UPDATE couple_members SET ended_at = $2
+			WHERE couple_id = $1 AND ended_at IS NULL
+		`, coupleID, at); err != nil {
+			return fmt.Errorf("ending memberships: %w", err)
+		}
+
+		if _, err := r.db.Q(ctx).Exec(ctx, `
+			UPDATE couple_invitations SET status = 'revoked'
+			WHERE couple_id = $1 AND status = 'pending'
+		`, coupleID); err != nil {
+			return fmt.Errorf("revoking invite: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// GetArchivedForUser is the couples this person used to be in and can still
+// read: ended, not yet purged, and inside the retention window.
+//
+// The window is applied here rather than left to the sweeper, so a sweeper
+// that stops running cannot quietly turn 30 days of access into forever.
+func (r *PostgresRepository) GetArchivedForUser(ctx context.Context, userID uuid.UUID, now time.Time) ([]Mine, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT c.id, COALESCE(c.name, ''), c.timezone, c.relationship_start_date,
+		       c.created_by, c.created_at, c.updated_at, c.dissolved_at
+		FROM couple_members m
+		JOIN couples c ON c.id = m.couple_id
+		WHERE m.user_id = $1 AND m.ended_at IS NOT NULL AND c.dissolved_at > $2
+		ORDER BY c.dissolved_at DESC
+	`, userID, now.Add(-RetentionWindow))
+	if err != nil {
+		return nil, fmt.Errorf("listing ended couples: %w", err)
+	}
+
+	var archived []Mine
+	for rows.Next() {
+		var c COUPLES
+		var start *time.Time
+		if err := rows.Scan(&c.ID, &c.Name, &c.Timezone, &start, &c.CreatedBy,
+			&c.CreatedAt, &c.UpdatedAt, &c.DissolvedAt); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scanning ended couple: %w", err)
+		}
+		if start != nil {
+			c.RelationshipStartDate = *start
+		}
+		archived = append(archived, Mine{Couple: c})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing ended couples: %w", err)
+	}
+
+	// Members come after the rows are closed: one connection, one query at a
+	// time, and this is never more than a couple or two.
+	for i := range archived {
+		members, err := r.membersOf(ctx, archived[i].Couple.ID)
+		if err != nil {
+			return nil, err
+		}
+		archived[i].Members = members
+	}
+	return archived, nil
+}
+
+func (r *PostgresRepository) membersOf(ctx context.Context, coupleID uuid.UUID) ([]Member, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT user_id, role, onboarding_install, onboarding_notifications
+		FROM couple_members WHERE couple_id = $1 ORDER BY joined_at ASC
+	`, coupleID)
+	if err != nil {
+		return nil, fmt.Errorf("listing members: %w", err)
+	}
+	defer rows.Close()
+
+	var members []Member
+	for rows.Next() {
+		var m Member
+		if err := rows.Scan(&m.ID, &m.Role, &m.Onboarding.Install, &m.Onboarding.Notifications); err != nil {
+			return nil, fmt.Errorf("scanning member: %w", err)
+		}
+		members = append(members, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing members: %w", err)
+	}
+	return members, nil
+}
+
+// purgeLockID keeps two API instances from sweeping at the same moment. The
+// number is arbitrary but must stay fixed: it only has to differ from every
+// other advisory lock this codebase takes.
+const purgeLockID = 20260923
+
+// PurgeDissolvedBefore deletes couples whose retention window closed at or
+// before cutoff, and reports how many went. One DELETE is the whole purge:
+// members, invitations and every couple-owned table cascade from this row,
+// so a module added later is covered the day its table references couples.
+func (r *PostgresRepository) PurgeDissolvedBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	var purged int64
+	err := r.db.InTx(ctx, func(ctx context.Context) error {
+		var mine bool
+		if err := r.db.Q(ctx).QueryRow(ctx,
+			`SELECT pg_try_advisory_xact_lock($1)`, purgeLockID).Scan(&mine); err != nil {
+			return fmt.Errorf("taking the purge lock: %w", err)
+		}
+		if !mine {
+			// Someone else is sweeping. There is nothing to wait for: the
+			// next tick will find whatever they leave behind.
+			return nil
+		}
+
+		tag, err := r.db.Q(ctx).Exec(ctx, `
+			DELETE FROM couples
+			WHERE dissolved_at IS NOT NULL AND dissolved_at <= $1
+		`, cutoff)
+		if err != nil {
+			return fmt.Errorf("purging ended couples: %w", err)
+		}
+		purged = tag.RowsAffected()
+		return nil
+	})
+	return purged, err
 }
 
 // Only the caller's own membership is touched: install and notifications
@@ -331,7 +481,7 @@ func translateMemberWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		switch pgErr.ConstraintName {
-		case "couple_members_user_id_key", "couple_members_couple_user_key":
+		case "couple_members_live_user_key", "couple_members_couple_user_key":
 			return ErrAlreadyPaired
 		}
 	}

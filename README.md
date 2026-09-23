@@ -17,8 +17,9 @@ feature and the fiftieth follow the same rules.
   current iPhone and iPad, and a service worker with an offline page that
   never caches personal data. See the brand guide in [`docs/BRAND.md`](docs/BRAND.md).
 
-What Amorae must do, and how well, is specified in
-[`docs/requirements/`](docs/requirements/README.md): product requirements,
+What to build next, and the gaps to close first, is
+[`docs/ROADMAP.md`](docs/ROADMAP.md). What Amorae must do, and how well, is
+specified in [`docs/requirements/`](docs/requirements/README.md): product requirements,
 functional and non-functional requirements, the design specification, and the
 register of decisions and open questions.
 
@@ -88,6 +89,7 @@ apps/
   api/        Go API: cmd/, internal/{app,config,platform,modules}, migrations/
   web/        Next.js: src/{app,features,lib,components}
 docs/
+  ROADMAP.md        where the product is, the gaps, and the order of work
   requirements/     what and how well: PRD, SRS, NFRs, design spec, decisions
   ARCHITECTURE.md   how and why
   API.md            HTTP contract

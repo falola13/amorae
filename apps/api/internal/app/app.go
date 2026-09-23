@@ -34,6 +34,7 @@ type App struct {
 	db            *database.DB
 	server        *server.Server
 	metricsServer *server.Server
+	purger        *couples.Purger
 	log           *slog.Logger
 }
 
@@ -87,6 +88,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 
 	couplesRepo := couples.NewPostgresRepository(db)
 	couplesSvc := couples.NewService(couplesRepo, now, joinAttempts, m)
+
+	// Leaving a couple freezes it rather than deleting it; this is what
+	// finally deletes it, once both partners have had the retention window
+	// to read and export (FR-PAIR-008).
+	purger := couples.NewPurger(couplesRepo, now, log)
 
 	// *database.DB satisfies auth.TxRunner directly (matching InTx method
 	// signature) — no adapter type needed just to cross that interface.
@@ -145,7 +151,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	metricsMux.Handle("GET /metrics", m.Handler())
 	metricsSrv := server.New(cfg.MetricsAddr, metricsMux, cfg.ShutdownTimeout, log)
 
-	return &App{db: db, server: srv, metricsServer: metricsSrv, log: log}, nil
+	return &App{db: db, server: srv, metricsServer: metricsSrv, purger: purger, log: log}, nil
 }
 
 // Run serves the API and the metrics listener until ctx is canceled or
@@ -158,6 +164,11 @@ func (a *App) Run(ctx context.Context) error {
 	errs := make(chan error, 2)
 	go func() { errs <- a.server.Run(ctx) }()
 	go func() { errs <- a.metricsServer.Run(ctx) }()
+
+	// The purge sweeper is not in errs: it ends only when ctx is canceled,
+	// and it must not be able to bring the API down. Its own failures are
+	// logged and retried on the next tick.
+	go func() { _ = a.purger.Run(ctx) }()
 
 	err := <-errs
 	cancel()

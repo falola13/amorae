@@ -83,3 +83,25 @@ export const timeAgo = (isoTimestamp: string, now = new Date()) => {
   if (days < 7) return `${days} ${days === 1 ? "day" : "days"} ago`;
   return longDate(iso(then));
 };
+
+/** "27 September 2024" — when the year is part of what makes the date mean something. */
+export const longDateYear = (isoDate: string) =>
+  `${longDate(isoDate)} ${parse(isoDate).getFullYear()}`;
+
+/**
+ * How long since a date, in whole years and months: "2 years, 7 months".
+ * Empty for anything under a month, where a duration says less than the date
+ * itself does.
+ */
+export const yearsAndMonths = (isoDate: string, now = new Date()) => {
+  const from = parse(isoDate);
+  let months = (now.getFullYear() - from.getFullYear()) * 12 + (now.getMonth() - from.getMonth());
+  if (now.getDate() < from.getDate()) months -= 1;
+  if (months < 1) return "";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  const parts = [];
+  if (years) parts.push(`${years} ${years === 1 ? "year" : "years"}`);
+  if (rest) parts.push(`${rest} ${rest === 1 ? "month" : "months"}`);
+  return parts.join(", ");
+};

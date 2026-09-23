@@ -20,6 +20,16 @@ function unpaired(error: unknown) {
   return isApiError(error) && error.code === "couple_not_found";
 }
 
+// Screens that stand on their own account rather than on a couple. Someone
+// who has just ended their space still has to be able to reach their devices,
+// their data and the way out.
+const ACCOUNT_ROUTES: string[] = [
+  routes.settings,
+  routes.settingsProfile,
+  routes.settingsDevices,
+  routes.settingsPastSpace,
+];
+
 // The signed-in shell. src/proxy.ts already bounced visitors with no cookie;
 // this is the real check: GET /couples/me. 401 → login. couple_not_found →
 // pairing. Any other failure (down API, missing route, 500) before the couple
@@ -30,6 +40,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const qc = useQueryClient();
   const focused = path.startsWith(routes.prayerMode());
+  // Your account is yours before you have a space and after you leave one.
+  // These screens are about you — what is left of an ended space, your
+  // devices, your data, your profile — so they are not sent back to pairing
+  // when there is no couple. Everything else needs one.
+  const outlivesCouple = ACCOUNT_ROUTES.includes(path);
 
   // Reconnecting needs no wiring here: React Query refetches stale queries
   // and resumes paused changes on its own (lib/query/client.ts). What this
@@ -47,11 +62,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
   }, [qc, router]);
   useEffect(() => {
+    if (outlivesCouple) return;
     if (couple.data && !couple.data.onboarding.couple) router.replace(routes.couple());
     if (couple.isError && unpaired(couple.error)) router.replace(routes.couple());
-  }, [couple.data, couple.error, couple.isError, router]);
+  }, [outlivesCouple, couple.data, couple.error, couple.isError, router]);
 
-  if (couple.isPending) return <SplashView />;
+  if (couple.isPending && !outlivesCouple) return <SplashView />;
+  // Whatever went wrong, it wasn't this screen's business: what is left of an
+  // ended space doesn't depend on having a live one.
+  if (outlivesCouple && !couple.data) return <>{children}</>;
   // Full screen only when there's nothing to show. With the couple already
   // loaded, a failed background refetch keeps the app usable; each screen's
   // own queries show their problems inline.

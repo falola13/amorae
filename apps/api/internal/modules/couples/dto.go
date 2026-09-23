@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 )
 
@@ -59,6 +61,18 @@ type MineDTO struct {
 	Onboarding onboardingDTO `json:"onboarding"`
 }
 
+// EndedCoupleDTO is a couple someone used to be in. It is not a Couple: there
+// is no invite code, no onboarding and nothing to act on — only what it was,
+// who was in it, and how long is left to take a copy.
+type EndedCoupleDTO struct {
+	ID            string       `json:"id"`
+	Name          string       `json:"name"`
+	People        []partnerDTO `json:"people"`
+	StartedOn     *string      `json:"started_on,omitempty"`
+	DissolvedAt   time.Time    `json:"dissolved_at"`
+	ReadOnlyUntil time.Time    `json:"read_only_until"`
+}
+
 // The date arrives as "2006-01-02", which encoding/json cannot decode into a
 // time.Time (it only accepts RFC 3339). The service parses it.
 type UpdateDto struct {
@@ -112,6 +126,33 @@ func ToMineDTO(mine Mine, me user.User, partner *user.User) MineDTO {
 		if member, ok := mine.Member(partner.ID); ok {
 			out.Partner.Role = member.Role
 		}
+	}
+	return out
+}
+
+// ToEndedDTO renders one ended couple. names supplies each member's display
+// name; a member whose account has since gone is left out rather than shown
+// as a blank person.
+func ToEndedDTO(mine Mine, names map[uuid.UUID]string) EndedCoupleDTO {
+	out := EndedCoupleDTO{
+		ID:     mine.Couple.ID.String(),
+		Name:   mine.Couple.Name,
+		People: make([]partnerDTO, 0, len(mine.Members)),
+	}
+	if mine.Couple.DissolvedAt != nil {
+		out.DissolvedAt = *mine.Couple.DissolvedAt
+		out.ReadOnlyUntil = PurgeDueAt(*mine.Couple.DissolvedAt)
+	}
+	if !mine.Couple.RelationshipStartDate.IsZero() {
+		day := mine.Couple.RelationshipStartDate.Format("2006-01-02")
+		out.StartedOn = &day
+	}
+	for _, m := range mine.Members {
+		name, ok := names[m.ID]
+		if !ok {
+			continue
+		}
+		out.People = append(out.People, partnerDTO{ID: m.ID.String(), DisplayName: name, Role: m.Role})
 	}
 	return out
 }

@@ -1,6 +1,6 @@
 import { http } from "@/lib/api/http";
 import type { ChangeEmailInput, ChangePasswordInput, DeleteAccountInput } from "@/lib/api/schemas";
-import type { Couple, User } from "@/lib/api/types";
+import type { Couple, EndedCouple, User } from "@/lib/api/types";
 
 export const coupleApi = {
   me: () => http.get<User>("/users/me").then((r) => r.data),
@@ -21,6 +21,10 @@ export const coupleApi = {
   updateCouple: (patch: { name?: string; relationship_start_date?: string }) =>
     http.patch<Couple>("/couples/me", patch).then((r) => r.data),
   updateRole: (role: string) => http.patch<Couple>("/couples/role", { role }).then((r) => r.data),
+  // Leaving ends the couple for both partners and answers with what is left:
+  // the ended couple, readable until its window closes.
+  leaveCouple: () => http.delete<EndedCouple[]>("/couples/me").then((r) => r.data),
+  endedCouples: () => http.get<EndedCouple[]>("/couples/archived").then((r) => r.data),
   onboarding: (patch: Partial<Couple["onboarding"]>) =>
     http.patch<Couple>("/couples/me/onboarding", patch).then((r) => r.data),
   // Signed out: the BFF forwards these without a session.

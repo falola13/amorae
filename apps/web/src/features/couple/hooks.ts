@@ -7,6 +7,29 @@ import { coupleApi } from "./api";
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: coupleApi.me });
 export const useCouple = () => useQuery({ queryKey: keys.couple, queryFn: coupleApi.couple });
+export const useEndedCouples = () =>
+  useQuery({ queryKey: keys.endedCouples, queryFn: coupleApi.endedCouples });
+
+/**
+ * Leaving ends the couple for both partners. Not a resumable offline write:
+ * it is irreversible and starts a clock, so it happens now or not at all.
+ * The sheet shows the failure itself rather than a passing toast.
+ */
+export function useLeaveCouple() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: coupleApi.leaveCouple,
+    networkMode: "always",
+    meta: { handlesError: true },
+    onSuccess: (ended) => {
+      // Everything cached belonged to the space that just ended. Drop it
+      // rather than refetch it: none of it applies any more, and refetching
+      // it all at once is a burst of requests that would mostly 404.
+      qc.removeQueries();
+      qc.setQueryData(keys.endedCouples, ended);
+    },
+  });
+}
 
 export function useCreateCouple() {
   const qc = useQueryClient();

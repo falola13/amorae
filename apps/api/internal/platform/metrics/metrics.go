@@ -24,6 +24,7 @@ type Metrics struct {
 	signups        prometheus.Counter
 	couplesCreated prometheus.Counter
 	couplesPaired  prometheus.Counter
+	couplesEnded   prometheus.Counter
 }
 
 func New() *Metrics {
@@ -52,8 +53,12 @@ func New() *Metrics {
 		Name: "amorae_couples_paired_total",
 		Help: "Couples completed by a second member joining.",
 	})
+	couplesEnded := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "amorae_couples_ended_total",
+		Help: "Couples ended by a partner leaving.",
+	})
 
-	registry.MustRegister(requestsTotal, requestDuration, signups, couplesCreated, couplesPaired)
+	registry.MustRegister(requestsTotal, requestDuration, signups, couplesCreated, couplesPaired, couplesEnded)
 
 	return &Metrics{
 		registry:        registry,
@@ -62,12 +67,14 @@ func New() *Metrics {
 		signups:         signups,
 		couplesCreated:  couplesCreated,
 		couplesPaired:   couplesPaired,
+		couplesEnded:    couplesEnded,
 	}
 }
 
 func (m *Metrics) SignedUp()      { m.signups.Inc() }
 func (m *Metrics) CoupleCreated() { m.couplesCreated.Inc() }
 func (m *Metrics) CouplePaired()  { m.couplesPaired.Inc() }
+func (m *Metrics) CoupleEnded()   { m.couplesEnded.Inc() }
 
 // Observe records one completed request. route is the pattern the handler
 // was registered under (e.g. "GET /v1/users/me"), not the raw request path,

@@ -680,10 +680,16 @@ notification-permission onboarding steps, and derive the couple step from member
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started — Blocked by Q-09 | Test |
+| Must | MVP | Implemented | Test |
 
-The system shall let a partner leave their couple, dissolving it for both members per the Q-09
-recommendation.
+The system shall let a partner leave their couple, dissolving it for both members per DEC-25.
+
+`DELETE /v1/couples/me` ends both memberships, revokes any pending invite, and answers with the
+ended couple. Neither partner is in a couple afterwards, so both are free to start a new one at
+once (DEC-26); the ended one stays readable through `GET /v1/couples/archived` and in the export
+for 30 days, after which an hourly sweep deletes the couple and everything that cascades from it.
+In the web app: "End this space" on the couple screen, and "Your past space" in Settings and on
+the pairing screen for as long as the window is open.
 
 **Acceptance criteria**
 
@@ -692,7 +698,10 @@ recommendation.
   delete the couple's shared content.
 - **FR-PAIR-008.AC2** Given a couple has dissolved this way, when either former partner signs in
   during the 30-day window, then they shall be able to read and export shared content but not add
-  to it.
+  to it. Reading it is `GET /v1/couples/archived`; there is no write path to an ended couple at
+  all, because no write resolves one.
+- **FR-PAIR-008.AC3** Given a partner has left, when they create or join a new couple, then the
+  system shall allow it immediately and keep the ended couple readable alongside it (DEC-26).
 
 ### 3.4 PRAY — Weekly prayer
 

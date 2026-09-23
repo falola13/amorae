@@ -17,8 +17,7 @@ import {
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { ChangeEmailSheet } from "@/features/couple/components/change-email-sheet";
 import { ChangePasswordSheet } from "@/features/couple/components/change-password-sheet";
-import { EditCoupleSheet } from "@/features/couple/components/edit-couple-sheet";
-import { useCouple, useUpdateProfile } from "@/features/couple/hooks";
+import { useCouple, useMe, useUpdateProfile } from "@/features/couple/hooks";
 import { isApiError } from "@/lib/api/errors";
 import { profileSchema, type ProfileInput } from "@/lib/api/schemas";
 import { routes } from "@/lib/routes";
@@ -26,13 +25,15 @@ import { routes } from "@/lib/routes";
 const ZONES = ["Africa/Lagos", "America/New_York", "Europe/London", "Africa/Nairobi", "Asia/Dubai"];
 
 export default function ProfilePage() {
+  // Your profile is yours whether or not you are in a space, so it hangs off
+  // the account. The couple only decides one line of copy.
+  const account = useMe();
+  const me = account.data;
   const couple = useCouple();
-  const me = couple.data?.me;
   const update = useUpdateProfile();
   const [saved, setSaved] = useState(false);
   const [changingEmail, setChangingEmail] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [editingCouple, setEditingCouple] = useState(false);
   const {
     register,
     handleSubmit,
@@ -67,7 +68,7 @@ export default function ProfilePage() {
     <>
       <TopBar back="Settings" backHref={routes.settings} />
       <QueryState
-        queries={[couple]}
+        queries={[account]}
         frame={inPage}
         loading={
           <Main>
@@ -75,8 +76,8 @@ export default function ProfilePage() {
           </Main>
         }
       >
-        {(coupleData) => {
-          const partner = coupleData.partner?.display_name;
+        {(profile) => {
+          const partner = couple.data?.partner?.display_name;
           return (
             <form
               method="post"
@@ -114,7 +115,7 @@ export default function ProfilePage() {
                   >
                     <span className="flex min-w-0 flex-col">
                       <span className="text-[13px] font-semibold text-stone">Email</span>
-                      <span className="truncate">{coupleData.me.email}</span>
+                      <span className="truncate">{profile.email}</span>
                     </span>
                     <span className="shrink-0 text-[15px] font-semibold text-plum">Change</span>
                   </button>
@@ -142,20 +143,6 @@ export default function ProfilePage() {
                     Password
                     <span className="text-[15px] font-semibold text-plum">Change</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingCouple(true)}
-                    className="press flex h-[54px] items-center justify-between gap-3 border-b border-line text-left text-[16px] font-medium text-ink"
-                  >
-                    <span className="flex min-w-0 flex-col">
-                      <span className="text-[13px] font-semibold text-stone">Your space</span>
-                      <span className="truncate">
-                        {coupleData.name}
-                        {coupleData.me.role ? ` · you’re ${coupleData.me.role}` : ""}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-[15px] font-semibold text-plum">Edit</span>
-                  </button>
                 </div>
               </Main>
               <BottomActions>
@@ -174,13 +161,6 @@ export default function ProfilePage() {
       </QueryState>
       <ChangeEmailSheet open={changingEmail} onClose={() => setChangingEmail(false)} />
       <ChangePasswordSheet open={changingPassword} onClose={() => setChangingPassword(false)} />
-      {couple.data ? (
-        <EditCoupleSheet
-          open={editingCouple}
-          onClose={() => setEditingCouple(false)}
-          couple={couple.data}
-        />
-      ) : null}
     </>
   );
 }

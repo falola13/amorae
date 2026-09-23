@@ -258,7 +258,8 @@ usual envelope:
 
 `Couple` is flat: `id`, `name`, `me` (a `User` plus your own `role`), `partner` (null until
 joined), `invite_code` (only while a usable code exists and the couple has one member),
-`started_on`, `onboarding` flags.
+`started_on`, `onboarding` flags. A `Couple` is always a live one; a couple that has ended is a
+different shape, `EndedCouple` (below).
 
 | Endpoint | Notes |
 | --- | --- |
@@ -269,6 +270,32 @@ joined), `invite_code` (only while a usable code exists and the couple has one m
 | `PATCH /v1/couples/me` `{ name?, relationship_start_date? }` | 200 `Couple`; dates are `YYYY-MM-DD` |
 | `PATCH /v1/couples/role` `{ role }` | 200 `Couple`; sets the caller's own label, 1–32 characters |
 | `PATCH /v1/couples/me/onboarding` | `{ couple?, install?, notifications? }`; 200 `Couple`. `install` and `notifications` are stored per person; `couple` is accepted but derived from membership, so it is always `true` in the response |
+| `DELETE /v1/couples/me` | 200 `EndedCouple[]`. Leaving **ends the couple for both partners** — it does not remove one of them and leave the other holding the shared history (FR-PAIR-008). Afterwards neither is in a couple. 404 `couple_not_found` when you are in none |
+| `GET /v1/couples/archived` | 200 `EndedCouple[]` — the couples you used to be in whose 30-day window is still open. Usually empty |
+
+#### After a couple has ended
+
+`EndedCouple` is `id`, `name`, `people` (both members, display name and role — no emails),
+`started_on`, `dissolved_at` and `read_only_until`. There is nothing to act on: no invite code,
+no onboarding, no writes.
+
+Leaving ends both memberships and marks the couple. For 30 days it stays readable through
+`GET /v1/couples/archived` and is included in `GET /v1/users/me/export` under `ended_couples`;
+then the couple row is deleted, taking memberships, invitations and every couple-owned table
+with it. Each person's own account and profile are untouched.
+
+| After leaving | |
+| --- | --- |
+| `GET /v1/couples/me` | 404 `couple_not_found` — you are in no couple |
+| `POST /v1/couples`, `POST /v1/couples/join` | Work normally. Ending a space does not cost you the app (Q-24): you can start a new one immediately, and the old one stays readable alongside it |
+| `GET /v1/couples/archived` | The ended couple, until `read_only_until` |
+| `GET /v1/users/me/export` | Includes it under `ended_couples`, with `dissolved_at` and `read_only_until` |
+| Any invite code for it | Revoked at the moment it ends, and refused even if a row somehow stayed pending |
+| After `read_only_until` | Gone from both the archive and the export |
+
+Read access is bounded by the window in the query itself, not by the sweep having run, so a
+sweeper that stops cannot turn 30 days into forever. The sweep is hourly, so rows can outlive
+`read_only_until` by up to an hour before they are deleted.
 
 ## Operational endpoints (no envelope)
 

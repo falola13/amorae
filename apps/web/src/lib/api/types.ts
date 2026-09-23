@@ -37,6 +37,20 @@ export interface Couple {
   onboarding: { couple: boolean; install: boolean; notifications: boolean };
 }
 
+/**
+ * A couple someone used to be in. Ending a couple ends it for both partners;
+ * for 30 days afterwards it can still be read and downloaded, and then it is
+ * deleted. There is nothing to act on here — no invite, no onboarding.
+ */
+export interface EndedCouple {
+  id: string;
+  name: string;
+  people: Partner[];
+  started_on?: string;
+  dissolved_at: string;
+  read_only_until: string;
+}
+
 export interface PrayerPoint {
   id: string;
   title: string;

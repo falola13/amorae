@@ -115,20 +115,21 @@ func (r *PostgresRepository) scanOne(ctx context.Context, query string, args ...
 	return u, nil
 }
 
-// DeleteMe removes the user. Sessions, this user's membership, and invitations
+// DeleteMe removes the user. Sessions, their memberships, and invitations
 // they created go with them through ON DELETE CASCADE. A couple is deleted
 // only when they were its last member; a remaining partner keeps it, and
 // created_by moves to that partner because that foreign key does not cascade.
+//
+// Memberships, plural: someone can hold a live one and an ended one whose
+// retention window is still open (Q-24), and each couple has to be released
+// or the foreign key from created_by blocks the delete.
 func (r *PostgresRepository) DeleteMe(ctx context.Context, id uuid.UUID) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
-		var coupleID uuid.UUID
-		err := r.db.Q(ctx).QueryRow(ctx, `
-			SELECT couple_id FROM couple_members WHERE user_id = $1
-		`, id).Scan(&coupleID)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("finding membership: %w", err)
+		coupleIDs, err := r.coupleIDsOf(ctx, id)
+		if err != nil {
+			return err
 		}
-		if err == nil {
+		for _, coupleID := range coupleIDs {
 			if err := r.releaseCouple(ctx, id, coupleID); err != nil {
 				return err
 			}
@@ -143,6 +144,29 @@ func (r *PostgresRepository) DeleteMe(ctx context.Context, id uuid.UUID) error {
 		}
 		return nil
 	})
+}
+
+func (r *PostgresRepository) coupleIDsOf(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT couple_id FROM couple_members WHERE user_id = $1
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("finding memberships: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scanning membership: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding memberships: %w", err)
+	}
+	return ids, nil
 }
 
 func (r *PostgresRepository) releaseCouple(ctx context.Context, userID, coupleID uuid.UUID) error {

@@ -20,6 +20,8 @@ type service interface {
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Mine, error)
 	UpdateOnboarding(ctx context.Context, userID uuid.UUID, patch OnboardingDto) (Mine, error)
 	RegenerateInvite(ctx context.Context, userID uuid.UUID) (Mine, error)
+	LeaveCouple(ctx context.Context, userID uuid.UUID) ([]Mine, error)
+	Archived(ctx context.Context, userID uuid.UUID) ([]Mine, error)
 }
 
 type users interface {
@@ -43,6 +45,82 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("PATCH /couples/role", http.HandlerFunc(h.updateRole))
 	r.HandleAuthed("PATCH /couples/me/onboarding", http.HandlerFunc(h.updateOnboarding))
 	r.HandleAuthed("POST /couples/invite", http.HandlerFunc(h.regenerateInvite))
+	r.HandleAuthed("DELETE /couples/me", http.HandlerFunc(h.leaveCouple))
+	r.HandleAuthed("GET /couples/archived", http.HandlerFunc(h.archived))
+}
+
+// Leaving ends the couple for both partners rather than removing one of them
+// (FR-PAIR-008). Neither is in a couple afterwards — both are free to start
+// again — so it answers with the archive: what the couple was, and how long
+// is left to read and download it.
+func (h *Handler) leaveCouple(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+
+	archived, err := h.svc.LeaveCouple(ctx, userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto, err := h.endedDTOs(ctx, archived)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, dto)
+}
+
+// archived is the same list on its own, for a client coming back later.
+func (h *Handler) archived(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := authctx.UserID(ctx)
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+
+	archived, err := h.svc.Archived(ctx, userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto, err := h.endedDTOs(ctx, archived)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, dto)
+}
+
+// endedDTOs looks up the names of everyone involved. Always an empty array
+// rather than null, so a client can render the list without a nil check.
+func (h *Handler) endedDTOs(ctx context.Context, archived []Mine) ([]EndedCoupleDTO, error) {
+	out := make([]EndedCoupleDTO, 0, len(archived))
+	names := map[uuid.UUID]string{}
+	for _, mine := range archived {
+		for _, m := range mine.Members {
+			if _, known := names[m.ID]; known {
+				continue
+			}
+			u, err := h.users.Get(ctx, m.ID)
+			if err != nil {
+				// A partner who has since deleted their account is simply
+				// not listed; the rest of the record still belongs to you.
+				continue
+			}
+			names[m.ID] = u.DisplayName
+		}
+		out = append(out, ToEndedDTO(mine, names))
+	}
+	return out, nil
 }
 
 func (h *Handler) regenerateInvite(w http.ResponseWriter, r *http.Request) {

@@ -26,6 +26,7 @@ type users interface {
 
 type couplesReader interface {
 	GetMine(ctx context.Context, userID uuid.UUID) (couples.Mine, error)
+	Archived(ctx context.Context, userID uuid.UUID) ([]couples.Mine, error)
 }
 
 type consents interface {
@@ -68,6 +69,10 @@ type coupleDTO struct {
 	CreatedAt  time.Time   `json:"created_at"`
 	Members    []memberDTO `json:"members"`
 	InviteCode string      `json:"invite_code,omitempty"`
+	// Set on a couple that has ended: when, and the day it is deleted. Taking
+	// a copy before then is the whole point of this file (FR-PAIR-008.AC2).
+	DissolvedAt   *time.Time `json:"dissolved_at,omitempty"`
+	ReadOnlyUntil *time.Time `json:"read_only_until,omitempty"`
 }
 
 type exportDTO struct {
@@ -75,6 +80,9 @@ type exportDTO struct {
 	User       user.DTO     `json:"user"`
 	Consents   []consentDTO `json:"consents"`
 	Couple     *coupleDTO   `json:"couple"`
+	// Couples this person used to be in, while their window is still open.
+	// Empty once they have been purged.
+	EndedCouples []coupleDTO `json:"ended_couples"`
 }
 
 func (h *Handler) export(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +116,21 @@ func (h *Handler) export(w http.ResponseWriter, r *http.Request) {
 	}
 	out.Couple = couple
 
+	ended, err := h.couples.Archived(ctx, userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	out.EndedCouples = make([]coupleDTO, 0, len(ended))
+	for _, mine := range ended {
+		c, err := h.coupleDTO(ctx, userID, mine)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+		out.EndedCouples = append(out.EndedCouples, *c)
+	}
+
 	w.Header().Set("Content-Disposition", `attachment; filename="amorae-export.json"`)
 	httpx.Data(w, http.StatusOK, out)
 }
@@ -121,7 +144,10 @@ func (h *Handler) couple(ctx context.Context, userID uuid.UUID) (*coupleDTO, err
 	if err != nil {
 		return nil, err
 	}
+	return h.coupleDTO(ctx, userID, mine)
+}
 
+func (h *Handler) coupleDTO(ctx context.Context, userID uuid.UUID, mine couples.Mine) (*coupleDTO, error) {
 	c := &coupleDTO{
 		ID:         mine.Couple.ID.String(),
 		Name:       mine.Couple.Name,
@@ -132,6 +158,12 @@ func (h *Handler) couple(ctx context.Context, userID uuid.UUID) (*coupleDTO, err
 	if !mine.Couple.RelationshipStartDate.IsZero() {
 		day := mine.Couple.RelationshipStartDate.Format("2006-01-02")
 		c.StartedOn = &day
+	}
+	if mine.Couple.DissolvedAt != nil {
+		endedAt := *mine.Couple.DissolvedAt
+		until := couples.PurgeDueAt(endedAt)
+		c.DissolvedAt = &endedAt
+		c.ReadOnlyUntil = &until
 	}
 	for _, m := range mine.Members {
 		u, err := h.users.Get(ctx, m.ID)

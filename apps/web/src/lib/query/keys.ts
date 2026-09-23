@@ -2,6 +2,7 @@
 export const keys = {
   me: ["me"] as const,
   couple: ["couple"] as const,
+  endedCouples: ["couple", "ended"] as const,
   week: ["prayers", "current"] as const,
   /** Prefix of every weekById key, for invalidating all of them at once. */
   weeksById: ["prayers", "week"] as const,

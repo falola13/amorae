@@ -61,6 +61,8 @@ export const routes = {
   // Settings
   settings: "/settings",
   settingsProfile: "/settings/profile",
+  settingsCouple: "/settings/couple",
+  settingsPastSpace: "/settings/past-space",
   settingsNotifications: "/settings/notifications",
   settingsDevices: "/settings/devices",
 } as const;

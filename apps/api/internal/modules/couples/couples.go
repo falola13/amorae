@@ -92,6 +92,10 @@ type COUPLES struct {
 	CreatedBy             uuid.UUID `json:"created_by"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
+	// When one partner ended the couple, or nil while it is live. A couple
+	// with an end date is readable and exportable but closed to writes, until
+	// the retention window runs out and it is deleted. See dissolution.go.
+	DissolvedAt *time.Time `json:"dissolved_at,omitempty"`
 }
 
 func New(name string, created_by uuid.UUID, timezone string, relationship_start_date *time.Time, now time.Time) (COUPLES, error) {
