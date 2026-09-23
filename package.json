@@ -6,6 +6,7 @@
     "up": "docker compose up --build",
     "down": "docker compose down",
     "db": "docker compose up -d db",
+    "lock:web": "node scripts/lock-web.mjs",
     "migrate": "cd apps/api && go run ./cmd/migrate up",
     "migrate:down": "cd apps/api && go run ./cmd/migrate down",
     "migrate:status": "cd apps/api && go run ./cmd/migrate status",

@@ -71,6 +71,14 @@ Root `package.json` scripts work the same on Windows, macOS and Linux:
 | `npm run dev:api` / `dev:web` | Run an app natively |
 | `npm run test:api` | Go tests. Repository tests run only when `AMORAE_TEST_DATABASE_URL` is set |
 | `npm run check` | vet + test + lint + typecheck + build: what CI runs, minus Docker |
+| `npm run lock:web` | Regenerate `apps/web/package-lock.json` **on Linux**, in Docker |
+
+Use `npm run lock:web` rather than `npm install` in `apps/web` when a
+dependency changes. npm's lockfile is supposed to be cross-platform and for
+this tree it isn't: installing on Windows or macOS writes a lock missing two
+of `@tailwindcss/oxide-wasm32-wasi`'s bundled dependencies. `npm install`
+never notices; `npm ci` does, so CI fails on Linux while everything looks
+fine locally. The script generates the lock where CI installs it.
 
 To run the database-backed tests locally (with `npm run db` up):
 
