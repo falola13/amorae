@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCouple } from "@/features/couple/hooks";
-import { setterLabel } from "@/features/prayers/derive";
+import { setterLabel, prayerCount } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
 import { longDate, monthName } from "@/lib/dates";
 import { routes } from "@/lib/routes";
@@ -26,8 +26,8 @@ function Entry({
   meId?: string;
 }) {
   const meta = now
-    ? `${w.points.length} prayers · you ${w.my_completed.length} of ${w.points.length} so far`
-    : `${w.points.length} prayers · you ${w.my_completed.length} of ${w.points.length} · ${partner} ${w.partner_completed.length} of ${w.points.length}`;
+    ? `${prayerCount(w.points.length)} · you ${w.my_completed.length} of ${w.points.length} so far`
+    : `${prayerCount(w.points.length)} · you ${w.my_completed.length} of ${w.points.length} · ${partner} ${w.partner_completed.length} of ${w.points.length}`;
   return (
     <Link
       href={now ? routes.prayers : routes.historyWeek(w.id)}

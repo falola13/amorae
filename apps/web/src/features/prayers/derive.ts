@@ -1,5 +1,9 @@
 import type { PrayerWeek } from "@/lib/api/types";
 
+/** "1 prayer" / "3 prayers" / "no prayers". */
+export const prayerCount = (n: number): string =>
+  n === 0 ? "no prayers" : n === 1 ? "1 prayer" : `${n} prayers`;
+
 /** "you", or the partner's name — lowercase, for inline sentences like "set by {word}". */
 export const setterWord = (
   week: PrayerWeek,

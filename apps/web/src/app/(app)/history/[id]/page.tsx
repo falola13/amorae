@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
-import { setterSentence } from "@/features/prayers/derive";
+import { setterSentence, prayerCount } from "@/features/prayers/derive";
 import { useSaveReflection, useWeekById } from "@/features/prayers/hooks";
 import { range } from "@/lib/dates";
 import { routes } from "@/lib/routes";
@@ -51,7 +51,7 @@ export default function HistoryDetail() {
               </div>
               <Title className="mt-2">{setterSentence(w, couple.data?.me.id, partner)}</Title>
               <Para className="mt-1.5">
-                {w.points.length} prayers. You prayed {w.my_completed.length}, {partner} prayed{" "}
+                {prayerCount(w.points.length)}. You prayed {w.my_completed.length}, {partner} prayed{" "}
                 {w.partner_completed.length}.
               </Para>
               <ol className="m-0 mt-[18px] list-none border-t border-line p-0">
