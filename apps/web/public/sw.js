@@ -17,7 +17,7 @@
 // only installs a new worker when these bytes change, and installing is what
 // refreshes the precached offline page and clears old caches.
 
-const VERSION = "v1";
+const VERSION = "v2";
 const PRECACHE = `amorae-precache-${VERSION}`;
 const STATIC_CACHE = `amorae-static-${VERSION}`;
 const ASSET_CACHE = `amorae-assets-${VERSION}`;
@@ -142,3 +142,83 @@ async function trim(cache, max) {
   const keys = await cache.keys();
   await Promise.all(keys.slice(0, Math.max(0, keys.length - max)).map((key) => cache.delete(key)));
 }
+
+// ---------------------------------------------------------------------------
+// Push
+//
+// The other half of cmd/worker. The payload it sends is
+// { title, body, path, tag } and nothing else — no prayer text, no names
+// beyond a partner's first name — because this is drawn on a lock screen,
+// which is the one part of Amorae that is not private (FR-NOTF-005).
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(show(readPush(event.data)));
+});
+
+// readPush never throws. A push with no payload, or one this version of the
+// worker does not understand, still has to put *something* on the screen: the
+// browser shows its own "This site has been updated in the background" notice
+// otherwise, which is worse than a vague one of ours.
+function readPush(data) {
+  const fallback = { title: "Amorae", body: "Something is waiting for you.", path: "/", tag: "amorae" };
+  if (!data) return fallback;
+  try {
+    const payload = data.json();
+    return {
+      title: payload.title || fallback.title,
+      body: payload.body || fallback.body,
+      // Only ever somewhere inside this app. Resolved against our own origin
+      // and checked, rather than tested for a leading "/": "//evil.example"
+      // starts with a slash and is read by browsers as https://evil.example,
+      // so a prefix check would walk someone straight off the site.
+      path: samePath(payload.path),
+      tag: payload.tag || fallback.tag,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function samePath(path) {
+  if (typeof path !== "string") return "/";
+  try {
+    const url = new URL(path, self.location.origin);
+    return url.origin === self.location.origin ? url.pathname + url.search : "/";
+  } catch {
+    return "/";
+  }
+}
+
+function show({ title, body, path, tag }) {
+  return self.registration.showNotification(title, {
+    body,
+    // One per category: a second "a moment to pray" replaces the first rather
+    // than stacking up a list of them.
+    tag,
+    renotify: false,
+    icon: "/icons/icon-192.png",
+    badge: "/icons/badge-72.png",
+    data: { path },
+  });
+}
+
+// Tapping it goes where the notification is about — reusing the open tab if
+// there is one, so people do not collect windows.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const path = event.notification.data?.path || "/";
+
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clients) {
+        if (new URL(client.url).origin === self.location.origin) {
+          await client.focus();
+          if ("navigate" in client) await client.navigate(path);
+          return;
+        }
+      }
+      await self.clients.openWindow(path);
+    })(),
+  );
+});
