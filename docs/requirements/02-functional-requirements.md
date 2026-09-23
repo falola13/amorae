@@ -2152,13 +2152,13 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-PAIR-007 | G-01 | `PATCH /v1/couples/me/onboarding` | Partial | Go handler and migration in progress |
 | FR-PAIR-008 | G-05 | `DELETE /v1/couples/me`, `GET /v1/couples/archived` | Implemented | Go unit + Postgres integration tests; browser check 2026-09-23 |
 | FR-PAIR-009 | G-02, G-05 | Derived from `user_consents` — no endpoint of its own | Not started | None yet |
-| FR-PRAY-001 | G-02 | `GET /v1/prayers/current` | UI only | Screen built; no endpoint to test against |
-| FR-PRAY-002 | G-02 | `PUT /v1/prayers/current/points` | UI only | Screen built; no endpoint to test against |
-| FR-PRAY-003 | G-02 | `POST /v1/prayers/current/publish` | UI only | Screen built; no endpoint to test against |
-| FR-PRAY-004 | G-02 | `GET /v1/prayers/current` | UI only | Screen built; no endpoint to test against |
-| FR-PRAY-005 | G-02 | `POST`, `DELETE /v1/prayers/points/:id/complete` | UI only | Screen built; no endpoint to test against |
-| FR-PRAY-006 | G-02 | `PATCH /v1/prayers/weeks/:id/reflection` | UI only | Screen built; no endpoint to test against |
-| FR-PRAY-007 | G-02 | `GET /v1/prayers/history` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-001 | G-02 | `GET /v1/prayers/current` | Implemented | Go unit + Postgres integration tests; API and browser check 2026-09-23 |
+| FR-PRAY-002 | G-02 | `PUT /v1/prayers/current/points` | Implemented | Go unit + Postgres integration tests; API and browser check 2026-09-23 |
+| FR-PRAY-003 | G-02 | `POST /v1/prayers/current/publish` | Implemented | Go unit + Postgres integration tests; API and browser check 2026-09-23 |
+| FR-PRAY-004 | G-02 | `GET /v1/prayers/current` | Implemented | Go unit + Postgres integration tests; API and browser check 2026-09-23 |
+| FR-PRAY-005 | G-02 | `POST`, `DELETE /v1/prayers/points/:id/complete` | Implemented | Go unit + Postgres integration tests; API and browser check 2026-09-23 |
+| FR-PRAY-006 | G-02 | `PATCH /v1/prayers/weeks/:id/reflection` | Implemented | Go unit + Postgres integration tests; API and browser check 2026-09-23 |
+| FR-PRAY-007 | G-02 | `GET /v1/prayers/history` | Implemented | Go unit + Postgres integration tests; API and browser check 2026-09-23 |
 | FR-PRAY-008 | G-02 | `GET /v1/prayers/weeks/:id` | UI only | Screen built; no endpoint to test against |
 | FR-PRAY-009 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-PRAY-010 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |

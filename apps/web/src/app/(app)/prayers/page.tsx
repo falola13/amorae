@@ -24,6 +24,24 @@ export default function PrayersPage() {
   const couple = useCouple();
   const pending = usePendingCompletions();
 
+  // Before a partner joins there is no week to wait for, and saying so is
+  // kinder than letting the screen fail at them.
+  if (couple.data && !couple.data.partner) {
+    return (
+      <Main>
+        <div className="pt-1.5">
+          <Title>This week&rsquo;s prayers</Title>
+        </div>
+        <EmptyState
+          ghost="dots"
+          title="Once your partner joins."
+          text="Praying together takes two: one of you sets the week, the other responds, and it alternates from there."
+          cta={<LinkButton href={routes.invite}>Invite your partner</LinkButton>}
+        />
+      </Main>
+    );
+  }
+
   return (
     <QueryState
       queries={[week, couple]}

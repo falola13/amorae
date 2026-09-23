@@ -49,6 +49,10 @@ var (
 	ErrNotSetter   = apperr.Forbidden("not_this_weeks_setter", "It’s your partner’s week to set the prayers.")
 	ErrNotDraft    = apperr.Conflict("week_already_published", "This week has been shared already.")
 	ErrLockedByUse = apperr.Conflict("week_in_use", "Your partner has started praying these, so they can’t change now.")
+	// A week needs two people to have a setter at all, so a couple still
+	// waiting for its second member has no week — which is a state of the
+	// couple, not a missing thing.
+	ErrWaitingForPartner = apperr.Conflict("waiting_for_partner", "Your first prayer week starts when your partner joins.")
 )
 
 // Week is one couple's week of prayer.

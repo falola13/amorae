@@ -150,9 +150,11 @@ export default function SetPrayers() {
               labelledBy="pub-h"
             >
               <Para>
-                {partner} will see all {items.length}. Once{" "}
-                {partner === "your partner" ? "they start" : "she starts"} praying, they can&rsquo;t
-                be changed, so the week stays the same for both of you.
+                {/* "they" whoever the partner is: a name says nothing about
+                    which pronoun somebody uses. */}
+                {partner} will see {items.length === 1 ? "it" : `all ${items.length}`}. Once they
+                start praying, {items.length === 1 ? "it can" : "they can"}&rsquo;t be changed, so
+                the week stays the same for both of you.
               </Para>
               <ol className="m-0 list-none border-y border-line py-1">
                 {items.map((p, i) => (

@@ -58,8 +58,12 @@ type Onboarding struct {
 }
 
 type Member struct {
-	ID         uuid.UUID
-	Role       string
+	ID   uuid.UUID
+	Role string
+	// When they joined. It is what fixes the order of anything that
+	// alternates between the two of them — the prayer setter rotation reads
+	// it, so it cannot be inferred from the order rows happen to arrive in.
+	JoinedAt   time.Time
 	Onboarding Onboarding
 }
 

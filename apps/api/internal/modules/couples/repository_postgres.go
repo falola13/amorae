@@ -340,7 +340,7 @@ func (r *PostgresRepository) GetArchivedForUser(ctx context.Context, userID uuid
 
 func (r *PostgresRepository) membersOf(ctx context.Context, coupleID uuid.UUID) ([]Member, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT user_id, role, onboarding_install, onboarding_notifications
+		SELECT user_id, role, joined_at, onboarding_install, onboarding_notifications
 		FROM couple_members WHERE couple_id = $1 ORDER BY joined_at ASC
 	`, coupleID)
 	if err != nil {
@@ -351,7 +351,7 @@ func (r *PostgresRepository) membersOf(ctx context.Context, coupleID uuid.UUID) 
 	var members []Member
 	for rows.Next() {
 		var m Member
-		if err := rows.Scan(&m.ID, &m.Role, &m.Onboarding.Install, &m.Onboarding.Notifications); err != nil {
+		if err := rows.Scan(&m.ID, &m.Role, &m.JoinedAt, &m.Onboarding.Install, &m.Onboarding.Notifications); err != nil {
 			return nil, fmt.Errorf("scanning member: %w", err)
 		}
 		members = append(members, m)

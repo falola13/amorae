@@ -20,6 +20,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/couples"
 	"github.com/falola13/amorae/apps/api/internal/modules/export"
 	"github.com/falola13/amorae/apps/api/internal/modules/health"
+	"github.com/falola13/amorae/apps/api/internal/modules/prayers"
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
@@ -89,6 +90,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	couplesRepo := couples.NewPostgresRepository(db)
 	couplesSvc := couples.NewService(couplesRepo, now, joinAttempts, m)
 
+	prayersRepo := prayers.NewPostgresRepository(db)
+	prayersSvc := prayers.NewService(prayersRepo, prayersCouples{couples: couplesSvc}, now)
+
 	// Leaving a couple freezes it rather than deleting it; this is what
 	// finally deletes it, once both partners have had the retention window
 	// to read and export (FR-PAIR-008).
@@ -115,6 +119,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	authHandler := auth.NewHandler(authSvc)
 	couplesHandler := couples.NewHandler(couplesSvc, userSvc)
 	exportHandler := export.NewHandler(userSvc, couplesSvc, consentRepo, now)
+	prayersHandler := prayers.NewHandler(prayersSvc)
 
 	// --- HTTP ---
 	mux := http.NewServeMux()
@@ -131,6 +136,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	authHandler.RegisterRoutes(v1.With(middleware.RateLimit(authRequests, "auth")))
 	couplesHandler.RegisterRoutes(v1.With(middleware.RateLimit(coupleRequests, "couples")))
 	exportHandler.RegisterRoutes(v1)
+	prayersHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
 	// logs and responds with the request id. ClientIP resolves the caller

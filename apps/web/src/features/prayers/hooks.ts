@@ -6,10 +6,23 @@ import type { PrayerWeek } from "@/lib/api/types";
 import { keys } from "@/lib/query/keys";
 import { useWrite } from "@/lib/query/mutations";
 import { usePausedVariables } from "@/lib/query/offline";
+import { useCouple } from "@/features/couple/hooks";
 import { prayersApi } from "./api";
 import { prayerWrites, type CompletionVars } from "./writes";
 
-export const useWeek = () => useQuery({ queryKey: keys.week, queryFn: prayersApi.current });
+/**
+ * A prayer week needs two people — one sets it, the other responds — so there
+ * is nothing to ask for until a partner has joined. Asking anyway would turn
+ * "waiting for your partner" into an error, which is not what it is.
+ */
+export function useWeek() {
+  const couple = useCouple();
+  return useQuery({
+    queryKey: keys.week,
+    queryFn: prayersApi.current,
+    enabled: Boolean(couple.data?.partner),
+  });
+}
 export const useHistory = () => useQuery({ queryKey: keys.history, queryFn: prayersApi.history });
 export const useWeekById = (id: string) =>
   useQuery({ queryKey: keys.weekById(id), queryFn: () => prayersApi.week(id), enabled: !!id });

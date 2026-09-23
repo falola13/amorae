@@ -96,7 +96,7 @@ Each one is either already tracked (the id in brackets) or new here.
 
 ## 3. The plan
 
-### Step 1 — Prayers, end to end ← you are here
+### Step 1 — Prayers, end to end ✅ done
 
 The signature feature, and the best one to learn on: it has reads, writes,
 permissions ("only this week's setter"), and rules that depend on time.
@@ -136,7 +136,7 @@ lists past weeks, and a request for another couple's week returns 404 [DEC-19].
 Plus tests: rules in `prayers_test.go`, SQL in `repository_postgres_test.go`,
 use cases and permissions in `service_test.go`.
 
-### Step 2 — The worker
+### Step 2 — The worker ← you are here
 
 A second entry point, `cmd/worker`, in the same module. It wakes hourly, finds
 couples whose local Sunday has begun and who have no week yet, and inserts one.
@@ -233,6 +233,7 @@ building, rather than launching:
 
 | Date | What |
 |---|---|
+| 2026-09-23 | **Prayers, end to end** [FR-PRAY-001..007]: repository, service, DTO, handler and wiring. The week is created on first read rather than waiting for a worker; the setter rotation is anchored to the couple's first week; points are matched by id so reordering keeps what has been prayed |
 | 2026-09-23 | The couple's timezone is its own setting, editable by either partner [DEC-27, Q-07 resolved]: the week turns over in the couple's zone, reminders in each person's |
 | 2026-09-23 | Every offline write now declares whether replaying it is safe, enforced by the type [DEC-28]; the seven that create rows are online-only until their endpoints take a key [FR-PWA-009] |
 | 2026-09-23 | Leaving a couple, end to end [FR-PAIR-008, DEC-25, DEC-26]: ends the space for both, 30 days to read and download, hourly purge, and an archive that does not lock either person out of starting again [Q-09, Q-24 both resolved] |
