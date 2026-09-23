@@ -70,6 +70,26 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Sends what nobody opens the app to ask for: that it is your week, and that
+  # you have prayers left today. Same image as the API, different command.
+  worker:
+    build: ./apps/api
+    command: ["/app/worker"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgres://amorae:amorae@db:5432/amorae?sslmode=disable
+      LOG_LEVEL: info
+      # Without these it decides everything and logs what it would have sent,
+      # which is what you want locally. Real keys belong in a secret store.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      BFF_SECRET: *bff-secret
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   web:
     build: ./apps/web
     environment:

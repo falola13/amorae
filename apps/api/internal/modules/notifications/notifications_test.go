@@ -99,7 +99,7 @@ func TestValidateSubscription(t *testing.T) {
 	})
 }
 
-func TestReminderDue(t *testing.T) {
+func TestReminderPassed(t *testing.T) {
 	lagos, err := time.LoadLocation("Africa/Lagos")
 	if err != nil {
 		t.Fatalf("loading zone: %v", err)
@@ -110,52 +110,62 @@ func TestReminderDue(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		since time.Time
-		now   time.Time
-		want  bool
+		name string
+		now  time.Time
+		want bool
 	}{
-		{"the tick that crosses the time", at(17, 30), at(18, 30), true},
-		{"a tick wholly before it", at(16, 0), at(17, 0), false},
-		{"a tick wholly after it", at(19, 0), at(20, 0), false},
-		// The whole reason for a window: a worker that asks "is it 19:00
-		// exactly?" misses the reminder whenever a tick runs late.
-		{"a late tick still catches it", at(17, 0), at(21, 0), true},
+		{"before it", at(17, 0), false},
+		{"the moment it arrives", at(18, 0), true},
+		{"after it", at(20, 0), true},
+		// The reason this is not an equality check: a tick that runs hours
+		// late still owes the person their reminder.
+		{"much later the same day", at(22, 30), true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ReminderDue("19:00", lagos, tc.since, tc.now)
+			_, passed, err := ReminderPassed("19:00", lagos, tc.now)
 			if err != nil {
-				t.Fatalf("ReminderDue: %v", err)
+				t.Fatalf("ReminderPassed: %v", err)
 			}
-			if got != tc.want {
-				t.Errorf("ReminderDue() = %v, want %v", got, tc.want)
+			if passed != tc.want {
+				t.Errorf("passed = %v, want %v", passed, tc.want)
 			}
 		})
 	}
 
-	t.Run("it is read in the person's own zone, not the server's", func(t *testing.T) {
-		// Not London: in September that is also UTC+1, so it would prove
+	t.Run("the date is the person's own, not the server's", func(t *testing.T) {
+		// 23:30 UTC is already the next day in Lagos. Keying the send on the
+		// server's date would give someone two reminders on one of their
+		// days and none on the next.
+		date, _, err := ReminderPassed("19:00", lagos, time.Date(2026, 9, 23, 23, 30, 0, 0, time.UTC))
+		if err != nil {
+			t.Fatalf("ReminderPassed: %v", err)
+		}
+		if date != "2026-09-24" {
+			t.Errorf("local date = %q, want 2026-09-24", date)
+		}
+	})
+
+	t.Run("it is read in the person's own zone", func(t *testing.T) {
+		// Not London: in September that is also UTC+1 and would prove
 		// nothing. New York is four hours behind, where 19:00 has not come
 		// round yet at the instant it already has in Lagos.
 		newYork, err := time.LoadLocation("America/New_York")
 		if err != nil {
 			t.Fatalf("loading zone: %v", err)
 		}
-		since, now := at(17, 30), at(18, 30)
-		inLagos, _ := ReminderDue("19:00", lagos, since, now)
-		inNewYork, _ := ReminderDue("19:00", newYork, since, now)
-		if !inLagos {
-			t.Error("19:00 Lagos did not fire at 18:30 UTC")
+		now := at(18, 30)
+		if _, passed, _ := ReminderPassed("19:00", lagos, now); !passed {
+			t.Error("19:00 Lagos had not passed at 18:30 UTC")
 		}
-		if inNewYork {
-			t.Error("19:00 New York fired while it was still early afternoon there")
+		if _, passed, _ := ReminderPassed("19:00", newYork, now); passed {
+			t.Error("19:00 New York had passed while it was still early afternoon there")
 		}
 	})
 
 	t.Run("a malformed time is an error, not a silent no", func(t *testing.T) {
-		if _, err := ReminderDue("7pm", lagos, at(0, 0), at(23, 0)); err == nil {
-			t.Error("ReminderDue accepted a time it cannot read")
+		if _, _, err := ReminderPassed("7pm", lagos, at(23, 0)); err == nil {
+			t.Error("ReminderPassed accepted a time it cannot read")
 		}
 	})
 }

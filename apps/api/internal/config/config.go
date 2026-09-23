@@ -32,6 +32,17 @@ type Config struct {
 	BFFSecret      string
 	RESEND_API_KEY string
 	DefaultFrom    string
+	// VAPID identifies this server to a browser's push service, and signs
+	// every send (RFC 8292). The public key also reaches the browser, through
+	// the web app's NEXT_PUBLIC_VAPID_PUBLIC_KEY; the private one never
+	// leaves here. Without a pair, push is disabled rather than broken: the
+	// worker logs what it would have sent.
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	// Who to contact about this server's sends — a mailto: or https: URL the
+	// push service can use if something goes wrong. Required by RFC 8292.
+	VAPIDSubject string
+
 	// AppURL is the web origin, used to build links in emails
 	// (e.g. the password-reset link).
 	AppURL string
@@ -71,6 +82,20 @@ func Load() (Config, error) {
 		}
 	} else if resendAPIKey != "" && mailFrom == "" {
 		errs = append(errs, errors.New("MAIL_FROM: required when RESEND_API_KEY is set"))
+	}
+
+	vapidPublic := getEnv("VAPID_PUBLIC_KEY", "")
+	vapidPrivate := getEnv("VAPID_PRIVATE_KEY", "")
+	vapidSubject := getEnv("VAPID_SUBJECT", "")
+	switch {
+	case appEnv == "production" && (vapidPublic == "" || vapidPrivate == ""):
+		errs = append(errs, errors.New("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY: required in production"))
+	case (vapidPublic == "") != (vapidPrivate == ""):
+		// Half a key pair sends nothing and looks configured, which is worse
+		// than being plainly switched off.
+		errs = append(errs, errors.New("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY: set both or neither"))
+	case vapidPrivate != "" && vapidSubject == "":
+		errs = append(errs, errors.New("VAPID_SUBJECT: required when VAPID keys are set (a mailto: or https: URL)"))
 	}
 
 	databaseURL := getEnv("DATABASE_URL", "")
@@ -148,6 +173,9 @@ func Load() (Config, error) {
 		TermsVersion:    getEnv("TERMS_VERSION", "2026-01"),
 		PrivacyVersion:  getEnv("PRIVACY_VERSION", "2026-01"),
 		FaithVersion:    getEnv("FAITH_VERSION", "2026-01"),
+		VAPIDPublicKey:  vapidPublic,
+		VAPIDPrivateKey: vapidPrivate,
+		VAPIDSubject:    vapidSubject,
 	}, nil
 }
 

@@ -10,6 +10,10 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app/api ./cmd/api
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app/migrate ./cmd/migrate
+# The worker ships in the same image and is started with a different command:
+# it shares the config, the database and the modules, so a rule only ever
+# exists in one place (DEC-20).
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app/worker ./cmd/worker
 
 # --- final ---
 FROM gcr.io/distroless/static-debian12:nonroot

@@ -1568,7 +1568,7 @@ The system shall let a user subscribe their browser to push notifications.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall remove a push subscription once the push service reports it as gone.
 
@@ -1618,7 +1618,7 @@ been reviewed end to end.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started — Blocked by Q-16 | Test |
+| Must | MVP | Partial — prayers categories only | Test |
 
 The worker shall send a push notification for each enabled category, respecting each user's own
 preferences and reminder time.
@@ -2192,10 +2192,10 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-NOTF-001 | G-03 | `GET`, `PATCH /v1/notifications/preferences` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
 | FR-NOTF-002 | G-03 | `PATCH /v1/notifications/preferences` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
 | FR-NOTF-003 | G-03 | `POST /v1/notifications/subscribe` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
-| FR-NOTF-004 | G-05 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-NOTF-004 | G-03 | `cmd/worker` — deletes on 404/410 from the push service | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-NOTF-005 | G-05 | — (notification copy) | Not started | None yet |
 | FR-NOTF-006 | G-05 | — (client only) | Partial | Manual demo 2026-09-22 |
-| FR-NOTF-007 | G-05 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-NOTF-007 | G-03 | `cmd/worker` — hourly tick, `notification_sends` for exactly-once | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-PWA-001 | G-05 | — (web manifest) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-002 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-003 | G-05 | — (service worker) | Implemented | Manual demo 2026-09-22 |

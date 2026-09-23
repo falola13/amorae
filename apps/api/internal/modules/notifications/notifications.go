@@ -137,24 +137,31 @@ func ValidateSubscription(endpoint, p256dh, auth string) (string, string, string
 	return endpoint, p256dh, auth, nil
 }
 
-// ReminderDue reports whether a personal reminder set for `at` should fire in
-// the window ending now, read in the user's own zone.
+// ReminderPassed reports whether today's reminder time has come round yet in
+// this person's own zone, and names the local date it belongs to.
 //
-// The window is how the worker stays honest about being late: it ticks
-// hourly, so it asks "did this time pass since I last looked?" rather than
-// "is it exactly 19:00 right now?", which would miss every reminder the
-// moment a tick ran a second late.
-func ReminderDue(at string, zone *time.Location, since, now time.Time) (bool, error) {
+// That date is the whole point. It is what the send record is keyed on
+// (notification_sends.key), so "have they had today's reminder?" is a
+// question the database answers rather than something the worker has to
+// remember between ticks. A worker that restarts, runs late, or runs twice
+// still sends exactly one.
+//
+// Compare this to asking "is it 19:00 right now?", which misses the reminder
+// entirely whenever a tick runs a minute late.
+func ReminderPassed(at string, zone *time.Location, now time.Time) (localDate string, passed bool, err error) {
 	if !clockTime.MatchString(at) {
-		return false, fmt.Errorf("reminder time %q is not HH:MM", at)
+		return "", false, fmt.Errorf("reminder time %q is not HH:MM", at)
 	}
-	hour, minute := int(at[0]-'0')*10+int(at[1]-'0'), int(at[3]-'0')*10+int(at[4]-'0')
+	hour := int(at[0]-'0')*10 + int(at[1]-'0')
+	minute := int(at[3]-'0')*10 + int(at[4]-'0')
 
 	local := now.In(zone)
 	due := time.Date(local.Year(), local.Month(), local.Day(), hour, minute, 0, 0, zone)
-	if due.After(local) {
-		// Today's has not come round yet; yesterday's may still be unsent.
-		due = due.AddDate(0, 0, -1)
-	}
-	return due.After(since) && !due.After(now), nil
+	return local.Format(time.DateOnly), !local.Before(due), nil
 }
+
+// Kinds of notification, used as notification_sends.kind.
+const (
+	KindNewWeek        = "new_week"
+	KindPrayerReminder = "prayer_reminder"
+)

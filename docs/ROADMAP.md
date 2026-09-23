@@ -136,7 +136,7 @@ lists past weeks, and a request for another couple's week returns 404 [DEC-19].
 Plus tests: rules in `prayers_test.go`, SQL in `repository_postgres_test.go`,
 use cases and permissions in `service_test.go`.
 
-### Step 2 — The worker ← you are here
+### Step 2 — The worker ✅ done (merged into Step 3)
 
 A second entry point, `cmd/worker`, in the same module. It wakes hourly, finds
 couples whose local Sunday has begun and who have no week yet, and inserts one.
@@ -146,7 +146,7 @@ Postgres is the job store — `FOR UPDATE SKIP LOCKED`, no queue [DEC-20, Q-16].
 their own midnight, running the worker twice in a row creates nothing extra,
 and killing it mid-tick loses nothing.
 
-### Step 3 — Notifications and push
+### Step 3 — Notifications and push ← you are here
 
 Now the worker has something to say. VAPID keys, a `push_subscriptions` table,
 delivery from the worker, subscriptions removed when the browser reports them
@@ -233,6 +233,7 @@ building, rather than launching:
 
 | Date | What |
 |---|---|
+| 2026-09-24 | **The worker and push** [FR-NOTF-001..004, 007]: `cmd/worker` in the same module, hourly, holding no state — what has been sent is a row, so a restart or a second worker sends each notification once. Preferences and subscriptions endpoints; a push seam that logs in development and encrypts in production |
 | 2026-09-23 | **Prayers, end to end** [FR-PRAY-001..007]: repository, service, DTO, handler and wiring. The week is created on first read rather than waiting for a worker; the setter rotation is anchored to the couple's first week; points are matched by id so reordering keeps what has been prayed |
 | 2026-09-23 | The couple's timezone is its own setting, editable by either partner [DEC-27, Q-07 resolved]: the week turns over in the couple's zone, reminders in each person's |
 | 2026-09-23 | Every offline write now declares whether replaying it is safe, enforced by the type [DEC-28]; the seven that create rows are online-only until their endpoints take a key [FR-PWA-009] |
