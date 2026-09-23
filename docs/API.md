@@ -355,5 +355,10 @@ those two names meet.
 
 | Endpoint | Notes |
 | --- | --- |
-| `GET`, `PATCH /v1/notifications/preferences` | `NotificationPrefs`; `reminder_time` is `HH:MM` in the user's timezone |
-| `POST /v1/notifications/subscribe` | the browser's `PushSubscription.toJSON()`; 204 |
+| `GET`, `PATCH /v1/notifications/preferences` | `NotificationPrefs`. Every PATCH field is optional and a missing one is left alone, so the client can send one switch. `reminder_time` is `HH:MM` read in the **user's own** timezone, not the couple's (FR-NOTF-002); anything else is 400 `validation_failed` with `fields.reminder_time`. Reading does not create a row — somebody who never opens the screen gets the defaults and leaves no trace of having been asked |
+| `POST /v1/notifications/subscribe` | The browser's `PushSubscription.toJSON()`; 204. Keyed on `endpoint`, so re-subscribing the same browser replaces its keys rather than collecting a second row that would send everything twice. The endpoint must be `https://`. 400 `validation_failed` naming `endpoint`, `keys.p256dh` or `keys.auth` |
+
+Preferences are per person, never per couple: partners choose their own, and one
+of them turning something off says nothing about the other. Defaults are on,
+except goals and challenges — following one of those is opted into rather than
+something that starts buzzing on its own (FR-NOTF-006).

@@ -1520,7 +1520,7 @@ reminders)
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let each user set their own notification preferences, independent of their
 partner's.
@@ -1536,7 +1536,7 @@ partner's.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let each user set an `HH:MM` reminder time, interpreted in their own timezone,
 not the couple's.
@@ -1554,7 +1554,7 @@ not the couple's.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let a user subscribe their browser to push notifications.
 
@@ -2189,9 +2189,9 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-DATE-001 | G-04 | `POST /v1/milestones` | UI only | Screen built; no endpoint to test against |
 | FR-DATE-002 | G-04 | `GET /v1/milestones` | UI only | Screen built; no endpoint to test against |
 | FR-DATE-003 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
-| FR-NOTF-001 | G-05 | `GET`, `PATCH /v1/notifications/preferences` | UI only | Screen built; no endpoint to test against |
-| FR-NOTF-002 | G-05 | `PATCH /v1/notifications/preferences` | UI only | Screen built; no endpoint to test against |
-| FR-NOTF-003 | G-05 | `POST /v1/notifications/subscribe` | UI only | Screen built; no endpoint to test against |
+| FR-NOTF-001 | G-03 | `GET`, `PATCH /v1/notifications/preferences` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
+| FR-NOTF-002 | G-03 | `PATCH /v1/notifications/preferences` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
+| FR-NOTF-003 | G-03 | `POST /v1/notifications/subscribe` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
 | FR-NOTF-004 | G-05 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-NOTF-005 | G-05 | — (notification copy) | Not started | None yet |
 | FR-NOTF-006 | G-05 | — (client only) | Partial | Manual demo 2026-09-22 |

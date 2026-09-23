@@ -20,6 +20,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/couples"
 	"github.com/falola13/amorae/apps/api/internal/modules/export"
 	"github.com/falola13/amorae/apps/api/internal/modules/health"
+	"github.com/falola13/amorae/apps/api/internal/modules/notifications"
 	"github.com/falola13/amorae/apps/api/internal/modules/prayers"
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
@@ -90,6 +91,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	couplesRepo := couples.NewPostgresRepository(db)
 	couplesSvc := couples.NewService(couplesRepo, now, joinAttempts, m)
 
+	notificationsRepo := notifications.NewPostgresRepository(db)
+	notificationsSvc := notifications.NewService(notificationsRepo, now)
+
 	prayersRepo := prayers.NewPostgresRepository(db)
 	prayersSvc := prayers.NewService(prayersRepo, prayersCouples{couples: couplesSvc}, now)
 
@@ -120,6 +124,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	couplesHandler := couples.NewHandler(couplesSvc, userSvc)
 	exportHandler := export.NewHandler(userSvc, couplesSvc, consentRepo, now)
 	prayersHandler := prayers.NewHandler(prayersSvc)
+	notificationsHandler := notifications.NewHandler(notificationsSvc)
 
 	// --- HTTP ---
 	mux := http.NewServeMux()
@@ -137,6 +142,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	couplesHandler.RegisterRoutes(v1.With(middleware.RateLimit(coupleRequests, "couples")))
 	exportHandler.RegisterRoutes(v1)
 	prayersHandler.RegisterRoutes(v1)
+	notificationsHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
 	// logs and responds with the request id. ClientIP resolves the caller
