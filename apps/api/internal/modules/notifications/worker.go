@@ -28,7 +28,7 @@ type Notification struct {
 // their partner has not written it yet, which is nobody's business and not a
 // notification anyone wants.
 func ForNewWeek(c Candidate) (Notification, bool) {
-	if c.UserID != c.SetterUserID || c.WeekStatus != string(statusDraft) || c.Points > 0 {
+	if c.UserID != c.SetterUserID || c.WeekStatus != string(statusDraft) || c.Points > 0 || !c.Prefs.NewWeek {
 		return Notification{}, false
 	}
 	return Notification{
@@ -44,6 +44,28 @@ func ForNewWeek(c Candidate) (Notification, bool) {
 	}, true
 }
 
+// ForPublishedWeek tells the other partner their week is ready.
+//
+// This is the moment the shared thing becomes shared, and the one
+// notification that most earns its place — so it goes to the partner who did
+// not write it, once, when there is something to read.
+func ForPublishedWeek(c Candidate) (Notification, bool) {
+	if c.UserID == c.SetterUserID || c.WeekStatus != "published" || c.Points == 0 || !c.Prefs.NewWeek {
+		return Notification{}, false
+	}
+	return Notification{
+		UserID: c.UserID,
+		Kind:   KindWeekPublished,
+		Key:    c.WeekID.String(),
+		Message: push.Message{
+			Title: "Your prayer week is ready",
+			Body:  "See what the two of you will be praying for.",
+			Path:  "/prayers",
+			Tag:   KindWeekPublished,
+		},
+	}, true
+}
+
 // ForReminder is the daily nudge, for someone with a published week they have
 // not finished.
 //
@@ -51,7 +73,7 @@ func ForNewWeek(c Candidate) (Notification, bool) {
 // lock screen, which is the one place in Amorae that is not private
 // (FR-NOTF-005).
 func ForReminder(c Candidate, now time.Time) (Notification, bool, error) {
-	if c.WeekStatus != "published" || c.Points == 0 || c.Completed >= c.Points {
+	if c.WeekStatus != "published" || c.Points == 0 || c.Completed >= c.Points || !c.Prefs.PrayerReminder {
 		return Notification{}, false, nil
 	}
 
@@ -91,8 +113,7 @@ const statusDraft weekStatus = "draft"
 
 // WorkerRepository is what the worker needs of storage.
 type WorkerRepository interface {
-	DueForNewWeek(ctx context.Context, now time.Time) ([]Candidate, error)
-	DueForReminder(ctx context.Context, now time.Time) ([]Candidate, error)
+	CurrentWeekCandidates(ctx context.Context, now time.Time) ([]Candidate, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
@@ -121,22 +142,19 @@ func NewWorker(repo WorkerRepository, sender push.Sender, now func() time.Time, 
 func (w *Worker) Tick(ctx context.Context) (int, error) {
 	now := w.now()
 
-	newWeek, err := w.repo.DueForNewWeek(ctx, now)
-	if err != nil {
-		return 0, err
-	}
-	reminders, err := w.repo.DueForReminder(ctx, now)
+	candidates, err := w.repo.CurrentWeekCandidates(ctx, now)
 	if err != nil {
 		return 0, err
 	}
 
 	var due []Notification
-	for _, c := range newWeek {
+	for _, c := range candidates {
 		if n, ok := ForNewWeek(c); ok {
 			due = append(due, n)
 		}
-	}
-	for _, c := range reminders {
+		if n, ok := ForPublishedWeek(c); ok {
+			due = append(due, n)
+		}
 		n, ok, err := ForReminder(c, now)
 		if err != nil {
 			w.log.Warn("skipping a reminder", "user", c.UserID, "error", err)

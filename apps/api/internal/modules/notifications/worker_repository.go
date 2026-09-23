@@ -41,13 +41,15 @@ type Candidate struct {
 	Completed int
 }
 
-// DueForNewWeek is everyone in a couple whose current week is still waiting to
-// be written, who has that notification turned on, and who has not been told.
+// CurrentWeekCandidates is everyone in a live couple, with that couple's
+// current prayer week and their own progress through it.
 //
-// The couple's timezone decides which day the week starts — that is the
-// couple's fact (DEC-27) — while the reminder query below reads each person's
-// own. They are different questions and use different zones on purpose.
-func (r *PostgresRepository) DueForNewWeek(ctx context.Context, now time.Time) ([]Candidate, error) {
+// One query for every kind of notification, rather than one per kind: which
+// of them applies is a rule, and rules belong in Go where they can be read
+// and tested. Nothing here asks "has this already been sent?" either —
+// ClaimSend answers that, and it is the only answer that stays true when two
+// workers ask at once.
+func (r *PostgresRepository) CurrentWeekCandidates(ctx context.Context, now time.Time) ([]Candidate, error) {
 	return r.candidates(ctx, `
 		SELECT u.id, u.display_name, u.timezone,
 		       COALESCE(p.new_week, true), COALESCE(p.prayer_reminder, true),
@@ -64,37 +66,6 @@ func (r *PostgresRepository) DueForNewWeek(ctx context.Context, now time.Time) (
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
 		  AND w.week_start = `+currentWeekStart+`
-		  AND COALESCE(p.new_week, true)
-		  AND NOT EXISTS (
-		        SELECT 1 FROM notification_sends s
-		         WHERE s.user_id = u.id AND s.kind = $2 AND s.key = w.id::text
-		      )
-	`, now, KindNewWeek)
-}
-
-// DueForReminder is everyone with a published week they have not finished
-// praying, whose own reminder time has passed. Whether it has passed, and
-// which local day it counts as, is decided in Go (ReminderPassed) — the query
-// only narrows the field.
-func (r *PostgresRepository) DueForReminder(ctx context.Context, now time.Time) ([]Candidate, error) {
-	return r.candidates(ctx, `
-		SELECT u.id, u.display_name, u.timezone,
-		       COALESCE(p.new_week, true), COALESCE(p.prayer_reminder, true),
-		       COALESCE(p.reminder_time, TIME '19:00'),
-		       w.id, w.week_start, w.setter_user_id, w.status,
-		       (SELECT count(*) FROM prayer_points pp WHERE pp.week_id = w.id),
-		       (SELECT count(*) FROM prayer_completions pc
-		         JOIN prayer_points pp ON pp.id = pc.point_id
-		        WHERE pp.week_id = w.id AND pc.user_id = u.id)
-		FROM prayer_weeks w
-		JOIN couples c ON c.id = w.couple_id
-		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
-		JOIN users u ON u.id = m.user_id
-		LEFT JOIN notification_preferences p ON p.user_id = u.id
-		WHERE c.dissolved_at IS NULL
-		  AND w.status = 'published'
-		  AND w.week_start = `+currentWeekStart+`
-		  AND COALESCE(p.prayer_reminder, true)
 	`, now)
 }
 

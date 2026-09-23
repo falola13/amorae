@@ -163,5 +163,6 @@ func ReminderPassed(at string, zone *time.Location, now time.Time) (localDate st
 // Kinds of notification, used as notification_sends.kind.
 const (
 	KindNewWeek        = "new_week"
+	KindWeekPublished  = "week_published"
 	KindPrayerReminder = "prayer_reminder"
 )

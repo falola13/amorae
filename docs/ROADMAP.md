@@ -146,7 +146,7 @@ Postgres is the job store — `FOR UPDATE SKIP LOCKED`, no queue [DEC-20, Q-16].
 their own midnight, running the worker twice in a row creates nothing extra,
 and killing it mid-tick loses nothing.
 
-### Step 3 — Notifications and push ← you are here
+### Step 3 — Notifications and push ✅ done
 
 Now the worker has something to say. VAPID keys, a `push_subscriptions` table,
 delivery from the worker, subscriptions removed when the browser reports them
@@ -155,7 +155,7 @@ gone. Notification preferences already have a screen waiting.
 **Watch out for:** notification text must never carry private content — a lock
 screen is a public surface [FR-NOTF-005].
 
-### Step 4 — Together: events, calendar, goals, challenges
+### Step 4 — Together: events, calendar, goals, challenges ← you are here
 
 Repetition of Step 1, which is the point: by the third module the shape should
 feel boring. Settle Q-23 (per-partner challenge days) before writing that
@@ -233,6 +233,7 @@ building, rather than launching:
 
 | Date | What |
 |---|---|
+| 2026-09-24 | **Step 3 closed**: the service worker receives what the worker sends, the partner is told when a week is published, and the settings screen asks for permission with a reason instead of never asking [FR-NOTF-006 done] |
 | 2026-09-24 | **The worker and push** [FR-NOTF-001..004, 007]: `cmd/worker` in the same module, hourly, holding no state — what has been sent is a row, so a restart or a second worker sends each notification once. Preferences and subscriptions endpoints; a push seam that logs in development and encrypts in production |
 | 2026-09-23 | **Prayers, end to end** [FR-PRAY-001..007]: repository, service, DTO, handler and wiring. The week is created on first read rather than waiting for a worker; the setter rotation is anchored to the couple's first week; points are matched by id so reordering keeps what has been prayed |
 | 2026-09-23 | The couple's timezone is its own setting, editable by either partner [DEC-27, Q-07 resolved]: the week turns over in the couple's zone, reminders in each person's |

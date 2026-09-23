@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { useCouple } from "@/features/couple/hooks";
 import { usePrefs, useSavePrefs } from "@/features/settings/hooks";
 import { time12 } from "@/lib/dates";
@@ -8,6 +10,7 @@ import { usePush } from "@/lib/pwa/push";
 import type { NotificationPrefs } from "@/lib/api/types";
 import { Main } from "@/components/layout/screen";
 import {
+  Button,
   LoadProblem,
   Para,
   Section,
@@ -28,6 +31,17 @@ export default function NotificationSettings() {
   const save = useSavePrefs();
   const couple = useCouple();
   const push = usePush();
+  const [asking, setAsking] = useState(false);
+  // usePush explains nothing by itself; the copy above this button is the
+  // explaining, which is why the request lives here and not on a switch.
+  const allow = async () => {
+    setAsking(true);
+    try {
+      await push.request();
+    } finally {
+      setAsking(false);
+    }
+  };
   const partner = couple.data?.partner?.display_name ?? "your partner";
   const row = (p: NotificationPrefs, k: BoolKey, label: string, last?: boolean) => (
     <SwitchRow
@@ -72,6 +86,25 @@ export default function NotificationSettings() {
                 title="This browser can't show notifications"
                 text="Install Amorae to your Home Screen, or open it in another browser. Your choices below are saved either way."
               />
+            ) : push.state === "default" ? (
+              /* The switches below save either way, but nothing can arrive
+                 until the browser has been asked — and it is only asked once,
+                 so it is asked here with a reason rather than on a stray tap
+                 (FR-NOTF-006). */
+              <div className="mt-4 flex flex-col items-start gap-3 border-y border-line py-4">
+                <div className="flex flex-col gap-1">
+                  <div className="text-[16px] font-semibold text-ink">
+                    Turn on notifications to receive these
+                  </div>
+                  <Para size="support">
+                    Your choices below are saved either way — but until your browser allows them,
+                    nothing can reach you.
+                  </Para>
+                </div>
+                <Button variant="secondary" loading={asking} onClick={allow}>
+                  Allow notifications
+                </Button>
+              </div>
             ) : null}
             <Section label="Faith" className="mt-[22px]">
               {row(p, "new_week", "New prayer week")}

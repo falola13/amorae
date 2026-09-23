@@ -1597,7 +1597,7 @@ appreciation content on a lock screen.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Partial | Demo |
+| Should | MVP | Implemented | Demo |
 
 The system shall not request push permission or send a notification until the app has explained
 the value of that category to the user.
@@ -1609,10 +1609,12 @@ the value of that category to the user.
   explain what the notification is for before, or as part of, requesting permission — never on
   first launch, unprompted.
 
-*Status note:* this is a UI/copy rule with no dedicated backend; verified by demo. Status is
-**Partial**: the settings screen exposes per-category toggles (mostly on by default, except goals
-and challenges, which default off), but the "explain before requesting permission" flow has not
-been reviewed end to end.
+*Status note:* a UI/copy rule with no dedicated backend, verified by demo. Both paths that can
+ask now explain first: the onboarding screen previews what would arrive before offering to turn
+it on, and the settings screen — where the permission has never been asked for — says what the
+switches cannot do until the browser allows them, with the request behind that explanation
+rather than on a switch. Permission is only ever asked once, so asking it on a stray tap would
+spend it.
 
 #### FR-NOTF-007 Push delivery
 
@@ -1622,6 +1624,12 @@ been reviewed end to end.
 
 The worker shall send a push notification for each enabled category, respecting each user's own
 preferences and reminder time.
+
+Built so far, all three respecting `new_week` and `prayer_reminder`: the setter is told it is
+their week while it is still empty; the other partner is told when it is published, which is the
+moment the shared thing becomes shared; and each partner is reminded once a day, in their own
+timezone, while a published week still has prayers left for them. Events, appreciation, journal,
+goals and challenges wait on those modules.
 
 **Acceptance criteria**
 
@@ -2194,7 +2202,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-NOTF-003 | G-03 | `POST /v1/notifications/subscribe` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
 | FR-NOTF-004 | G-03 | `cmd/worker` — deletes on 404/410 from the push service | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-NOTF-005 | G-05 | — (notification copy) | Not started | None yet |
-| FR-NOTF-006 | G-05 | — (client only) | Partial | Manual demo 2026-09-22 |
+| FR-NOTF-006 | G-03 | Onboarding and settings screens | Implemented | Browser check 2026-09-24: both paths explain before asking |
 | FR-NOTF-007 | G-03 | `cmd/worker` — hourly tick, `notification_sends` for exactly-once | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-PWA-001 | G-05 | — (web manifest) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-002 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
