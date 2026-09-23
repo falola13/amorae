@@ -27,6 +27,9 @@ const ACCOUNT_ROUTES: string[] = [
   routes.settings,
   routes.settingsProfile,
   routes.settingsDevices,
+  // Reminders are per person, not per couple, and Settings links here — so
+  // without this the row would bounce a couple-less person to pairing.
+  routes.settingsNotifications,
   routes.settingsPastSpace,
 ];
 

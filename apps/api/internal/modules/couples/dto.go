@@ -52,12 +52,15 @@ type onboardingDTO struct {
 // Flat, matching the Couple interface in apps/web/src/lib/api/types.ts and
 // the mock adapter. Every couples endpoint answers with this one shape.
 type MineDTO struct {
-	ID         string        `json:"id"`
-	Name       string        `json:"name"`
-	Me         personDTO     `json:"me"`
-	Partner    *partnerDTO   `json:"partner"`
-	InviteCode string        `json:"invite_code"`
-	StartedOn  *string       `json:"started_on,omitempty"`
+	ID         string      `json:"id"`
+	Name       string      `json:"name"`
+	Me         personDTO   `json:"me"`
+	Partner    *partnerDTO `json:"partner"`
+	InviteCode string      `json:"invite_code"`
+	StartedOn  *string     `json:"started_on,omitempty"`
+	// When this couple's week turns over. Distinct from me.timezone, which is
+	// when this person's reminders fire (DEC-27).
+	Timezone   string        `json:"timezone"`
 	Onboarding onboardingDTO `json:"onboarding"`
 }
 
@@ -78,6 +81,9 @@ type EndedCoupleDTO struct {
 type UpdateDto struct {
 	RelationshipStartDate *string `json:"relationship_start_date"`
 	Name                  *string `json:"name"`
+	// The couple's zone, not either person's: it decides when the prayer week
+	// turns over, so both partners have to agree on it (DEC-27).
+	Timezone *string `json:"timezone"`
 }
 
 // Couple is accepted so the client can send the whole object back, but it is
@@ -97,8 +103,9 @@ func ToMineDTO(mine Mine, me user.User, partner *user.User) MineDTO {
 	}
 
 	out := MineDTO{
-		ID:   mine.Couple.ID.String(),
-		Name: mine.Couple.Name,
+		ID:       mine.Couple.ID.String(),
+		Name:     mine.Couple.Name,
+		Timezone: mine.Couple.Timezone,
 		Me: personDTO{
 			ID:          me.ID.String(),
 			Email:       me.Email,

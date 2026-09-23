@@ -4,6 +4,7 @@ import {
   forwardRef,
   type InputHTMLAttributes,
   type ReactNode,
+  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
 import { Icon } from "@/components/icons";
@@ -41,6 +42,58 @@ export const Field = forwardRef<
         />
         {trailing ? <div className="absolute right-1 top-1">{trailing}</div> : null}
       </div>
+      {error ? (
+        <div
+          id={`${fid}-err`}
+          role="alert"
+          className="flex items-center gap-1.5 text-[13px] text-red"
+        >
+          <Icon name="alert" size={16} />
+          {error}
+        </div>
+      ) : hint ? (
+        <div id={`${fid}-hint`} className="text-[13px] text-stone">
+          {hint}
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
+/** Field, for a choice from a fixed list. Same label, hint and error. */
+export const Select = forwardRef<
+  HTMLSelectElement,
+  {
+    label: string;
+    hint?: string;
+    error?: string;
+    options: readonly { value: string; label: string }[];
+  } & SelectHTMLAttributes<HTMLSelectElement>
+>(function Select({ label, hint, error, options, id, className, ...rest }, ref) {
+  const fid = id ?? rest.name ?? label.toLowerCase().replace(/\W+/g, "-");
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor={fid} className="text-[13px] font-semibold text-stone">
+        {label}
+      </label>
+      <select
+        ref={ref}
+        id={fid}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${fid}-err` : hint ? `${fid}-hint` : undefined}
+        className={cx(
+          "h-[52px] w-full appearance-none rounded-input border bg-surface px-4 text-[16px] text-ink focus:border-[1.5px] focus:border-plum",
+          error ? "border-[1.5px] border-red" : "border-edge",
+          className,
+        )}
+        {...rest}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
       {error ? (
         <div
           id={`${fid}-err`}

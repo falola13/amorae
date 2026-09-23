@@ -18,7 +18,7 @@ type Repository interface {
 	Create(ctx context.Context, inviteCode string, inviteExpiresAt time.Time, input COUPLES) (COUPLES, error)
 	Join(ctx context.Context, userID uuid.UUID, code string, at time.Time) error
 	GetForUser(ctx context.Context, userID uuid.UUID, now time.Time) (Mine, error)
-	UpdateCouples(ctx context.Context, coupleID uuid.UUID, start *time.Time, name *string) error
+	UpdateCouples(ctx context.Context, coupleID uuid.UUID, start *time.Time, name, timezone *string) error
 	UpdateRole(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, role string) error
 	UpdateOnboarding(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, install *bool, notifications *bool) error
 	ReplaceInvite(ctx context.Context, userID uuid.UUID, code string, expiresAt, at time.Time) error
@@ -219,11 +219,23 @@ func (s *Service) UpdateCouples(ctx context.Context, userID uuid.UUID, update Up
 	if err != nil {
 		return Mine{}, err
 	}
+	// Either partner may move the couple's zone, and it moves for both: a
+	// week both people are praying cannot start at two different moments
+	// (DEC-27). Validated before anything is written, so a bad zone changes
+	// nothing at all.
+	var timezone *string
+	if update.Timezone != nil {
+		valid, err := user.ValidateTimezone(*update.Timezone)
+		if err != nil {
+			return Mine{}, err
+		}
+		timezone = &valid
+	}
 	mine, err := s.GetMine(ctx, userID)
 	if err != nil {
 		return Mine{}, err
 	}
-	if err := s.repo.UpdateCouples(ctx, mine.Couple.ID, start, update.Name); err != nil {
+	if err := s.repo.UpdateCouples(ctx, mine.Couple.ID, start, update.Name, timezone); err != nil {
 		return Mine{}, err
 	}
 	return s.GetMine(ctx, userID)

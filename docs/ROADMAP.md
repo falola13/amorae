@@ -47,10 +47,10 @@ Each one is either already tracked (the id in brackets) or new here.
 
 ### Correctness and safety
 
-- **Idempotency keys are missing** for queued offline writes [FR-PWA-009].
-  Today the queue only ever reaches endpoints that don't exist, so nothing is
-  at risk — but the first write endpoint that ships (prayer completion) makes
-  this live. A replayed request after a dropped response will duplicate.
+- **Idempotency keys are missing** for queued offline writes [FR-PWA-009], so
+  the writes that create rows are `onlineOnly` until their endpoints take a key
+  [DEC-28]. Not a Step 1 blocker: every prayer write is idempotent in the
+  schema. It becomes live when Together's endpoints are built.
 - **No audit log** of security-sensitive actions [NFR-SEC-020].
 - **No common-password check** at registration [NFR-SEC-004].
 - **No Content-Security-Policy on pages** — only on the service worker
@@ -61,6 +61,13 @@ Each one is either already tracked (the id in brackets) or new here.
   instance would silently multiply every limit [DEC-11, Q-13].
 
 ### Product gaps
+
+- **The faith consent gates nothing** [FR-AUTH-012, FR-PAIR-009, DEC-29]. Sign-up asks "Show me
+  faith content (prayers and scripture). Optional." and records the answer with its policy
+  version — and then no part of the app reads it. Untick it and you still get prayer weeks,
+  scripture fields and "Two hearts, one faith". It is the one shipped promise the product
+  currently breaks, and it is also what a secular mode would be built from: a space uses faith
+  vocabulary only while both partners hold consent.
 
 - **Challenge days are shared, not per-partner** [Q-23]: one `done` flag per
   day means either partner can tick it for both. Decide before the endpoint is
@@ -216,7 +223,6 @@ building, rather than launching:
 
 | Question | Blocks |
 |---|---|
-| Q-07 couple timezone | The prayer scheduler (Step 1–2) |
 | Q-16 worker runtime | Step 2 |
 | Q-23 challenge completion | Step 4's schema |
 | Q-06 photo storage | Step 5 |
@@ -227,6 +233,8 @@ building, rather than launching:
 
 | Date | What |
 |---|---|
+| 2026-09-23 | The couple's timezone is its own setting, editable by either partner [DEC-27, Q-07 resolved]: the week turns over in the couple's zone, reminders in each person's |
+| 2026-09-23 | Every offline write now declares whether replaying it is safe, enforced by the type [DEC-28]; the seven that create rows are online-only until their endpoints take a key [FR-PWA-009] |
 | 2026-09-23 | Leaving a couple, end to end [FR-PAIR-008, DEC-25, DEC-26]: ends the space for both, 30 days to read and download, hourly purge, and an archive that does not lock either person out of starting again [Q-09, Q-24 both resolved] |
 | 2026-09-23 | Account screens no longer sit behind the couple gate: settings, profile, devices and the past space stand on the account |
 | 2026-09-23 | Password reset and change, account export and deletion, session list and sign-out-others, invite regeneration, Resend mailer [DEC-24] |

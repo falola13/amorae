@@ -201,14 +201,15 @@ func (r *PostgresRepository) GetForUser(ctx context.Context, userID uuid.UUID, n
 	return Mine{Couple: c, Members: members, InviteCode: code}, nil
 }
 
-func (r *PostgresRepository) UpdateCouples(ctx context.Context, coupleID uuid.UUID, start *time.Time, name *string) error {
+func (r *PostgresRepository) UpdateCouples(ctx context.Context, coupleID uuid.UUID, start *time.Time, name, timezone *string) error {
 
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 	UPDATE couples
 	SET relationship_start_date = COALESCE($2, relationship_start_date) , name = COALESCE($3, name),
+	timezone = COALESCE($4, timezone),
 	updated_at = now()
 	WHERE id = $1 
-	`, coupleID, start, name)
+	`, coupleID, start, name, timezone)
 	if err != nil {
 		return err
 	}

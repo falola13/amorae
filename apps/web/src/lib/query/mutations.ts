@@ -21,7 +21,7 @@ import {
  *
  * Errors and offline pausing are handled centrally (lib/query/client.ts).
  */
-export interface WriteDef<A, R> {
+interface BaseWriteDef<A, R> {
   mutationKey: MutationKey;
   mutationFn: (args: A) => Promise<R>;
   /** Queries that are stale once this succeeds or fails. */
@@ -30,13 +30,40 @@ export interface WriteDef<A, R> {
   scope?: string;
   /** The screen shows this write's errors itself, so skip the global toast. */
   handlesError?: boolean;
-  /**
-   * Send now or fail; never pause offline and send later. For writes whose
-   * meaning depends on when they land, like undoing an appreciation: a late
-   * undo would delete a note the partner has already read.
-   */
-  onlineOnly?: boolean;
 }
+
+/**
+ * Every write says what happens if it is sent twice, and there is no third
+ * option — which is the point.
+ *
+ * A queued write can be replayed: the connection drops after the server
+ * applied it but before the response arrives, and the queue sends it again.
+ * So a write may only be queued when replaying it changes nothing
+ * (FR-PWA-009). The alternative is not "queue it and hope": it is to refuse
+ * to queue it at all.
+ */
+type Replay =
+  | {
+      /**
+       * Why sending this twice is the same as sending it once — the natural
+       * key, the replace, or the state it settles on. Written out rather than
+       * a boolean, because that sentence is where the thinking happens.
+       */
+      idempotent: string;
+      onlineOnly?: never;
+    }
+  | {
+      /**
+       * Send now or fail; never pause offline and send later. For a write
+       * that would do damage twice (creating a second memory) or whose
+       * meaning depends on when it lands (undoing a note the partner has
+       * since read).
+       */
+      onlineOnly: true;
+      idempotent?: never;
+    };
+
+export type WriteDef<A, R> = BaseWriteDef<A, R> & Replay;
 
 /** Any definition, whatever its argument and result types. */
 export type AnyWriteDef = WriteDef<never, unknown>;

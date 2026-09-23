@@ -9,14 +9,16 @@ import { SafeTop } from "@/components/layout/screen";
 import { Button, LinkButton, Micro, Para, Title, TopBar } from "@/components/ui/kit";
 import { Bottom, Fact } from "@/components/ui/onboarding-bits";
 import { logoutAction } from "@/features/auth/actions";
-import { useCouple, useCreateCouple, useEndedCouples } from "@/features/couple/hooks";
+import { useCouple, useCreateCouple, useEndedCouples, useMe } from "@/features/couple/hooks";
 import { clearSignedInState } from "@/lib/query/persist";
 import { routes } from "@/lib/routes";
+import { zoneLabel } from "@/lib/timezones";
 
 export default function CreateCouplePage() {
   const router = useRouter();
   const create = useCreateCouple();
   const couple = useCouple();
+  const me = useMe();
   // Someone who just ended a space lands here, because they are in no couple.
   // Without this they would see "start a space" and no sign of where theirs
   // went, while it is still sitting there on a clock.
@@ -58,15 +60,14 @@ export default function CreateCouplePage() {
             title="A prayer week every Sunday"
             text="You’ll set the first week. After that it alternates."
           />
+          {/* The real zone, not a hardcoded one: this is the creator's own,
+              which seeds the couple's. Changing it lives in the space itself
+              once there is a space to change (DEC-27), so there is no button
+              here promising something that cannot happen yet. */}
           <Fact
             icon="globe"
-            title="Lagos time (WAT)"
-            text="Your weeks follow this timezone."
-            trailing={
-              <button type="button" className="press h-11 px-1 text-[15px] font-semibold text-plum">
-                Change
-              </button>
-            }
+            title={zoneLabel(me.data?.timezone ?? "UTC")}
+            text="Your prayer week turns over on Sunday here. You can change it later."
           />
         </div>
       </div>

@@ -11,6 +11,7 @@ export const settingsWrites = {
     mutationFn: (patch: Partial<NotificationPrefs>) => settingsApi.savePrefs(patch),
     invalidates: [keys.prefs],
     scope: "settings.prefs",
+    idempotent: "a patch of switch positions; the same patch twice leaves the same positions.",
   }),
   // Securing an account is only meaningful now: queued and replayed an hour
   // later it would sign out devices the person has since decided to keep.

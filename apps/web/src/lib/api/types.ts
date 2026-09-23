@@ -28,6 +28,12 @@ export interface Partner {
 export interface Couple {
   id: string;
   name: string;
+  /**
+   * When this couple's prayer week turns over. Not the same as me.timezone,
+   * which is when your own reminders fire: partners in different places must
+   * still agree on which week it is (DEC-27).
+   */
+  timezone: string;
   /** role is your own label in the couple, like the partner's. */
   me: User & { role: string };
   partner: Partner | null;

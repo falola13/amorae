@@ -258,7 +258,7 @@ usual envelope:
 
 `Couple` is flat: `id`, `name`, `me` (a `User` plus your own `role`), `partner` (null until
 joined), `invite_code` (only while a usable code exists and the couple has one member),
-`started_on`, `onboarding` flags. A `Couple` is always a live one; a couple that has ended is a
+`started_on`, `timezone`, `onboarding` flags. A `Couple` is always a live one; a couple that has ended is a
 different shape, `EndedCouple` (below).
 
 | Endpoint | Notes |
@@ -267,7 +267,7 @@ different shape, `EndedCouple` (below).
 | `POST /v1/couples` | 201 `Couple`; creates the couple with the caller as first member and a fresh invite code. 409 `already_paired` when the caller is already in a couple |
 | `POST /v1/couples/invite` | 200 `Couple` with a new code. The old pending code is revoked at once. 409 `couple_full` once both have joined |
 | `POST /v1/couples/join` `{ code }` | 200 `Couple`, now with `partner` filled in. `code` is case- and dash-insensitive (`abc-123` = `ABC123`). 400 `validation_failed` with `fields.code` when it is empty; 400 `invite_invalid` (unknown, or your own code), `invite_expired`, `invite_used` or `invite_revoked`, each with the message also in `fields.code`; 409 `couple_full` when the couple already has two members; 409 `already_paired` when the caller is already in a couple; 429 after 10 attempts in 15 minutes |
-| `PATCH /v1/couples/me` `{ name?, relationship_start_date? }` | 200 `Couple`; dates are `YYYY-MM-DD` |
+| `PATCH /v1/couples/me` `{ name?, relationship_start_date?, timezone? }` | 200 `Couple`; dates are `YYYY-MM-DD`. `timezone` is the **couple's** — an IANA name deciding when the prayer week turns over, changeable by either partner and shared by both (DEC-27). Not the same as `me.timezone`, which is when that person's reminders fire. 400 `validation_failed` with `fields.timezone` for an unknown zone |
 | `PATCH /v1/couples/role` `{ role }` | 200 `Couple`; sets the caller's own label, 1–32 characters |
 | `PATCH /v1/couples/me/onboarding` | `{ couple?, install?, notifications? }`; 200 `Couple`. `install` and `notifications` are stored per person; `couple` is accepted but derived from membership, so it is always `true` in the response |
 | `DELETE /v1/couples/me` | 200 `EndedCouple[]`. Leaving **ends the couple for both partners** — it does not remove one of them and leave the other holding the shared history (FR-PAIR-008). Afterwards neither is in a couple. 404 `couple_not_found` when you are in none |

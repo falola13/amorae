@@ -15,21 +15,25 @@ export const prayerWrites = {
       done ? prayersApi.complete(pointId) : prayersApi.uncomplete(pointId),
     invalidates: [keys.week],
     scope: "prayers.completion",
+    idempotent: "one row per (point, person), so marking or unmarking twice settles the same way.",
   }),
   savePoints: defineWrite({
     mutationKey: ["prayers", "savePoints"],
     mutationFn: (points: PrayerPoint[]) => prayersApi.savePoints(points),
     invalidates: [keys.week],
+    idempotent: "sends the whole week, so a replay rewrites the same list rather than appending.",
   }),
   publish: defineWrite<void, PrayerWeek>({
     mutationKey: ["prayers", "publish"],
     mutationFn: () => prayersApi.publish(),
     invalidates: [keys.week, keys.history],
+    idempotent: "publishing a week that is already published changes nothing.",
   }),
   reflection: defineWrite({
     mutationKey: ["prayers", "reflection"],
     mutationFn: ({ weekId, text }: { weekId: string; text: string }) =>
       prayersApi.reflection(weekId, text),
     invalidates: [keys.history, keys.week, keys.weeksById],
+    idempotent: "one reflection per person per week, replaced rather than added to.",
   }),
 };

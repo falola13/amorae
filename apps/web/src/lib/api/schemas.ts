@@ -90,6 +90,7 @@ export const coupleSchema = z.object({
     .regex(/^(\d{4}-\d{2}-\d{2})?$/, "Pick a date.")
     .optional(),
   role: z.string().trim().max(32, "Keep it under 32 characters.").optional(),
+  timezone: z.string().optional(),
 });
 export type CoupleInput = z.infer<typeof coupleSchema>;
 

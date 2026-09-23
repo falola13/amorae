@@ -18,7 +18,7 @@ export const coupleApi = {
   create: () => http.post<Couple>("/couples", {}).then((r) => r.data),
   join: (code: string) => http.post<Couple>("/couples/join", { code }).then((r) => r.data),
   regenerateInvite: () => http.post<Couple>("/couples/invite", {}).then((r) => r.data),
-  updateCouple: (patch: { name?: string; relationship_start_date?: string }) =>
+  updateCouple: (patch: { name?: string; relationship_start_date?: string; timezone?: string }) =>
     http.patch<Couple>("/couples/me", patch).then((r) => r.data),
   updateRole: (role: string) => http.patch<Couple>("/couples/role", { role }).then((r) => r.data),
   // Leaving ends the couple for both partners and answers with what is left:

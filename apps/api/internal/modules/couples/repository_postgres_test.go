@@ -284,3 +284,76 @@ func TestPostgresRepository_PurgeDissolvedBefore(t *testing.T) {
 		}
 	})
 }
+
+func TestPostgresRepository_UpdateCouples_Timezone(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo, ada, _ := pair(t, db)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	mine, err := repo.GetForUser(ctx, ada, now)
+	if err != nil {
+		t.Fatalf("GetForUser: %v", err)
+	}
+	if mine.Couple.Timezone != "UTC" {
+		t.Fatalf("starting timezone = %q, want UTC", mine.Couple.Timezone)
+	}
+
+	lagos := "Africa/Lagos"
+	if err := repo.UpdateCouples(ctx, mine.Couple.ID, nil, nil, &lagos); err != nil {
+		t.Fatalf("UpdateCouples: %v", err)
+	}
+
+	t.Run("it moves for both partners at once", func(t *testing.T) {
+		// A week the two of them are praying cannot start at two different
+		// moments, so this is the couple's setting and not each person's.
+		_, ben := mustMembers(t, db, mine.Couple.ID)
+		for who, userID := range map[string]uuid.UUID{"the one who changed it": ada, "their partner": ben} {
+			got, err := repo.GetForUser(ctx, userID, now)
+			if err != nil {
+				t.Fatalf("GetForUser(%s): %v", who, err)
+			}
+			if got.Couple.Timezone != lagos {
+				t.Errorf("%s sees %q, want %q", who, got.Couple.Timezone, lagos)
+			}
+		}
+	})
+
+	t.Run("a nil timezone leaves it alone", func(t *testing.T) {
+		name := "Renamed"
+		if err := repo.UpdateCouples(ctx, mine.Couple.ID, nil, &name, nil); err != nil {
+			t.Fatalf("UpdateCouples: %v", err)
+		}
+		got, err := repo.GetForUser(ctx, ada, now)
+		if err != nil {
+			t.Fatalf("GetForUser: %v", err)
+		}
+		if got.Couple.Timezone != lagos {
+			t.Errorf("timezone = %q after renaming, want %q", got.Couple.Timezone, lagos)
+		}
+	})
+}
+
+// mustMembers returns the couple's two member ids in join order.
+func mustMembers(t *testing.T, db *database.DB, coupleID uuid.UUID) (uuid.UUID, uuid.UUID) {
+	t.Helper()
+	rows, err := db.Q(context.Background()).Query(context.Background(),
+		`SELECT user_id FROM couple_members WHERE couple_id = $1 ORDER BY joined_at ASC`, coupleID)
+	if err != nil {
+		t.Fatalf("listing members: %v", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scanning member: %v", err)
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("couple has %d members, want 2", len(ids))
+	}
+	return ids[0], ids[1]
+}

@@ -4,12 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
-import { Alert, Button, Field, Sheet } from "@/components/ui/kit";
+import { Alert, Button, Field, Select, Sheet } from "@/components/ui/kit";
 import { GENERIC_ERROR_MESSAGE } from "@/lib/api/envelope";
 import { isApiError } from "@/lib/api/errors";
 import { coupleSchema, type CoupleInput } from "@/lib/api/schemas";
 import type { Couple } from "@/lib/api/types";
 import { notify } from "@/lib/store/toast";
+import { ZONES, zoneLabel } from "@/lib/timezones";
 import { useUpdateCouple, useUpdateRole } from "../hooks";
 
 /**
@@ -31,6 +32,7 @@ export function EditCoupleSheet({
     name: couple.name,
     relationship_start_date: couple.started_on ?? "",
     role: couple.me.role ?? "",
+    timezone: couple.timezone,
   };
   const {
     register,
@@ -60,10 +62,11 @@ export function EditCoupleSheet({
 
   const onSubmit = async (v: CoupleInput) => {
     try {
-      if (dirtyFields.name || dirtyFields.relationship_start_date)
+      if (dirtyFields.name || dirtyFields.relationship_start_date || dirtyFields.timezone)
         await updateCouple.mutateAsync({
           name: v.name,
           relationship_start_date: v.relationship_start_date || undefined,
+          timezone: dirtyFields.timezone ? v.timezone : undefined,
         });
       if (dirtyFields.role && v.role) await updateRole.mutateAsync(v.role);
       notify("Saved.");
@@ -83,6 +86,13 @@ export function EditCoupleSheet({
           type="date"
           error={errors.relationship_start_date?.message}
           {...register("relationship_start_date")}
+        />
+        <Select
+          label="Where your week starts"
+          hint="Your prayer week turns over on Sunday here, for both of you."
+          options={ZONES.map((z) => ({ value: z, label: zoneLabel(z) }))}
+          error={errors.timezone?.message}
+          {...register("timezone")}
         />
         <Field
           label="What you call yourself"

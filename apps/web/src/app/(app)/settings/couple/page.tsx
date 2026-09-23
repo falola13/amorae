@@ -19,6 +19,7 @@ import { EditCoupleSheet } from "@/features/couple/components/edit-couple-sheet"
 import { LeaveCoupleSheet } from "@/features/couple/components/leave-couple-sheet";
 import { useCouple } from "@/features/couple/hooks";
 import { longDateYear, yearsAndMonths } from "@/lib/dates";
+import { zoneLabel } from "@/lib/timezones";
 import { routes } from "@/lib/routes";
 
 /**
@@ -81,6 +82,12 @@ export default function CouplePage() {
                 icon="user"
                 title="What you call yourself"
                 sub={c.me.role || "Not set yet"}
+                onClick={edit}
+              />
+              <Row
+                icon="globe"
+                title="Where your week starts"
+                sub={zoneLabel(c.timezone)}
                 onClick={edit}
                 last
               />

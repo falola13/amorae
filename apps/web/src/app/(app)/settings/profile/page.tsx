@@ -10,6 +10,7 @@ import {
   Button,
   Field,
   Initial,
+  Select,
   Skeleton,
   Title,
   TopBar,
@@ -21,8 +22,7 @@ import { useCouple, useMe, useUpdateProfile } from "@/features/couple/hooks";
 import { isApiError } from "@/lib/api/errors";
 import { profileSchema, type ProfileInput } from "@/lib/api/schemas";
 import { routes } from "@/lib/routes";
-
-const ZONES = ["Africa/Lagos", "America/New_York", "Europe/London", "Africa/Nairobi", "Asia/Dubai"];
+import { ZONES, zoneLabel } from "@/lib/timezones";
 
 export default function ProfilePage() {
   // Your profile is yours whether or not you are in a space, so it hangs off
@@ -119,22 +119,12 @@ export default function ProfilePage() {
                     </span>
                     <span className="shrink-0 text-[15px] font-semibold text-plum">Change</span>
                   </button>
-                  <div className="flex flex-col gap-2">
-                    <label htmlFor="timezone" className="text-[13px] font-semibold text-stone">
-                      Timezone
-                    </label>
-                    <select
-                      id="timezone"
-                      className="h-[52px] w-full appearance-none rounded-input border border-edge bg-surface px-4 text-[16px] text-ink"
-                      {...register("timezone")}
-                    >
-                      {ZONES.map((z) => (
-                        <option key={z} value={z}>
-                          {z.replace("_", " ")}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <Select
+                    label="Timezone"
+                    hint="When your own reminders arrive. Your prayer week follows your space's timezone."
+                    options={ZONES.map((z) => ({ value: z, label: zoneLabel(z) }))}
+                    {...register("timezone")}
+                  />
                   <button
                     type="button"
                     onClick={() => setChangingPassword(true)}

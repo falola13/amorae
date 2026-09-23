@@ -363,11 +363,16 @@ recorded acceptance event) is not built, hence **Partial** rather than **Impleme
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started — Blocked by Q-20 | Test |
+| Must | MVP | Partial — captured, not yet acted on | Test |
 
 The system shall obtain a user's explicit consent to process faith content, separate from
-acceptance of the Terms, before that content can be stored (NFR-PRIV; where it is asked is
-Q-20).
+acceptance of the Terms, before that content can be stored (NFR-PRIV; where it is asked was
+Q-20, what it controls is DEC-29).
+
+*Status note:* the consent is asked for at sign-up as its own unticked box, and recorded with
+its policy version — AC1 and AC2 are met. Nothing reads it: a user who leaves the box unticked
+still sees prayer weeks, scripture fields and "Two hearts, one faith". Until FR-PAIR-009 is
+built, this consent is a promise the product does not keep.
 
 **Acceptance criteria**
 
@@ -375,6 +380,12 @@ Q-20).
   tick it, then the system shall not treat Terms acceptance as consent to process faith content.
 - **FR-AUTH-012.AC2** Given the user consents, when consent is recorded, then the system shall
   store who consented, when, and which version of the privacy policy they saw.
+- **FR-AUTH-012.AC3** Given a user has consented, when they withdraw that consent from their own
+  settings, then the system shall record the withdrawal and shall stop storing faith content for
+  the space at once (FR-PAIR-009.AC4).
+- **FR-AUTH-012.AC4** Given consent is asked for anywhere other than sign-up, when it is asked,
+  then it shall be the person's own affirmative act; no partner, and no acceptance of the Terms,
+  shall ever grant it on their behalf.
 
 ### 3.2 ACCT — Account
 
@@ -702,6 +713,73 @@ the pairing screen for as long as the window is open.
   all, because no write resolves one.
 - **FR-PAIR-008.AC3** Given a partner has left, when they create or join a new couple, then the
   system shall allow it immediately and keep the ended couple readable alongside it (DEC-26).
+
+#### FR-PAIR-009 Faith vocabulary, and when a space uses it
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Not started | Test |
+
+A space shall use faith vocabulary only while **both** partners currently hold faith consent
+(DEC-29). The weekly mechanic is the same either way — one partner sets the week, the other
+responds, the turn alternates — and only the words change. The scripture and verse fields exist
+in faith vocabulary only.
+
+This is derived from the two consents each time it is needed. There is no couple-level setting:
+a stored mode could outlive a withdrawal, and one partner must never be able to consent on the
+other's behalf.
+
+**The rule, for every combination**
+
+| Partner A | Partner B | The space | What happens |
+|---|---|---|---|
+| Consented | Consented | **Faith** | Prayers, scripture, "This week's prayers" |
+| Consented | Not | **Secular** | Intentions, no scripture field, no religious framing |
+| Not | Consented | **Secular** | Identical — neither partner's consent outranks the other's |
+| Not | Not | **Secular** | Identical, and neither is prompted about it |
+
+A space with one member is always secular in effect: a prayer week needs two members to have a
+setter at all (`prayers.SetterFor`), so nothing faith-shaped exists before pairing completes.
+
+**Acceptance criteria**
+
+- **FR-PAIR-009.AC1** Given both partners hold faith consent, when either opens the weekly
+  screen, then the system shall use faith vocabulary and shall offer the scripture and verse
+  fields.
+- **FR-PAIR-009.AC2** Given either partner does not hold faith consent, when either opens the
+  weekly screen, then the system shall use secular vocabulary, shall not offer a scripture or
+  verse field, and shall not store one.
+- **FR-PAIR-009.AC3** Given a space is secular because one partner has not consented, when that
+  partner consents in their own settings, then the space shall use faith vocabulary from then on
+  without either partner confirming anything further.
+- **FR-PAIR-009.AC4** Given a space uses faith vocabulary, when either partner withdraws their
+  consent, then the space shall use secular vocabulary from that moment, and no further faith
+  content shall be stored. What becomes of faith content already written is Q-25.
+- **FR-PAIR-009.AC5** Given a partner is invited to a space, when they join, then the system
+  shall not disclose the other partner's consent state to them as a fact about that person; it
+  shall state the rule ("a space uses prayer when both of you have turned it on") and leave the
+  inference to them.
+- **FR-PAIR-009.AC6** Given secular vocabulary is in use, when a partner types religious words
+  into an intention or a journal entry of their own accord, then the system shall store it as
+  ordinary content; this requirement governs what Amorae asks for, not what people write.
+
+**Vocabulary**
+
+One mechanic, two vocabularies. The faith wording must never appear in a secular space, including
+in notifications, empty states and the installed app's shortcuts.
+
+| Faith | Secular |
+|---|---|
+| This week's prayers | This week's intentions |
+| Prayer | Intention |
+| Scripture, optional | *(field absent)* |
+| Prayed | Done |
+| Prayer Mode | Quiet Mode |
+| New prayer week | New week |
+| Two hearts, one faith | Two people, one life |
+
+Internal names do not change: the route stays `/prayers`, the tables stay `prayer_*`, the Go
+module stays `prayers`. This is a display layer, not a migration.
 
 ### 3.4 PRAY — Weekly prayer
 
@@ -1567,15 +1645,18 @@ networks, and clear about what is and is not safe to do offline.
 - **BR-PWA-02** — An offline write is saved only if its mutation is registered as resumable. It is
   stored under the signed-in user's id in `localStorage`, for at most 7 days, and the query cache
   itself is never persisted (DEC-05).
-- **BR-PWA-03** — The resumable write set today, read from `apps/web/src/features/prayers/writes.ts`,
-  `apps/web/src/features/together/writes.ts` and `apps/web/src/features/settings/writes.ts`, all
-  registered together in `apps/web/src/components/providers.tsx`, is: prayer completion toggle,
-  save draft prayer points, publish a prayer week (DEC-21), save a weekly reflection, save an
-  event, complete/reopen an event, toggle an event checklist item, create a goal, log goal
-  progress, mark/skip a challenge day, add a journal entry, send an appreciation, add a memory,
-  add a milestone, and save notification preferences. Undoing an appreciation is defined there
-  but marked `onlineOnly`, so it is never queued (DEC-21). Account and pairing actions (register,
-  login, create/join a couple, delete account) have no `writes.ts` and are never queued offline.
+- **BR-PWA-03** — Every write declares, in its own definition, what happens if it is sent twice:
+  either `idempotent: "<why>"` or `onlineOnly: true`. The type offers no third option, so a write
+  cannot be queued without someone having said why replaying it is safe (DEC-28). The resumable
+  set is therefore exactly the idempotent writes: prayer completion toggle, save draft prayer
+  points, publish a prayer week (DEC-21), save a weekly reflection, complete/reopen an event,
+  toggle an event checklist item, mark/skip a challenge day, and save notification preferences.
+  Everything that creates a row without a key of its own — save an event, create a goal, add a
+  journal entry, send an appreciation, add a memory, add a milestone — and logging goal progress,
+  which adds an amount rather than setting one, are `onlineOnly` until their endpoints take an
+  idempotency key (FR-PWA-009). Undoing an appreciation is `onlineOnly` for a different reason:
+  its meaning depends on when it lands (DEC-21). Account and pairing actions (register, login,
+  create/join a couple, leave a couple, delete account) have no `writes.ts` and are never queued.
 
 #### FR-PWA-001 Installable
 
@@ -1707,7 +1788,7 @@ The client shall warn a user before logging them out if they have unsynced offli
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started | Test |
+| Must | MVP | Not started — not yet reachable | Test |
 
 Before a queued, non-idempotent write is sent to the API, the client shall attach
 a client-generated idempotency key so a retried send cannot be applied twice.
@@ -1720,8 +1801,14 @@ a client-generated idempotency key so a retried send cannot be applied twice.
 - **FR-PWA-009.AC2** Given the same write is retried after a partial failure, when it is sent
   again, then the API shall recognise the repeated key and shall not create a second record.
 
-*Status note:* this is required before the non-idempotent writes in BR-PWA-03 reach a real
-endpoint. None of those endpoints exists yet, so nothing is at risk today.
+*Status note:* no longer the only thing standing between a dropped response and a duplicate row.
+Under DEC-28 a write may not be queued unless it says why a replay is safe, so the non-idempotent
+writes are `onlineOnly` rather than queued-and-hoped. This requirement is what lets them queue
+again: when an endpoint accepts a key, its write moves from `onlineOnly` to `idempotent`.
+
+None of Step 1's writes needs it. Prayer completion is keyed on (point, person), saving points
+replaces the whole week, publishing is a state transition, and a reflection is one row per person
+per week — all idempotent in the schema rather than by a key.
 
 #### FR-PWA-010 Conflict rule: last write wins
 
@@ -2047,7 +2134,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-AUTH-009 | G-05 | TBD — Blocked by Q-05 | Not started | None yet |
 | FR-AUTH-010 | G-05 | TBD — Blocked by Q-10 | Not started | None yet |
 | FR-AUTH-011 | G-05 | — (registration screen copy) | Partial | Manual demo 2026-09-22 |
-| FR-AUTH-012 | G-05 | TBD — Blocked by Q-20 | Not started | None yet |
+| FR-AUTH-012 | G-05 | `POST /v1/auth/register` (`faith_consent`), `user_consents` | Partial | Consent captured and recorded; nothing reads it (FR-PAIR-009) |
 | FR-ACCT-001 | G-05 | `GET`, `PATCH /v1/users/me` | Implemented | Go integration tests (users) |
 | FR-ACCT-002 | G-05 | `PUT /v1/users/me/email` | Implemented | Go integration tests (users) |
 | FR-ACCT-003 | G-05 | TBD — Blocked by Q-05 | Not started | None yet |
@@ -2063,7 +2150,8 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-PAIR-005 | G-01 | `PATCH /v1/couples/me` | Partial | Go handler in the in-progress couples module; no tests yet |
 | FR-PAIR-006 | G-01 | `PATCH /v1/couples/role` | Partial | Go handler in the in-progress couples module; no tests yet |
 | FR-PAIR-007 | G-01 | `PATCH /v1/couples/me/onboarding` | Partial | Go handler and migration in progress |
-| FR-PAIR-008 | G-05 | TBD — Blocked by Q-09 | Not started | None yet |
+| FR-PAIR-008 | G-05 | `DELETE /v1/couples/me`, `GET /v1/couples/archived` | Implemented | Go unit + Postgres integration tests; browser check 2026-09-23 |
+| FR-PAIR-009 | G-02, G-05 | Derived from `user_consents` — no endpoint of its own | Not started | None yet |
 | FR-PRAY-001 | G-02 | `GET /v1/prayers/current` | UI only | Screen built; no endpoint to test against |
 | FR-PRAY-002 | G-02 | `PUT /v1/prayers/current/points` | UI only | Screen built; no endpoint to test against |
 | FR-PRAY-003 | G-02 | `POST /v1/prayers/current/publish` | UI only | Screen built; no endpoint to test against |
