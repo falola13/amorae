@@ -9,7 +9,25 @@ const SESSION_COOKIE = "amorae_session";
 //
 // It never redirects a logged-in-looking visitor away from /login or
 // /welcome, so a stale cookie can't trap anyone in a loop.
-const PUBLIC = ["/welcome", "/login", "/register", "/offline", "/terms", "/privacy", "/api/", "/_next/", "/icons/", "/splash/", "/brand/", "/manifest.webmanifest", "/sw.js", "/robots.txt", "/favicon"];
+const PUBLIC = [
+  "/welcome",
+  "/login",
+  "/register",
+  "/forgot",
+  "/reset",
+  "/offline",
+  "/terms",
+  "/privacy",
+  "/api/",
+  "/_next/",
+  "/icons/",
+  "/splash/",
+  "/brand/",
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/robots.txt",
+  "/favicon",
+];
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

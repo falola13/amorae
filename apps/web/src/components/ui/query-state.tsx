@@ -3,9 +3,10 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { GENERIC_ERROR_MESSAGE } from "@/lib/api/envelope";
+import { Main } from "@/components/layout/screen";
+import { GENERIC_ERROR_MESSAGE, NOT_AVAILABLE_CODE } from "@/lib/api/envelope";
 import { isApiError } from "@/lib/api/errors";
-import { ErrorState, Skeleton } from "./kit";
+import { LoadProblem, Skeleton } from "./kit";
 
 type AnyQuery = UseQueryResult<unknown, unknown>;
 type DataOf<Q> = Q extends UseQueryResult<infer D, unknown> ? D : never;
@@ -19,37 +20,85 @@ type DataTuple<Qs extends readonly AnyQuery[]> = { [K in keyof Qs]: DataOf<Qs[K]
  *     {(g, c) => <GoalDetail goal={g} partner={c.partner} />}
  *   </QueryState>
  *
- * Keep the page chrome (TopBar, Main, title) outside, so it stays put while
- * the content area switches. Cached data always wins: a background refetch
- * that fails keeps showing what was loaded.
+ * A failure takes only this component's space, never the screen: wrap each
+ * independent part of a page in its own QueryState so the rest keeps working.
+ * Keep the page chrome (TopBar, Main, title) outside. When the QueryState is
+ * the whole page body (its children render their own <Main>), pass
+ * frame={inPage} so the notice sits in the page like everything else.
+ * Cached data always wins: a background refetch that fails keeps showing
+ * what was loaded.
  */
 export function QueryState<const Qs extends readonly AnyQuery[]>({
   queries,
   loading,
+  frame = (notice) => notice,
   children,
 }: {
   queries: Qs;
   /** Shown while loading. Defaults to a text skeleton. */
   loading?: ReactNode;
+  /** Wraps a failure or offline notice, e.g. `inPage`. */
+  frame?: (notice: ReactNode) => ReactNode;
   children: (...data: DataTuple<Qs>) => ReactNode;
 }) {
   const missing = queries.filter((q) => q.data === undefined);
   const retry = () => missing.forEach((q) => void q.refetch());
 
   const failed = missing.find((q) => q.isError);
-  if (failed) {
-    return (
-      <ErrorState
-        title="This didn’t load"
-        text={isApiError(failed.error) ? failed.error.message : GENERIC_ERROR_MESSAGE}
-        onRetry={retry}
-      />
-    );
-  }
+  if (failed) return <>{frame(<LoadFailure error={failed.error} onRetry={retry} />)}</>;
   if (missing.some((q) => q.fetchStatus === "paused")) {
-    return <ErrorState title="You’re offline" text="This will load when you’re back online." onRetry={retry} />;
+    // Not an error: React Query loads it by itself when the connection returns.
+    return (
+      <>
+        {frame(
+          <LoadProblem
+            tone="quiet"
+            icon="offline"
+            title="You’re offline"
+            text="This will load when you’re back online."
+          />,
+        )}
+      </>
+    );
   }
   if (missing.length > 0) return <>{loading ?? <Skeleton />}</>;
 
   return <>{children(...(queries.map((q) => q.data) as DataTuple<Qs>))}</>;
+}
+
+/** Frame for a QueryState that is a whole page body: padded, and filling the height so the tab bar stays at the bottom. */
+export const inPage = (notice: ReactNode) => (
+  <Main>
+    <div className="pt-4">{notice}</div>
+  </Main>
+);
+
+/** The inline notice for a failed load, worded for its cause. Retry only where retrying can help. */
+export function LoadFailure({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  if (isApiError(error) && error.code === NOT_AVAILABLE_CODE) {
+    return (
+      <LoadProblem
+        tone="quiet"
+        icon="clock"
+        title="Not available yet"
+        text="This part of Amorae is still being built."
+      />
+    );
+  }
+  if (isApiError(error) && error.status === 404) {
+    // The API's own "not found" (deleted, or another couple's): asking again won't bring it back.
+    return (
+      <LoadProblem tone="quiet" icon="alert" title="This isn’t here anymore" text={error.message} />
+    );
+  }
+  const message = isApiError(error) ? error.message : GENERIC_ERROR_MESSAGE;
+  return (
+    <LoadProblem
+      tone="error"
+      icon="alert"
+      title="This didn’t load"
+      text={message}
+      onRetry={onRetry}
+    />
+  );
 }

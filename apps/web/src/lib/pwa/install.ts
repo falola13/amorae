@@ -5,7 +5,9 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useUI } from "@/lib/store/ui";
 
 const noop = () => () => {};
-const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
+const isStandalone = () =>
+  window.matchMedia("(display-mode: standalone)").matches ||
+  (navigator as unknown as { standalone?: boolean }).standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 
 // Standalone detection and the Android install prompt. iOS has no prompt API,
@@ -19,7 +21,9 @@ export function useInstall() {
     const handler = (raw: globalThis.Event) => {
       const e = raw as globalThis.Event & { prompt?: () => Promise<void> };
       e.preventDefault();
-      setPrompt(async () => { await e.prompt?.(); });
+      setPrompt(async () => {
+        await e.prompt?.();
+      });
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);

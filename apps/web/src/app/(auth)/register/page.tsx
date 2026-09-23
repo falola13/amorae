@@ -12,7 +12,10 @@ export default function RegisterPage() {
     <>
       <SafeTop />
       <TopBar back="Back" backHref={routes.welcome} />
-      <div className="flex flex-col gap-2 px-6 pb-7 pt-3"><Title>Create your account</Title><Para>Your partner will make their own, then you&rsquo;ll link the two.</Para></div>
+      <div className="flex flex-col gap-2 px-6 pb-7 pt-3">
+        <Title>Create your account</Title>
+        <Para>Your partner will make their own, then you&rsquo;ll link the two.</Para>
+      </div>
       <RegisterForm />
     </>
   );

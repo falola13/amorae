@@ -12,10 +12,22 @@ import { env } from "@/lib/env";
  * believes X-Client-IP when X-BFF-Secret matches its own BFF_SECRET.
  */
 export function visitorHeaders(incoming: Headers): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  // Forwarded so a person can tell their own sessions apart in "where you're
+  // signed in"; without it every session would read "Unknown device", because
+  // the API would only ever see this server's own agent.
+  const userAgent = incoming.get("user-agent");
+  if (userAgent) headers["User-Agent"] = userAgent;
+
   const secret = env.BFF_SECRET;
-  if (!secret) return {};
+  if (!secret) return headers;
   const ip = visitorIP(incoming);
-  return ip ? { "X-Client-IP": ip, "X-BFF-Secret": secret } : {};
+  if (ip) {
+    headers["X-Client-IP"] = ip;
+    headers["X-BFF-Secret"] = secret;
+  }
+  return headers;
 }
 
 /**

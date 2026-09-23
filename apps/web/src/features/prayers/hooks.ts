@@ -11,11 +11,14 @@ import { prayerWrites, type CompletionVars } from "./writes";
 
 export const useWeek = () => useQuery({ queryKey: keys.week, queryFn: prayersApi.current });
 export const useHistory = () => useQuery({ queryKey: keys.history, queryFn: prayersApi.history });
-export const useWeekById = (id: string) => useQuery({ queryKey: keys.weekById(id), queryFn: () => prayersApi.week(id), enabled: !!id });
+export const useWeekById = (id: string) =>
+  useQuery({ queryKey: keys.weekById(id), queryFn: () => prayersApi.week(id), enabled: !!id });
 
 const withCompletion = (w: PrayerWeek, { pointId, done }: CompletionVars): PrayerWeek => ({
   ...w,
-  my_completed: done ? Array.from(new Set([...w.my_completed, pointId])) : w.my_completed.filter((x) => x !== pointId),
+  my_completed: done
+    ? Array.from(new Set([...w.my_completed, pointId]))
+    : w.my_completed.filter((x) => x !== pointId),
 });
 
 /**
@@ -35,17 +38,20 @@ export function useSetCompleted() {
       if (prev) qc.setQueryData<PrayerWeek>(keys.week, withCompletion(prev, vars));
       return { prev };
     },
-    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.week, ctx.prev); },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(keys.week, ctx.prev);
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: keys.week }),
   });
 }
 
 /** Prayer ids whose "prayed" change is waiting for the connection. */
 export function usePendingCompletions(): Set<string> {
-  return new Set(usePausedVariables<CompletionVars>(prayerWrites.completion.mutationKey).map((v) => v.pointId));
+  return new Set(
+    usePausedVariables<CompletionVars>(prayerWrites.completion.mutationKey).map((v) => v.pointId),
+  );
 }
 
 export const useSavePoints = () => useWrite(prayerWrites.savePoints);
 export const usePublish = () => useWrite(prayerWrites.publish);
 export const useSaveReflection = () => useWrite(prayerWrites.reflection);
-export const useDemoWeek = () => useWrite(prayerWrites.demo);

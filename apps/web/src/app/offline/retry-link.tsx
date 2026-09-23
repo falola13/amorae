@@ -6,7 +6,11 @@ import { buttonClass } from "@/components/ui/kit";
 // for*, so reloading retries exactly that page.
 export function RetryLink() {
   return (
-    <button type="button" className={buttonClass("primary")} onClick={() => window.location.reload()}>
+    <button
+      type="button"
+      className={buttonClass("primary")}
+      onClick={() => window.location.reload()}
+    >
       Try again
     </button>
   );

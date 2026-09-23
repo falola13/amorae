@@ -10,16 +10,26 @@ export const useCouple = () => useQuery({ queryKey: keys.couple, queryFn: couple
 
 export function useCreateCouple() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: coupleApi.create, onSuccess: (c) => qc.setQueryData(keys.couple, c) });
+  return useMutation({
+    mutationFn: coupleApi.create,
+    onSuccess: (c) => qc.setQueryData(keys.couple, c),
+  });
 }
 // The join form shows a wrong code inline, so it opts out of the global error toast.
 export function useJoinCouple() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: coupleApi.join, meta: { handlesError: true }, onSuccess: (c) => qc.setQueryData(keys.couple, c) });
+  return useMutation({
+    mutationFn: coupleApi.join,
+    meta: { handlesError: true },
+    onSuccess: (c) => qc.setQueryData(keys.couple, c),
+  });
 }
 export function useOnboarding() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: coupleApi.onboarding, onSuccess: (c) => qc.setQueryData(keys.couple, c) });
+  return useMutation({
+    mutationFn: coupleApi.onboarding,
+    onSuccess: (c) => qc.setQueryData(keys.couple, c),
+  });
 }
 // The profile form maps field errors onto its inputs, so it opts out of the global error toast.
 export function useUpdateProfile() {
@@ -27,7 +37,10 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: coupleApi.updateMe,
     meta: { handlesError: true },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: keys.me }); qc.invalidateQueries({ queryKey: keys.couple }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.me });
+      qc.invalidateQueries({ queryKey: keys.couple });
+    },
   });
 }
 // Shows "wrong password" / "email taken" on the form itself, so no global toast.
@@ -36,7 +49,47 @@ export function useChangeEmail() {
   return useMutation({
     mutationFn: coupleApi.changeEmail,
     meta: { handlesError: true },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: keys.me }); qc.invalidateQueries({ queryKey: keys.couple }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.me });
+      qc.invalidateQueries({ queryKey: keys.couple });
+    },
   });
 }
-export const useDeleteAccount = () => useMutation({ mutationFn: coupleApi.deleteMe });
+// The delete sheet shows a wrong confirmation or password on its input, so no global toast.
+export const useDeleteAccount = () =>
+  useMutation({ mutationFn: coupleApi.deleteMe, meta: { handlesError: true } });
+export const useChangePassword = () =>
+  useMutation({ mutationFn: coupleApi.changePassword, meta: { handlesError: true } });
+export const useForgotPassword = () =>
+  useMutation({ mutationFn: coupleApi.forgotPassword, meta: { handlesError: true } });
+export const useResetPassword = () =>
+  useMutation({
+    mutationFn: (v: { token: string; new_password: string }) =>
+      coupleApi.resetPassword(v.token, v.new_password),
+    meta: { handlesError: true },
+  });
+
+export function useRegenerateInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: coupleApi.regenerateInvite,
+    onSuccess: (c) => qc.setQueryData(keys.couple, c),
+  });
+}
+// The couple sheet saves the couple and your role; both answer with the whole couple.
+export function useUpdateCouple() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: coupleApi.updateCouple,
+    meta: { handlesError: true },
+    onSuccess: (c) => qc.setQueryData(keys.couple, c),
+  });
+}
+export function useUpdateRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: coupleApi.updateRole,
+    meta: { handlesError: true },
+    onSuccess: (c) => qc.setQueryData(keys.couple, c),
+  });
+}

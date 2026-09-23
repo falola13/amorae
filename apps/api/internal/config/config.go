@@ -29,7 +29,17 @@ type Config struct {
 	MetricsAddr string
 	// BFFSecret, when set, lets the web BFF vouch for the real client IP
 	// (see middleware.ClientIP). Empty means no forwarded IP is trusted.
-	BFFSecret string
+	BFFSecret      string
+	RESEND_API_KEY string
+	DefaultFrom    string
+	// AppURL is the web origin, used to build links in emails
+	// (e.g. the password-reset link).
+	AppURL string
+	// Policy versions recorded with each consent at sign-up. They come from
+	// here, never from the request, so a client can't claim a version.
+	TermsVersion   string
+	PrivacyVersion string
+	FaithVersion   string
 }
 
 // minBFFSecretLen keeps the secret out of reach of guessing.
@@ -48,6 +58,19 @@ func Load() (Config, error) {
 	appEnv := getEnv("APP_ENV", "development")
 	if appEnv != "development" && appEnv != "production" {
 		errs = append(errs, fmt.Errorf("APP_ENV: must be development or production, got %q", appEnv))
+	}
+
+	resendAPIKey := getEnv("RESEND_API_KEY", "")
+	mailFrom := getEnv("DefaultFrom", "no-reply@amorae.com")
+	if appEnv == "production" {
+		if resendAPIKey == "" {
+			errs = append(errs, errors.New("RESEND_API_KEY: required in production"))
+		}
+		if mailFrom == "" {
+			errs = append(errs, errors.New("MAIL_FROM: required in production"))
+		}
+	} else if resendAPIKey != "" && mailFrom == "" {
+		errs = append(errs, errors.New("MAIL_FROM: required when RESEND_API_KEY is set"))
 	}
 
 	databaseURL := getEnv("DATABASE_URL", "")
@@ -98,6 +121,11 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("BFF_SECRET: must be at least %d characters when set", minBFFSecretLen))
 	}
 
+	appURL := getEnv("APP_URL", "http://localhost:3000")
+	if appEnv == "production" && os.Getenv("APP_URL") == "" {
+		errs = append(errs, errors.New("APP_URL: required in production"))
+	}
+
 	if len(errs) > 0 {
 		return Config{}, errors.Join(errs...)
 	}
@@ -114,6 +142,12 @@ func Load() (Config, error) {
 		ShutdownTimeout: shutdownTimeout,
 		MetricsAddr:     getEnv("METRICS_ADDR", "127.0.0.1:9090"),
 		BFFSecret:       bffSecret,
+		RESEND_API_KEY:  resendAPIKey,
+		DefaultFrom:     mailFrom,
+		AppURL:          appURL,
+		TermsVersion:    getEnv("TERMS_VERSION", "2026-01"),
+		PrivacyVersion:  getEnv("PRIVACY_VERSION", "2026-01"),
+		FaithVersion:    getEnv("FAITH_VERSION", "2026-01"),
 	}, nil
 }
 

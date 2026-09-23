@@ -6,6 +6,8 @@ export class ApiError extends Error {
   readonly code: string;
   readonly fields?: Record<string, string>;
   readonly requestId?: string;
+  /** Seconds to wait, from a 429's `Retry-After`. */
+  readonly retryAfter?: number;
 
   constructor(
     status: number,
@@ -13,6 +15,7 @@ export class ApiError extends Error {
     message: string,
     fields?: Record<string, string>,
     requestId?: string,
+    retryAfter?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -20,6 +23,7 @@ export class ApiError extends Error {
     this.code = code;
     this.fields = fields;
     this.requestId = requestId;
+    this.retryAfter = retryAfter;
   }
 }
 

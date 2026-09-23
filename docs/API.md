@@ -53,6 +53,10 @@ it up in the logs by `request_id`.
 | --- | --- |
 | All `/v1/auth/*` endpoints | 20 requests per client IP per minute |
 | `POST /v1/auth/login` | 10 attempts per email per 15 minutes, counted whether or not the account exists |
+| `POST /v1/auth/password/forgot` | 10 requests per email per 15 minutes |
+| Password and account changes that ask for the current password | 10 attempts per account per 15 minutes, shared between email change, password change and deletion |
+| All `/v1/couples/*` endpoints | 60 requests per client IP per minute |
+| `POST /v1/couples/join` | 10 attempts per account per 15 minutes |
 
 Clients should wait `Retry-After` seconds before trying again. The message is
 the same for every limit, so a 429 never reveals whether an account exists.
@@ -81,11 +85,24 @@ interface AuthResult {
 ### `POST /v1/auth/register`
 
 ```json
-{ "email": "ada@example.com", "password": "correct horse", "display_name": "Ada" }
+{
+  "email": "ada@example.com",
+  "password": "correct horse",
+  "display_name": "Ada",
+  "age_confirmed": true,
+  "accepted_terms": true,
+  "faith_consent": false
+}
 ```
 
 - `201` → `{ "data": AuthResult }`
-- `400 validation_failed`: `fields` may contain `email`, `password`, `display_name`
+- `400 validation_failed`: `fields` may contain `email`, `password`, `display_name`,
+  `age_confirmed`, `accepted_terms`
+
+`age_confirmed` and `accepted_terms` must be `true`. Each sign-up records one consent
+row per kind (`age_18`, `terms`, `privacy`, and `faith_content` only when
+`faith_consent` is true), with the policy version taken from server config, never
+from the request.
 - `409 email_taken`
 - `429 rate_limited`: see *Rate limits*
 
@@ -142,6 +159,117 @@ account over.
 - `429 rate_limited`: shares the per-account limit with login, so the password can't be
   guessed here either. Also subject to the per-IP limit on auth routes.
 
+### `GET /v1/sessions` (auth)
+
+Your own live sessions, newest first — for "where you're signed in". It carries
+no token hash, no raw user agent and no IP: `device` is a coarse label the API
+builds from the user agent ("Safari on iPhone"), and nothing here says anything
+about your partner's devices.
+
+```ts
+interface SessionInfo {
+  current: boolean;      // the session making this request
+  device: string;        // "Chrome on Windows", or "Unknown device"
+  created_at: string;
+  last_used_at?: string; // absent until the session is used again after sign-in
+  expires_at: string;
+}
+```
+
+- `200` → `{ "data": SessionInfo[] }`. Expired sessions are left out.
+- `401 unauthenticated`
+
+`last_used_at` is written at most once an hour per session, so it is a
+recognition aid, not an audit trail.
+
+### `DELETE /v1/sessions/others` (auth)
+
+Ends every other session for this account. The session making the request
+survives: someone securing their account from the phone in their hand should
+not be signed out by it.
+
+- `200` → `{ "data": { "signed_out": 2 } }`
+- `401 unauthenticated`
+
+### `PUT /v1/users/me/password` (auth)
+
+```json
+{ "current_password": "correct horse", "new_password": "correct horse battery" }
+```
+
+- `204`. Every other session is ended; the one making the request survives.
+- `400 validation_failed`: `fields.new_password` (same rule as sign-up), or
+  `fields.current_password` when it is missing or wrong
+- `429 rate_limited`
+
+### `DELETE /v1/users/me` (auth)
+
+```json
+{ "confirm": "delete", "current_password": "correct horse" }
+```
+
+- `204`. The user, their sessions and their couple membership are deleted. A partner
+  keeps their account and the couple.
+- `400 invalid_json` when there is no body
+- `400 validation_failed`: `fields.confirm` unless it is the word `delete` (any case,
+  surrounding spaces ignored), or `fields.current_password` when it is missing or wrong
+- `429 rate_limited`
+
+### `POST /v1/auth/password/forgot`
+
+```json
+{ "email": "ada@example.com" }
+```
+
+- `204` whether or not the email has an account, so the answer never reveals which
+  emails exist. For a known email, a link to `APP_URL/reset?token=…` is sent. It
+  works once, for one hour.
+- `429 rate_limited`
+
+### `POST /v1/auth/password/reset`
+
+```json
+{ "token": "…", "new_password": "correct horse battery" }
+```
+
+- `204`. Every session for the account is ended, including any on this device.
+- `400 validation_failed`: `fields.token` when the link is unknown, expired or used;
+  `fields.new_password` for the password rule
+
+### `GET /v1/users/me/export` (auth)
+
+A JSON file (`Content-Disposition: attachment; filename="amorae-export.json"`) inside the
+usual envelope:
+
+```ts
+{
+  exported_at: string;
+  user: User;
+  consents: { kind: string; policy_version: string; created_at: string }[];
+  couple: null | {
+    id: string; name: string; started_on?: string; created_at: string;
+    members: { display_name: string; role: string; you: boolean }[]; // never a partner's email
+    invite_code: string;
+  };
+}
+```
+
+### Couples (auth)
+
+`Couple` is flat: `id`, `name`, `me` (a `User` plus your own `role`), `partner` (null until
+joined), `invite_code` (only while a usable code exists and the couple has one member),
+`started_on`, `onboarding` flags.
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET /v1/couples/me` | 200 `Couple`; 404 when you are not in a couple |
+| `POST /v1/couples` | 201 `Couple`; creates the couple with the caller as first member and a fresh invite code. 409 `already_paired` when the caller is already in a couple |
+| `POST /v1/couples/invite` | 200 `Couple` with a new code. The old pending code is revoked at once. 409 `couple_full` once both have joined |
+| `POST /v1/couples/join` `{ code }` | 200 `Couple`, now with `partner` filled in. `code` is case- and dash-insensitive (`abc-123` = `ABC123`). 400 `validation_failed` with `fields.code` when it is empty; 400 `invite_invalid` (unknown, or your own code), `invite_expired`, `invite_used` or `invite_revoked`, each with the message also in `fields.code`; 409 `couple_full` when the couple already has two members; 409 `already_paired` when the caller is already in a couple; 429 after 10 attempts in 15 minutes |
+| `PATCH /v1/couples/me` `{ name?, relationship_start_date? }` | 200 `Couple`; dates are `YYYY-MM-DD` |
+| `PATCH /v1/couples/role` `{ role }` | 200 `Couple`; sets the caller's own label, 1–32 characters |
+| `PATCH /v1/couples/me/onboarding` | `{ couple?, install?, notifications? }`; 200 `Couple`. `install` and `notifications` are stored per person; `couple` is accepted but derived from membership, so it is always `true` in the response |
+
 ## Operational endpoints (no envelope)
 
 | Endpoint | Purpose |
@@ -150,24 +278,16 @@ account over.
 | `GET /readyz` | Readiness. `200 {"status":"ready"}`, or `503 {"status":"unavailable"}` if Postgres is unreachable. |
 | `GET /metrics` | Prometheus metrics, served on a **separate listener** (`METRICS_ADDR`, default `127.0.0.1:9090`), never on the API port. |
 
-## Proposed endpoints (implemented by the web mock, not yet by Go)
+## Planned endpoints (not built yet)
 
-`apps/web/src/lib/api/mock/adapter.ts` answers these with the same envelopes
-and status codes, and `apps/web/src/lib/api/types.ts` has the shapes. Every
-resource is scoped to the caller's couple; a request for another couple's
-resource is a 404, never a 403, so ids do not leak.
-
-### Users and couples
-
-| Endpoint | Notes |
-| --- | --- |
-| `DELETE /v1/users/me` | 204; removes the user from the couple and deletes their content |
-| `GET /v1/couples/me` | `Couple`: flat `id`, `name`, `me`, `partner` (null until joined), `invite_code`, `started_on`, `onboarding` flags |
-| `POST /v1/couples` | 201 `Couple`; creates the couple with the caller as first member and a fresh invite code |
-| `POST /v1/couples/join` `{ code }` | 200 `Couple`, now with `partner` filled in; 400 `validation_failed` with `fields.code` when it does not match; 409 when the couple is full |
-| `PATCH /v1/couples/me` `{ name?, relationship_start_date? }` | 200 `Couple`; dates are `YYYY-MM-DD` |
-| `PATCH /v1/couples/role` `{ role }` | 200 `Couple`; sets the caller's own label, 1–32 characters |
-| `PATCH /v1/couples/me/onboarding` | `{ couple?, install?, notifications? }`; 200 `Couple`. `install` and `notifications` are stored per person; `couple` is accepted but derived from membership, so it is always `true` in the response |
+Nothing serves these yet. They are the contract the screens were built
+against, and `apps/web/src/lib/api/types.ts` has the shapes. Until a Go module
+lands, the router answers with a bare 404 and the screen shows "Not available
+yet" rather than an error. Treat the shapes as a starting point, not a
+commitment: when a module is built differently, change it here and in
+`types.ts` in the same pull request. Every resource is scoped to the caller's
+couple; a request for another couple's resource is a 404, never a 403, so ids
+do not leak.
 
 ### Prayers
 
@@ -195,7 +315,7 @@ resource is a 404, never a 403, so ids do not leak.
 | `POST /v1/goals/:id/progress` `{ amount }` | one shared total; progress rows carry `user_id` for the log only |
 | `GET /v1/challenges/current` · `PATCH /v1/challenges/current/days/:n` `{ done?, skipped? }` | |
 | `GET`, `POST /v1/journal` | `{ tag, text }` |
-| `GET`, `POST /v1/appreciations` · `DELETE /v1/appreciations/:id` | delete is the sender's undo, within a short window |
+| `GET`, `POST /v1/appreciations` · `DELETE /v1/appreciations/:id` | delete is the sender's undo: 204 within 30 seconds of sending; 403 `forbidden` for the partner's note; 409 `undo_window_closed` after the window. The web app offers Undo for 5 seconds and never queues it offline |
 | `GET`, `POST /v1/memories` | photo upload is a later addition |
 | `GET`, `POST /v1/milestones` | |
 

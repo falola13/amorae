@@ -1,6 +1,7 @@
 // Mirrors the Go API's JSON contract (snake_case), see docs/API.md. The
-// auth and users shapes exist in Go today; the rest is the proposed contract
-// the mock adapter implements and the Go modules will follow.
+// auth, users and couples shapes exist in Go; the rest is a planned contract
+// the screens were built against. When a Go module lands with a different
+// shape, change it here and in docs/API.md in the same pull request.
 
 export interface User {
   id: string;
@@ -27,7 +28,8 @@ export interface Partner {
 export interface Couple {
   id: string;
   name: string;
-  me: User;
+  /** role is your own label in the couple, like the partner's. */
+  me: User & { role: string };
   partner: Partner | null;
   invite_code: string;
   started_on?: string;
@@ -155,4 +157,16 @@ export interface NotificationPrefs {
   journal: boolean;
   goals: boolean;
   challenges: boolean;
+}
+
+/** One row of "where you're signed in" (GET /v1/sessions), for your own account. */
+export interface SessionInfo {
+  /** The session making this request. */
+  current: boolean;
+  /** A coarse label the API builds from the user agent, e.g. "Safari on iPhone". */
+  device: string;
+  created_at: string;
+  /** Absent until the session is used again after sign-in. */
+  last_used_at?: string;
+  expires_at: string;
 }

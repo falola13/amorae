@@ -9,7 +9,11 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 const subscribe = (onChange: () => void) => onlineManager.subscribe(onChange);
 
 export function useOnline(): boolean {
-  return useSyncExternalStore(subscribe, () => onlineManager.isOnline(), () => true);
+  return useSyncExternalStore(
+    subscribe,
+    () => onlineManager.isOnline(),
+    () => true,
+  );
 }
 
 /** Variables of changes waiting for the connection, e.g. to mark "will sync" rows. */

@@ -19,6 +19,11 @@ type Metrics struct {
 	registry        *prometheus.Registry
 	requestsTotal   *prometheus.CounterVec
 	requestDuration *prometheus.HistogramVec
+
+	// Product counts (Q-14): how many, never who or what.
+	signups        prometheus.Counter
+	couplesCreated prometheus.Counter
+	couplesPaired  prometheus.Counter
 }
 
 func New() *Metrics {
@@ -35,14 +40,34 @@ func New() *Metrics {
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method", "route", "status"})
 
-	registry.MustRegister(requestsTotal, requestDuration)
+	signups := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "amorae_signups_total",
+		Help: "Accounts created.",
+	})
+	couplesCreated := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "amorae_couples_created_total",
+		Help: "Couples created (first member only).",
+	})
+	couplesPaired := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "amorae_couples_paired_total",
+		Help: "Couples completed by a second member joining.",
+	})
+
+	registry.MustRegister(requestsTotal, requestDuration, signups, couplesCreated, couplesPaired)
 
 	return &Metrics{
 		registry:        registry,
 		requestsTotal:   requestsTotal,
 		requestDuration: requestDuration,
+		signups:         signups,
+		couplesCreated:  couplesCreated,
+		couplesPaired:   couplesPaired,
 	}
 }
+
+func (m *Metrics) SignedUp()      { m.signups.Inc() }
+func (m *Metrics) CoupleCreated() { m.couplesCreated.Inc() }
+func (m *Metrics) CouplePaired()  { m.couplesPaired.Inc() }
 
 // Observe records one completed request. route is the pattern the handler
 // was registered under (e.g. "GET /v1/users/me"), not the raw request path,

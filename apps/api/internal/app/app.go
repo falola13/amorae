@@ -18,10 +18,12 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/config"
 	"github.com/falola13/amorae/apps/api/internal/modules/auth"
 	"github.com/falola13/amorae/apps/api/internal/modules/couples"
+	"github.com/falola13/amorae/apps/api/internal/modules/export"
 	"github.com/falola13/amorae/apps/api/internal/modules/health"
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
+	"github.com/falola13/amorae/apps/api/internal/platform/mailer"
 	"github.com/falola13/amorae/apps/api/internal/platform/metrics"
 	"github.com/falola13/amorae/apps/api/internal/platform/middleware"
 	"github.com/falola13/amorae/apps/api/internal/platform/ratelimit"
@@ -41,12 +43,27 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		return nil, fmt.Errorf("connecting to database: %w", err)
 	}
 
+	// --- Mailer ---
+	// Without an API key (development), mail is written to the log instead of
+	// sent. That log line contains reset links, so config.Load refuses to
+	// start production without a key.
+	var mail auth.Mailer = mailer.NewLog(log)
+	if cfg.RESEND_API_KEY != "" {
+		mail = mailer.NewResend(cfg.RESEND_API_KEY, cfg.DefaultFrom)
+	}
+
 	// --- repositories ---
 	// One postgres type backs two consumer-declared interfaces: see the
 	// ISP note on auth.UserRepository for why that's one repository, not two.
 	userRepo := user.NewPostgresRepository(db)
 	sessionRepo := auth.NewPostgresSessionRepository(db)
+	resetRepo := auth.NewPostgresPasswordResetRepository(db)
+	consentRepo := auth.NewPostgresConsentRepository(db)
 	hasher := auth.NewBcryptHasher(cfg.BCryptCost)
+
+	// Product counters (signups, couples) are recorded by the services, and
+	// HTTP metrics by the router, into the same private registry.
+	m := metrics.New()
 
 	// --- services ---
 	// Postgres stores timestamps to the microsecond. Truncating here means a
@@ -54,21 +71,33 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	// on every later read, so clients can compare them safely.
 	now := func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 	userSvc := user.NewService(userRepo, now)
-	couplesRepo := couples.NewPostgresRepository(db)
-	couplesSvc := couples.NewService(couplesRepo, now)
 
 	// Rate limits. In memory, so they are per process: correct for one API
 	// instance. When scaling out, swap in a Redis-backed limiter here; both
 	// consumers only see an Allow(key) interface.
-	//   loginAttempts: per account, stops password guessing from any number of IPs.
-	//   authRequests:  per client IP across /auth/*, caps bcrypt load and
-	//                  account enumeration through register.
+	//   loginAttempts:  per account, stops password guessing from any number of IPs.
+	//   authRequests:   per client IP across /auth/*, caps bcrypt load and
+	//                   account enumeration through register.
+	//   joinAttempts:   per person, stops invite codes being guessed (Q-08).
+	//   coupleRequests: per client IP across /couples/*.
 	loginAttempts := ratelimit.New(10, 15*time.Minute, time.Now)
 	authRequests := ratelimit.New(20, time.Minute, time.Now)
+	joinAttempts := ratelimit.New(10, 15*time.Minute, time.Now)
+	coupleRequests := ratelimit.New(60, time.Minute, time.Now)
+
+	couplesRepo := couples.NewPostgresRepository(db)
+	couplesSvc := couples.NewService(couplesRepo, now, joinAttempts, m)
 
 	// *database.DB satisfies auth.TxRunner directly (matching InTx method
 	// signature) — no adapter type needed just to cross that interface.
-	authSvc, err := auth.NewService(userRepo, sessionRepo, hasher, db, cfg.SessionTTL, now, auth.NewToken, loginAttempts)
+	authSvc, err := auth.NewService(userRepo, sessionRepo, hasher, db, cfg.SessionTTL, now, auth.NewToken, loginAttempts, auth.Options{
+		Resets:   resetRepo,
+		Mailer:   mail,
+		AppURL:   cfg.AppURL,
+		Consents: consentRepo,
+		Policies: auth.PolicyVersions{Terms: cfg.TermsVersion, Privacy: cfg.PrivacyVersion, Faith: cfg.FaithVersion},
+		Events:   m,
+	})
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("building auth service: %w", err)
@@ -79,9 +108,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	userHandler := user.NewHandler(userSvc)
 	authHandler := auth.NewHandler(authSvc)
 	couplesHandler := couples.NewHandler(couplesSvc, userSvc)
+	exportHandler := export.NewHandler(userSvc, couplesSvc, consentRepo, now)
 
 	// --- HTTP ---
-	m := metrics.New()
 	mux := http.NewServeMux()
 	requireAuth := auth.RequireAuth(authSvc)
 	router := httpx.NewRouter(mux, requireAuth, m)
@@ -94,7 +123,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	v1 := router.Version(httpx.V1)
 	userHandler.RegisterRoutes(v1)
 	authHandler.RegisterRoutes(v1.With(middleware.RateLimit(authRequests, "auth")))
-	couplesHandler.RegisterRoutes(v1)
+	couplesHandler.RegisterRoutes(v1.With(middleware.RateLimit(coupleRequests, "couples")))
+	exportHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
 	// logs and responds with the request id. ClientIP resolves the caller

@@ -1,7 +1,5 @@
 import "server-only";
 
-import { isMockApi } from "@/lib/config";
-
 // Read lazily so a misconfigured value only breaks the request that needs it.
 function readApiUrl(): string {
   const value = process.env.API_URL ?? "http://localhost:8088";
@@ -39,20 +37,5 @@ export const env = {
   },
   get BFF_SECRET(): string | undefined {
     return readBffSecret();
-  },
-  /**
-   * Whether the auth actions should issue a mock session. Mock sign-in
-   * accepts any email and password, so a production build refuses it unless
-   * ALLOW_MOCK_AUTH=true says the deployment is deliberately a demo.
-   */
-  get MOCK_AUTH(): boolean {
-    if (!isMockApi) return false;
-    if (process.env.NODE_ENV === "production" && !readBool("ALLOW_MOCK_AUTH", false)) {
-      throw new Error(
-        "NEXT_PUBLIC_API_MOCK is on in a production build. Mock sign-in accepts any password; " +
-          "set ALLOW_MOCK_AUTH=true only for a deliberate public demo.",
-      );
-    }
-    return true;
   },
 };

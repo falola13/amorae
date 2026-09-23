@@ -1,6 +1,12 @@
 "use client";
 
-import { useMutation, useQueryClient, type MutationKey, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type MutationKey,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 
 /**
  * One write the app can make: its key, the API call, and what it makes
@@ -24,6 +30,12 @@ export interface WriteDef<A, R> {
   scope?: string;
   /** The screen shows this write's errors itself, so skip the global toast. */
   handlesError?: boolean;
+  /**
+   * Send now or fail; never pause offline and send later. For writes whose
+   * meaning depends on when they land, like undoing an appreciation: a late
+   * undo would delete a note the partner has already read.
+   */
+  onlineOnly?: boolean;
 }
 
 /** Any definition, whatever its argument and result types. */
@@ -41,13 +53,20 @@ export function useWrite<A, R>(def: WriteDef<A, R>) {
     mutationFn: def.mutationFn,
     scope: def.scope ? { id: def.scope } : undefined,
     meta: def.handlesError ? { handlesError: true } : undefined,
+    // "always" skips the offline pause: the request goes out and, with no
+    // connection, fails straight away instead of waiting.
+    networkMode: def.onlineOnly ? "always" : undefined,
     onSettled: () => invalidate(qc, def.invalidates),
   });
 }
 
-/** Makes each write resumable after a reload (see lib/query/persist.ts). */
+/**
+ * Makes each write resumable after a reload (see lib/query/persist.ts).
+ * Online-only writes are skipped: they never pause, so there is nothing to resume.
+ */
 export function registerWrites(qc: QueryClient, defs: readonly AnyWriteDef[]) {
   for (const def of defs) {
+    if (def.onlineOnly) continue;
     qc.setMutationDefaults(def.mutationKey, {
       // A restored change carries its variables as saved JSON; the definition
       // is what knows their type.

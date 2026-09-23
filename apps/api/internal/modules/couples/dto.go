@@ -32,6 +32,7 @@ type personDTO struct {
 	Timezone    string    `json:"timezone"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	Role        string    `json:"role"`
 }
 
 type partnerDTO struct {
@@ -97,6 +98,7 @@ func ToMineDTO(mine Mine, me user.User, partner *user.User) MineDTO {
 		Onboarding: onboardingDTO{Couple: true},
 	}
 	if member, ok := mine.Member(me.ID); ok {
+		out.Me.Role = member.Role
 		out.Onboarding.Install = member.Onboarding.Install
 		out.Onboarding.Notifications = member.Onboarding.Notifications
 	}

@@ -22,19 +22,34 @@ import { useChangeEmail } from "../hooks";
 export function ChangeEmailSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const change = useChangeEmail();
   const [show, setShow] = useState(false);
-  const { register, handleSubmit, setError, reset, formState: { errors } } = useForm<ChangeEmailInput>({
+  const {
+    register,
+    handleSubmit,
+    setError,
+    reset,
+    formState: { errors },
+  } = useForm<ChangeEmailInput>({
     resolver: zodResolver(changeEmailSchema),
     defaultValues: { email: "", current_password: "" },
   });
 
-  const close = () => { reset(); setShow(false); onClose(); };
+  const close = () => {
+    reset();
+    setShow(false);
+    onClose();
+  };
 
   const onSubmit = (input: ChangeEmailInput) =>
     change.mutate(input, {
-      onSuccess: () => { notify("Email updated. Use it the next time you log in."); close(); },
+      onSuccess: () => {
+        notify("Email updated. Use it the next time you log in.");
+        close();
+      },
       onError: (e) => {
         const fields = isApiError(e) ? e.fields : undefined;
-        if (fields) for (const [k, m] of Object.entries(fields)) setError(k as keyof ChangeEmailInput, { message: m });
+        if (fields)
+          for (const [k, m] of Object.entries(fields))
+            setError(k as keyof ChangeEmailInput, { message: m });
         else setError("root", { message: isApiError(e) ? e.message : GENERIC_ERROR_MESSAGE });
       },
     });
@@ -42,9 +57,19 @@ export function ChangeEmailSheet({ open, onClose }: { open: boolean; onClose: ()
   return (
     <Sheet open={open} onClose={close} title="Change your email" labelledBy="change-email-h">
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
-        <Para size="support">You&rsquo;ll log in with the new email from now on. Enter your password so we know it&rsquo;s you.</Para>
+        <Para size="support">
+          You&rsquo;ll log in with the new email from now on. Enter your password so we know
+          it&rsquo;s you.
+        </Para>
         {errors.root?.message ? <Alert message={errors.root.message} /> : null}
-        <Field label="New email" type="email" autoComplete="email" inputMode="email" error={errors.email?.message} {...register("email")} />
+        <Field
+          label="New email"
+          type="email"
+          autoComplete="email"
+          inputMode="email"
+          error={errors.email?.message}
+          {...register("email")}
+        />
         <Field
           label="Current password"
           type={show ? "text" : "password"}
@@ -54,8 +79,12 @@ export function ChangeEmailSheet({ open, onClose }: { open: boolean; onClose: ()
           {...register("current_password")}
         />
         <div className="flex flex-col gap-1">
-          <Button type="submit" loading={change.isPending}>Change email</Button>
-          <Button type="button" variant="text" onClick={close}>Not now</Button>
+          <Button type="submit" loading={change.isPending}>
+            Change email
+          </Button>
+          <Button type="button" variant="text" onClick={close}>
+            Not now
+          </Button>
         </div>
       </form>
     </Sheet>

@@ -26,9 +26,9 @@ declare module "@tanstack/react-query" {
  * - Offline: queries serve what's cached (offlineFirst). Mutations use the
  *   default "online" mode, so a change made offline is *paused*, not failed:
  *   its optimistic update shows immediately and React Query sends it when
- *   the connection returns. Paused changes live in memory, so they are lost
- *   if the app is closed before reconnecting; persisting them needs
- *   @tanstack/react-query-persist-client.
+ *   the connection returns. Paused changes survive the app being closed
+ *   (lib/query/persist.ts). A write marked `onlineOnly` opts out and fails
+ *   instead (lib/query/mutations.ts).
  */
 export function createQueryClient(): QueryClient {
   return new QueryClient({

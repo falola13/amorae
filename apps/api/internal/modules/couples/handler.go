@@ -19,6 +19,7 @@ type service interface {
 	UpdateCouples(ctx context.Context, userID uuid.UUID, update UpdateDto) (Mine, error)
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) (Mine, error)
 	UpdateOnboarding(ctx context.Context, userID uuid.UUID, patch OnboardingDto) (Mine, error)
+	RegenerateInvite(ctx context.Context, userID uuid.UUID) (Mine, error)
 }
 
 type users interface {
@@ -41,7 +42,28 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("PATCH /couples/me", http.HandlerFunc(h.updateCouple))
 	r.HandleAuthed("PATCH /couples/role", http.HandlerFunc(h.updateRole))
 	r.HandleAuthed("PATCH /couples/me/onboarding", http.HandlerFunc(h.updateOnboarding))
+	r.HandleAuthed("POST /couples/invite", http.HandlerFunc(h.regenerateInvite))
+}
 
+func (h *Handler) regenerateInvite(w http.ResponseWriter, r *http.Request) {
+	userID, ok := authctx.UserID(r.Context())
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+
+	mine, err := h.svc.RegenerateInvite(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto, err := h.mineDTO(r.Context(), userID, mine)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, dto)
 }
 
 type createRequest struct {

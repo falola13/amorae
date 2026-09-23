@@ -33,6 +33,7 @@ func NewHandler(svc service) *Handler {
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /users/me", http.HandlerFunc(h.getMe))
 	r.HandleAuthed("PATCH /users/me", http.HandlerFunc(h.updateMe))
+	// DELETE /users/me is registered by auth: it re-checks the password.
 }
 
 func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {

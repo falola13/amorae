@@ -33,7 +33,11 @@ export function persistOfflineChanges(qc: QueryClient, userId: string): () => vo
 
   const [unsubscribe, restored] = persistQueryClient({
     queryClient: qc,
-    persister: createSyncStoragePersister({ storage, key: KEY_PREFIX + userId, throttleTime: SAVE_THROTTLE_MS }),
+    persister: createSyncStoragePersister({
+      storage,
+      key: KEY_PREFIX + userId,
+      throttleTime: SAVE_THROTTLE_MS,
+    }),
     maxAge: MAX_AGE_MS,
     buster: SCHEMA_VERSION,
     dehydrateOptions: {

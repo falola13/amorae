@@ -48,7 +48,7 @@ func (r *PostgresRepository) Create(ctx context.Context, inviteCode string, invi
 			VALUES ($1, $2, $3, $4)
 		`, memberID, c.ID, c.CreatedBy, c.CreatedAt)
 		if err != nil {
-			return err
+			return translateMemberWriteErr(err)
 		}
 
 		inviteID, err := uuid.NewV7()
@@ -60,7 +60,7 @@ func (r *PostgresRepository) Create(ctx context.Context, inviteCode string, invi
 	INSERT INTO couple_invitations (id, couple_id,code,created_by,expires_at)
 	VALUES ($1, $2, $3, $4, $5)`, inviteID, c.ID, inviteCode, c.CreatedBy, inviteExpiresAt)
 		if err != nil {
-			return err
+			return translateInviteWriteErr(err)
 		}
 
 		return nil
@@ -156,18 +156,7 @@ func (r *PostgresRepository) Join(ctx context.Context, userID uuid.UUID, code st
 	})
 }
 
-func translateMemberWriteErr(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		switch pgErr.ConstraintName {
-		case "couple_members_user_id_key", "couple_members_couple_user_key":
-			return ErrAlreadyPaired
-		}
-	}
-	return fmt.Errorf("adding member: %w", err)
-}
-
-func (r *PostgresRepository) GetForUser(ctx context.Context, userID uuid.UUID) (Mine, error) {
+func (r *PostgresRepository) GetForUser(ctx context.Context, userID uuid.UUID, now time.Time) (Mine, error) {
 	var c COUPLES
 	var start *time.Time
 	err := r.db.Q(ctx).QueryRow(ctx, `
@@ -208,11 +197,13 @@ func (r *PostgresRepository) GetForUser(ctx context.Context, userID uuid.UUID) (
 	}
 
 	var code string
-	err = r.db.Q(ctx).QueryRow(ctx, `
-		SELECT code FROM couple_invitations WHERE couple_id = $1 ORDER BY created_at DESC LIMIT 1
-	`, c.ID).Scan(&code)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return Mine{}, fmt.Errorf("loading invite: %w", err)
+	if len(members) < 2 {
+		err = r.db.Q(ctx).QueryRow(ctx, `
+			SELECT code FROM couple_invitations WHERE couple_id = $1 AND status = 'pending' AND expires_at > $2 ORDER BY created_at DESC LIMIT 1
+		`, c.ID, now).Scan(&code)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return Mine{}, fmt.Errorf("loading invite: %w", err)
+		}
 	}
 
 	return Mine{Couple: c, Members: members, InviteCode: code}, nil
@@ -275,4 +266,74 @@ func (r *PostgresRepository) UpdateOnboarding(ctx context.Context, id uuid.UUID,
 	}
 
 	return nil
+}
+
+// ReplaceInvite revokes the couple's pending invite and issues a new one, in
+// one transaction, so there is never a moment with two live codes or none.
+func (r *PostgresRepository) ReplaceInvite(ctx context.Context, userID uuid.UUID, code string, expiresAt, at time.Time) error {
+	return r.db.InTx(ctx, func(ctx context.Context) error {
+		var coupleID uuid.UUID
+		err := r.db.Q(ctx).QueryRow(ctx, `
+			SELECT c.id FROM couple_members m
+			JOIN couples c ON c.id = m.couple_id
+			WHERE m.user_id = $1
+			FOR UPDATE OF c
+		`, userID).Scan(&coupleID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("locking couple: %w", err)
+		}
+
+		var members int
+		if err := r.db.Q(ctx).QueryRow(ctx, `
+			SELECT COUNT(*) FROM couple_members WHERE couple_id = $1
+		`, coupleID).Scan(&members); err != nil {
+			return fmt.Errorf("counting members: %w", err)
+		}
+		if members >= 2 {
+			return ErrCoupleFull
+		}
+
+		if _, err := r.db.Q(ctx).Exec(ctx, `
+			UPDATE couple_invitations SET status = 'revoked'
+			WHERE couple_id = $1 AND status = 'pending'
+		`, coupleID); err != nil {
+			return fmt.Errorf("revoking invite: %w", err)
+		}
+
+		inviteID, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		_, err = r.db.Q(ctx).Exec(ctx, `
+			INSERT INTO couple_invitations (id, couple_id, code, created_by, expires_at, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, inviteID, coupleID, code, userID, expiresAt, at)
+		if err != nil {
+			return translateInviteWriteErr(err)
+		}
+		return nil
+	})
+}
+
+// The code column is UNIQUE (couple_invitations_code_key, 00001_init.sql).
+func translateInviteWriteErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "couple_invitations_code_key" {
+		return errCodeTaken
+	}
+	return fmt.Errorf("creating invite: %w", err)
+}
+
+func translateMemberWriteErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		switch pgErr.ConstraintName {
+		case "couple_members_user_id_key", "couple_members_couple_user_key":
+			return ErrAlreadyPaired
+		}
+	}
+	return fmt.Errorf("adding member: %w", err)
 }

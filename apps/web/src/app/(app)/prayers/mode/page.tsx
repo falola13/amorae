@@ -1,20 +1,25 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, type ReactNode } from "react";
 
-import { Skeleton } from "@/components/ui/kit";
+import { LinkButton, Skeleton } from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
 import { PrayerSession } from "@/features/prayers/components/prayer-session";
 import { QuietPrayer } from "@/features/prayers/components/quiet-prayer";
 import { startIndex } from "@/features/prayers/derive";
 import { useWeek } from "@/features/prayers/hooks";
 import { useTimer } from "@/lib/hooks/use-timer";
+import { routes } from "@/lib/routes";
 import { useUI } from "@/lib/store/ui";
 
 /** Distraction free: own chrome (no tab bar), paper background, one prayer at a time. */
 export default function PrayerModePage() {
-  return <Suspense fallback={null}><PrayerMode /></Suspense>;
+  return (
+    <Suspense fallback={null}>
+      <PrayerMode />
+    </Suspense>
+  );
 }
 
 function PrayerMode() {
@@ -43,9 +48,24 @@ function PrayerMode() {
 
   if (quiet) return <QuietPrayer timer={timer} />;
 
-  const loading = <div className="mx-auto flex min-h-dvh max-w-[520px] flex-col bg-paper px-8 pt-24"><Skeleton /></div>;
+  const loading = (
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col bg-paper px-8 pt-24">
+      <Skeleton />
+    </div>
+  );
+  // Prayer mode has no tab bar, so a notice here needs its own way back.
+  // On the paper background the notice sits on the page's own colour, so
+  // give it the lighter bg for its card to show.
+  const frame = (notice: ReactNode) => (
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col gap-2 bg-paper px-6 pt-24 [&>[role]]:bg-bg">
+      {notice}
+      <LinkButton href={routes.prayers} variant="text">
+        Back to prayers
+      </LinkButton>
+    </div>
+  );
   return (
-    <QueryState queries={[week]} loading={loading}>
+    <QueryState queries={[week]} loading={loading} frame={frame}>
       {(w) => {
         if (w.points.length === 0) return <QuietPrayer timer={timer} />;
         if (i === null || i >= w.points.length) return loading;

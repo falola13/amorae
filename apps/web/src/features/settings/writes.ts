@@ -12,4 +12,12 @@ export const settingsWrites = {
     invalidates: [keys.prefs],
     scope: "settings.prefs",
   }),
+  // Securing an account is only meaningful now: queued and replayed an hour
+  // later it would sign out devices the person has since decided to keep.
+  signOutOthers: defineWrite({
+    mutationKey: ["sessions", "sign-out-others"],
+    mutationFn: () => settingsApi.signOutOthers(),
+    invalidates: [keys.sessions],
+    onlineOnly: true,
+  }),
 };

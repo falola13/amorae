@@ -16,6 +16,8 @@
     "lint:web": "npm --prefix apps/web run lint",
     "typecheck:web": "npm --prefix apps/web run typecheck",
     "build:web": "npm --prefix apps/web run build",
-    "check": "npm run vet:api && npm run test:api && npm run lint:web && npm run typecheck:web && npm run build:web"
+    "check": "npm run vet:api && npm run test:api && npm run lint:web && npm run typecheck:web && npm run build:web",
+    "format:web": "npm --prefix apps/web run format",
+    "format:check:web": "npm --prefix apps/web run format:check"
   }
 }

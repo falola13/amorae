@@ -155,8 +155,8 @@ can start our shared space together without friction or confusion about what thi
 
 ### 4.5 Launch market assumption
 
-The mock data throughout the product uses `Africa/Lagos` as a default timezone and naira-
-denominated example goals. **Assumption, not a confirmed fact — Product to confirm:** the launch
+Goals are denominated in naira (`unit: "naira"` in the contract) and the couple timezone
+examples use `Africa/Lagos`. **Assumption, not a confirmed fact — Product to confirm:** the launch
 market is Nigeria and the Nigerian diaspora, in English. This shapes currency examples, default
 timezone behaviour, and initial marketing, but nothing in the product architecture hard-codes it
 (see `couples.timezone`, Q-07). If this assumption is wrong, the impact is mostly on content and
@@ -291,7 +291,7 @@ resolved, and the relevant NFR categories checked.
 | **Phase 2 — Faith** | `PRAY` (weekly prayer, setter rotation, completion, history), `NOTF` for prayer categories | Phase 1 exit met. Q-07 and Q-16 resolved (they shape the scheduler). | All Phase 2 Must requirements Implemented. Q-01 and Q-22 resolved. NFR-PERF and NFR-OFFL checked for the prayer flow. |
 | **Phase 3 — Together** | `EVT`, `CAL`, `GOAL`, `CHAL`, `NOTF` for their categories | Phase 2 exit met. Q-23 resolved (challenge completion model). | All Phase 3 Must requirements Implemented. NFR-A11Y checked across the new screens. |
 | **Phase 4 — Memories (MVP complete)** | `JRNL`, `APPR`, `MEM`, `DATE`, `NOTF` for their categories | Phase 3 exit met. Q-06 resolved (photo storage). | All Phase 4 Must requirements Implemented. NFR-PRIV checked, including photo handling. MVP is feature-complete. |
-| **Private beta gate** | No new features; real couples using the MVP | Phase 4 exit met | A cohort of real couples has used the product for at least one full prayer-week cycle. Section 5 metrics have a first baseline reading. No open SEV1/SEV2 defect (severity levels in 03, NFR-OPS). NFR-SEC and NFR-PRIV spot-checked against real (not mock) data. Q-19 resolved. |
+| **Private beta gate** | No new features; real couples using the MVP | Phase 4 exit met | A cohort of real couples has used the product for at least one full prayer-week cycle. Section 5 metrics have a first baseline reading. No open SEV1/SEV2 defect (severity levels in 03, NFR-OPS). NFR-SEC and NFR-PRIV spot-checked against real couples' data. Q-19 resolved. |
 | **Public launch gate** | Go-live to the general public | Private beta feedback incorporated | Q-02, Q-10, Q-11, Q-12, and Q-17 resolved. A penetration test completed with findings triaged. A WCAG 2.2 AA audit completed with findings triaged. Backups configured with a tested restore. |
 | **Phase 5 — Optional intelligence (Post-MVP)** | `AI`: optional prayer and journal assistance, behind a feature flag, off by default (DEC-15) | Public launch gate passed; Q-18 resolved | All Phase 5 Must requirements Implemented. AI remains fully optional per DEC-15 — verified by testing the product with the flag off. |
 
@@ -299,7 +299,7 @@ resolved, and the relevant NFR categories checked.
 
 - **Implemented in Go:** authentication, profile, and email change.
 - **In development in Go:** couple pairing (`PAIR`).
-- **Mock only:** phases 2 through 4 exist as working UI against the in-browser mock; no Go
+- **UI only:** the phase 2 to 4 screens are built and wired to the contract, but no Go
   endpoints exist yet for prayer, events, calendar, goals, challenges, journal, appreciation,
   memories, milestones, or notifications.
 - **Not started:** Phase 5 (AI).
@@ -352,7 +352,7 @@ the definition of done in README §4 — see RISK-05.
 | RISK-02 | iOS PWA limitations: push only works for an installed app, and Safari may evict site storage after roughly 7 days without use. | H | M | Prompt install with a clear value proposition before asking for push; design offline behaviour around DEC-04 rather than fighting it; monitor push delivery success. | Engineering |
 | RISK-03 | Faith content (prayer points, prayer history) is sensitive personal data — religious belief under NDPA 2023 and GDPR Article 9 — creating consent and legal-review obligations. | M | H | Explicit consent language at sign-up; data minimisation in prayer content; legal review before public launch (Q-17). | Product + Legal |
 | RISK-04 | Relationship breakup or coercive control: shared account structure could let one partner surveil the other, or leave one partner locked out or exposed after a breakup. | M | H | Leave-couple flow (Q-09) gives a clean, mutual exit; no covert or one-sided monitoring capability is built; both partners always have equal visibility into shared content; safety controls while paired are settled by Q-19. | Product |
-| RISK-05 | Mock-only features (Phases 2–4) hide API contract problems that will surface only once the Go implementation catches up. | H | M | Contract tests against `docs/API.md`; phase exit criteria require **Implemented** status, not just a working mock (section 8). | Engineering |
+| RISK-05 | The Phases 2–4 screens were built against a contract no Go module implements yet, so the API may land in a different shape and force UI rework. | H | M | Build each Go module against `docs/API.md`, and change the contract and `types.ts` together when it has to differ; phase exit criteria require **Implemented** status, not a built screen (section 8). | Engineering |
 | RISK-06 | Notification fatigue contradicts principle 3 ("intentional, not addictive") and drives opt-outs or uninstalls. | M | M | Per-category opt-out is a Must requirement for `NOTF`; cadence caps per category; monitor M-11 as a guardrail. | Product |
 | RISK-07 | Low retention once the novelty of a new app wears off. | M | H | Weekly rhythm (prayer, planning) is the retention mechanism by design; track M-06 and iterate based on private beta feedback before public launch. | Product |
 | RISK-08 | Spec drift: this document and the code disagree, and the disagreement goes unnoticed (already true in places — see 05 §3). | H | M | README §4's definition of done and the traceability matrix in 02 are updated in the same pull request as any implementation change; 05 §3 stays the single place drift is recorded, not silently resolved. | Engineering + Product |
@@ -373,7 +373,7 @@ the definition of done in README §4 — see RISK-05.
 | **Couple-scoped** | Any resource that belongs to a couple and is visible only to its two members. |
 | **BFF** | Backend-for-frontend. The Next.js layer the browser talks to; it holds the session and forwards requests to the Go API (DEC-02). |
 | **PWA** | Progressive Web App — an installable, offline-capable web app; Amorae's only client platform (C-01). |
-| **Mock mode** | A build-time flag (`NEXT_PUBLIC_API_MOCK`) under which the web app answers from an in-browser mock instead of the real Go API. Refused in production builds unless explicitly allowed. |
+| **Not available yet** | What a screen shows in place of its content when no Go endpoint serves it: the app calls the real API, its router answers with a bare 404, and the screen says so instead of reporting an error. |
 | **Paused (offline) change** | A write made while offline, held as a paused TanStack Query mutation in `localStorage`, and replayed on reconnect (DEC-05). |
 | **Invite code** | A 6-character code (3 letters, 3 digits, shown as `ABC-123`) used to join a couple (DEC-08). |
 | **SLO** | Service-level objective — a measurable operational target (for example, an error-rate or latency budget), defined in full in 03. |
@@ -404,6 +404,6 @@ Business rules behind these terms — limits, validation, and edge cases — liv
 
 | Version | Date | Change |
 |---------|------|--------|
-| 3.0 | 2026-09-22 | Rewritten as an industry-standard PRD. Added a problem statement (marked as an unvalidated hypothesis), compact personas with jobs-to-be-done, user classes, a stakeholders table, and a "who this is not for" list. Replaced the narrative MVP scope and roadmap with a module-level scope table, an out-of-scope table with reasons, and a release plan with concrete entry/exit criteria per phase plus private-beta and public-launch gates. Added goals G-01–G-05 with a metrics table (M-01–M-12) built around weekly meaningful actions instead of time-in-app or streaks, per principle 3. Added assumptions, constraints, dependencies, and a risk register (RISK-01–RISK-08). Removed the old "Decisions log" section; its content now lives in 05 as DEC-12, DEC-13, and DEC-15. |
+| 3.0 | 2026-09-22 | Rewritten as an industry-standard PRD. Later the same day: the in-browser mock was removed (DEC-22), so "Mock only" scope became "UI only". Added a problem statement (marked as an unvalidated hypothesis), compact personas with jobs-to-be-done, user classes, a stakeholders table, and a "who this is not for" list. Replaced the narrative MVP scope and roadmap with a module-level scope table, an out-of-scope table with reasons, and a release plan with concrete entry/exit criteria per phase plus private-beta and public-launch gates. Added goals G-01–G-05 with a metrics table (M-01–M-12) built around weekly meaningful actions instead of time-in-app or streaks, per principle 3. Added assumptions, constraints, dependencies, and a risk register (RISK-01–RISK-08). Removed the old "Decisions log" section; its content now lives in 05 as DEC-12, DEC-13, and DEC-15. |
 | 2.0 | 2026-09-21 | Product foundation split out of the combined spec. |
 | 1.0 | (prior) | Original combined product requirements and UX design spec. |

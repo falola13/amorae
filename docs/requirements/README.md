@@ -82,7 +82,7 @@ requirement, and traceable to a goal.
 |-----------|--------|
 | Priority (MoSCoW) | **Must** (release fails without it) · **Should** (important, can slip one release) · **Could** (nice to have) · **Won't** (explicitly out of scope for now) |
 | Release | **MVP** (phases 1–4) · **Post-MVP** (phase 5 and later) |
-| Implementation status (as of the document date) | **Implemented** (real API and web, tested) · **Partial** · **Mock only** (web works against the in-browser mock; Go endpoint not built) · **Not started** |
+| Implementation status (as of the document date) | **Implemented** (real API and web, tested) · **Partial** · **UI only** (the screens exist and are wired to the contract, but no Go endpoint serves them, so they show "Not available yet") · **Not started** |
 | Verification | **Test** (automated) · **Demo** (manual scripted check) · **Inspection** (review of code or config) · **Analysis** (measurement or calculation) |
 
 **Acceptance criteria** are written as *Given / When / Then* and numbered `.AC1`, `.AC2`, …
@@ -97,7 +97,7 @@ until the question is resolved.
 
 A requirement moves to **Implemented** only when all of the following hold:
 
-1. The Go endpoint and the web client both exist (no mock in the path).
+1. The Go endpoint and the web client both exist and talk to each other.
 2. Every acceptance criterion has an automated test, or a documented manual check where
    automation is impractical (for example PWA install on iOS).
 3. [`docs/API.md`](../API.md) and `apps/web/src/lib/api/types.ts` describe the same contract.

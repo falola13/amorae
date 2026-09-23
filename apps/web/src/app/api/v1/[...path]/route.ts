@@ -15,19 +15,26 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 async function forward(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   if (!SAFE_METHODS.has(request.method) && isCrossOrigin(request)) {
-    return NextResponse.json(errorBody("forbidden", "This request came from another site."), { status: 403 });
+    return NextResponse.json(errorBody("forbidden", "This request came from another site."), {
+      status: 403,
+    });
   }
 
   const path = upstreamPath((await params).path);
   if (path === null) {
-    return NextResponse.json(errorBody("route_not_found", "That page doesn't exist."), { status: 404 });
+    return NextResponse.json(errorBody("route_not_found", "That page doesn't exist."), {
+      status: 404,
+    });
   }
 
   const target = new URL(`${env.API_URL}/v1/${path}`);
   target.search = request.nextUrl.search;
 
   const token = await getSessionToken();
-  const headers: Record<string, string> = { Accept: "application/json", ...visitorHeaders(request.headers) };
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...visitorHeaders(request.headers),
+  };
   if (token) headers.Authorization = `Bearer ${token}`;
   copyHeader(request.headers, headers, "content-type", "Content-Type");
   copyHeader(request.headers, headers, "x-request-id", "X-Request-ID");
@@ -47,7 +54,7 @@ async function forward(request: NextRequest, { params }: { params: Promise<{ pat
 
   const res = new NextResponse((await upstream.text()) || null, { status: upstream.status });
   res.headers.set("Cache-Control", "no-store");
-  for (const name of ["content-type", "x-request-id", "retry-after"]) {
+  for (const name of ["content-type", "x-request-id", "retry-after", "content-disposition"]) {
     const value = upstream.headers.get(name);
     if (value) res.headers.set(name, value);
   }

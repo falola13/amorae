@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { NetworkBanner } from "@/components/layout/network-banner";
 import { Main, Screen } from "@/components/layout/screen";
+import { SideNav } from "@/components/layout/side-nav";
 import { SplashView } from "@/components/layout/splash-view";
 import { TabBar } from "@/components/layout/tab-bar";
 import { ErrorState } from "@/components/ui/kit";
@@ -21,8 +22,8 @@ function unpaired(error: unknown) {
 
 // The signed-in shell. src/proxy.ts already bounced visitors with no cookie;
 // this is the real check: GET /couples/me. 401 → login. couple_not_found →
-// pairing. Any other failure (down API, missing route, 500) is a retry
-// screen — never a raw "404 page not found".
+// pairing. Any other failure (down API, missing route, 500) before the couple
+// has ever loaded is a retry screen — never a raw "404 page not found".
 export function AppShell({ children }: { children: ReactNode }) {
   const couple = useCouple();
   const router = useRouter();
@@ -38,7 +39,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => (meId ? persistOfflineChanges(qc, meId) : undefined), [qc, meId]);
 
   useEffect(() => {
-    const expired = () => { clearSignedInState(qc); router.replace(routes.login({ expired: true })); };
+    const expired = () => {
+      clearSignedInState(qc);
+      router.replace(routes.login({ expired: true }));
+    };
     window.addEventListener(SESSION_EXPIRED_EVENT, expired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
   }, [qc, router]);
@@ -48,15 +52,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [couple.data, couple.error, couple.isError, router]);
 
   if (couple.isPending) return <SplashView />;
-  if (couple.isError && !unpaired(couple.error)) {
-    const network = isApiError(couple.error) && (couple.error.status === 0 || couple.error.code === "network_error");
+  // Full screen only when there's nothing to show. With the couple already
+  // loaded, a failed background refetch keeps the app usable; each screen's
+  // own queries show their problems inline.
+  if (!couple.data && couple.isError && !unpaired(couple.error)) {
+    const network =
+      isApiError(couple.error) &&
+      (couple.error.status === 0 || couple.error.code === "network_error");
     return (
       <Screen>
         <Main>
           <ErrorState
             title={network ? "We couldn’t reach the server" : "We couldn’t load your space"}
             text="Nothing of yours is lost. Try again in a moment."
-            onRetry={() => { void couple.refetch(); }}
+            onRetry={() => {
+              void couple.refetch();
+            }}
           />
         </Main>
       </Screen>
@@ -64,12 +75,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
   if (!couple.data || !couple.data.onboarding.couple) return <SplashView />;
   if (focused) return <>{children}</>;
+  // One layout, two shapes: a phone gets the column and the bottom tab bar; a
+  // tablet or desktop gets the side nav and a wider column, centred in what's
+  // left. Only one navigation is ever rendered (see SideNav).
   return (
-    <Screen>
-      <div className="shrink-0" style={{ height: "calc(var(--safe-top) + 8px)" }} />
-      <NetworkBanner />
-      {children}
-      <TabBar />
-    </Screen>
+    <div className="mx-auto flex w-full max-w-[1280px]">
+      <SideNav />
+      {/* min-w-0 so the column measures the space left by the nav, not the viewport. */}
+      <div className="flex min-w-0 flex-1 justify-center">
+        <Screen size="app">
+          <div className="shrink-0" style={{ height: "calc(var(--safe-top) + 8px)" }} />
+          <NetworkBanner />
+          {children}
+          <TabBar />
+        </Screen>
+      </div>
+    </div>
   );
 }

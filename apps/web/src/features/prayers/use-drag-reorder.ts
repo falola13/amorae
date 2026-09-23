@@ -13,7 +13,10 @@ import type { PrayerPoint } from "@/lib/api/types";
  * sends one save — never one per 60px step. A keyboard move has no
  * "release" to batch against, so it commits immediately.
  */
-export function useDragReorder(source: PrayerPoint[] | null, onCommit: (next: PrayerPoint[]) => void) {
+export function useDragReorder(
+  source: PrayerPoint[] | null,
+  onCommit: (next: PrayerPoint[]) => void,
+) {
   const [local, setLocal] = useState<PrayerPoint[] | null>(null);
   const items = local ?? source;
   const drag = useRef<{ from: number; y: number } | null>(null);
@@ -45,12 +48,19 @@ export function useDragReorder(source: PrayerPoint[] | null, onCommit: (next: Pr
     if (Math.abs(dy) > 60) {
       const to = drag.current.from + Math.sign(dy);
       const next = reordered(items, drag.current.from, to);
-      if (next) { setLocal(next); dirty.current = next; drag.current = { from: to, y: e.clientY }; }
+      if (next) {
+        setLocal(next);
+        dirty.current = next;
+        drag.current = { from: to, y: e.clientY };
+      }
     }
   };
   const endDrag = () => {
     drag.current = null;
-    if (dirty.current) { onCommit(dirty.current); dirty.current = null; }
+    if (dirty.current) {
+      onCommit(dirty.current);
+      dirty.current = null;
+    }
   };
 
   return {

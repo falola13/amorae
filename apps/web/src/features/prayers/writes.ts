@@ -11,7 +11,8 @@ export const prayerWrites = {
   // "prayed, then undo" can never land reversed.
   completion: defineWrite({
     mutationKey: ["prayers", "completion"],
-    mutationFn: ({ pointId, done }: CompletionVars) => (done ? prayersApi.complete(pointId) : prayersApi.uncomplete(pointId)),
+    mutationFn: ({ pointId, done }: CompletionVars) =>
+      done ? prayersApi.complete(pointId) : prayersApi.uncomplete(pointId),
     invalidates: [keys.week],
     scope: "prayers.completion",
   }),
@@ -27,12 +28,8 @@ export const prayerWrites = {
   }),
   reflection: defineWrite({
     mutationKey: ["prayers", "reflection"],
-    mutationFn: ({ weekId, text }: { weekId: string; text: string }) => prayersApi.reflection(weekId, text),
+    mutationFn: ({ weekId, text }: { weekId: string; text: string }) =>
+      prayersApi.reflection(weekId, text),
     invalidates: [keys.history, keys.week, keys.weeksById],
-  }),
-  demo: defineWrite({
-    mutationKey: ["prayers", "demo"],
-    mutationFn: (mode: "partner" | "mine" | "waiting") => prayersApi.demo(mode),
-    invalidates: [keys.week, keys.history],
   }),
 };

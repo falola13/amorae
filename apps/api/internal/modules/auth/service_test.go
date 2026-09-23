@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,27 @@ func (f *fakeUserRepo) UpdateEmail(_ context.Context, id uuid.UUID, email string
 	return user.User{}, user.ErrNotFound
 }
 
+func (f *fakeUserRepo) UpdatePasswordHash(_ context.Context, id uuid.UUID, hash string, at time.Time) error {
+	for email, u := range f.byEmail {
+		if u.ID == id {
+			u.PasswordHash, u.UpdatedAt = hash, at
+			f.byEmail[email] = u
+			return nil
+		}
+	}
+	return user.ErrNotFound
+}
+
+func (f *fakeUserRepo) DeleteMe(_ context.Context, id uuid.UUID) error {
+	for email, u := range f.byEmail {
+		if u.ID == id {
+			delete(f.byEmail, email)
+			return nil
+		}
+	}
+	return user.ErrNotFound
+}
+
 type fakeSessionRepo struct {
 	byHash    map[string]Session
 	createErr error // when set, Create fails with it (simulates a DB error)
@@ -115,6 +137,49 @@ func (f *fakeSessionRepo) Delete(_ context.Context, hash []byte) error {
 	return nil
 }
 
+func (f *fakeSessionRepo) ListByUser(_ context.Context, userID uuid.UUID, now time.Time) ([]Session, error) {
+	var out []Session
+	for _, s := range f.byHash {
+		if s.UserID == userID && s.ExpiresAt.After(now) {
+			out = append(out, s)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (f *fakeSessionRepo) DeleteOthers(_ context.Context, userID uuid.UUID, keepHash []byte) (int, error) {
+	ended := 0
+	for key, s := range f.byHash {
+		if s.UserID == userID && key != string(keepHash) {
+			delete(f.byHash, key)
+			ended++
+		}
+	}
+	return ended, nil
+}
+
+func (f *fakeSessionRepo) DeleteAllForUser(_ context.Context, userID uuid.UUID) error {
+	for key, s := range f.byHash {
+		if s.UserID == userID {
+			delete(f.byHash, key)
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessionRepo) TouchLastUsed(_ context.Context, hash []byte, at, staleBefore time.Time) error {
+	s, ok := f.byHash[string(hash)]
+	if !ok {
+		return nil
+	}
+	if s.LastUsedAt == nil || s.LastUsedAt.Before(staleBefore) {
+		s.LastUsedAt = &at
+		f.byHash[string(hash)] = s
+	}
+	return nil
+}
+
 type fakeTxRunner struct{}
 
 func (fakeTxRunner) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
@@ -154,7 +219,7 @@ func newTestService(t *testing.T, newToken func() (string, error)) (*Service, *f
 	sessions := newFakeSessionRepo()
 	hasher := NewBcryptHasher(bcrypt.MinCost)
 
-	svc, err := NewService(users, sessions, hasher, fakeTxRunner{}, time.Hour, fixedNow, newToken, allowAll{})
+	svc, err := NewService(users, sessions, hasher, fakeTxRunner{}, time.Hour, fixedNow, newToken, allowAll{}, Options{})
 	if err != nil {
 		t.Fatalf("NewService() returned an error: %v", err)
 	}
@@ -164,7 +229,7 @@ func newTestService(t *testing.T, newToken func() (string, error)) (*Service, *f
 func TestService_Register_OK(t *testing.T) {
 	svc, users, sessions := newTestService(t, sequentialToken("token-1"))
 
-	result, err := svc.Register(context.Background(), RegisterInput{
+	result, err := svc.Register(context.Background(), RegisterInput{AgeConfirmed: true, AcceptedTerms: true,
 		Email:       "a@b.com",
 		Password:    "password123",
 		DisplayName: "Ada",
@@ -193,7 +258,7 @@ func TestService_Register_OK(t *testing.T) {
 func TestService_Register_DuplicateEmail(t *testing.T) {
 	svc, _, _ := newTestService(t, sequentialToken("token-1", "token-2"))
 	ctx := context.Background()
-	input := RegisterInput{Email: "a@b.com", Password: "password123", DisplayName: "Ada"}
+	input := RegisterInput{AgeConfirmed: true, AcceptedTerms: true, Email: "a@b.com", Password: "password123", DisplayName: "Ada"}
 
 	if _, err := svc.Register(ctx, input); err != nil {
 		t.Fatalf("first Register() returned an error: %v", err)
@@ -209,7 +274,7 @@ func TestService_Register_DuplicateEmail(t *testing.T) {
 func TestService_Register_AllFieldErrorsTogether(t *testing.T) {
 	svc, _, _ := newTestService(t, sequentialToken("token-1"))
 
-	_, err := svc.Register(context.Background(), RegisterInput{
+	_, err := svc.Register(context.Background(), RegisterInput{AgeConfirmed: true, AcceptedTerms: true,
 		Email:       "not-an-email",
 		Password:    "short",
 		DisplayName: "",
@@ -248,7 +313,7 @@ func TestService_Register_PasswordLengthBoundaries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, _, _ := newTestService(t, sequentialToken("token"))
 
-			_, err := svc.Register(context.Background(), RegisterInput{
+			_, err := svc.Register(context.Background(), RegisterInput{AgeConfirmed: true, AcceptedTerms: true,
 				Email:       tc.email,
 				Password:    tc.password,
 				DisplayName: "Name",
@@ -267,7 +332,7 @@ func TestService_Login_OK(t *testing.T) {
 	svc, _, _ := newTestService(t, sequentialToken("register-token", "login-token"))
 	ctx := context.Background()
 
-	_, err := svc.Register(ctx, RegisterInput{Email: "a@b.com", Password: "password123", DisplayName: "Ada"})
+	_, err := svc.Register(ctx, RegisterInput{AgeConfirmed: true, AcceptedTerms: true, Email: "a@b.com", Password: "password123", DisplayName: "Ada"})
 	if err != nil {
 		t.Fatalf("Register() returned an error: %v", err)
 	}
@@ -285,7 +350,7 @@ func TestService_Login_WrongPassword(t *testing.T) {
 	svc, _, _ := newTestService(t, sequentialToken("register-token", "login-token"))
 	ctx := context.Background()
 
-	_, err := svc.Register(ctx, RegisterInput{Email: "a@b.com", Password: "password123", DisplayName: "Ada"})
+	_, err := svc.Register(ctx, RegisterInput{AgeConfirmed: true, AcceptedTerms: true, Email: "a@b.com", Password: "password123", DisplayName: "Ada"})
 	if err != nil {
 		t.Fatalf("Register() returned an error: %v", err)
 	}
@@ -303,7 +368,7 @@ func TestService_Login_UnknownEmail_StillComparesAgainstDummy(t *testing.T) {
 	sessions := newFakeSessionRepo()
 	spy := &spyHasher{inner: NewBcryptHasher(bcrypt.MinCost)}
 
-	svc, err := NewService(users, sessions, spy, fakeTxRunner{}, time.Hour, fixedNow, NewToken, allowAll{})
+	svc, err := NewService(users, sessions, spy, fakeTxRunner{}, time.Hour, fixedNow, NewToken, allowAll{}, Options{})
 	if err != nil {
 		t.Fatalf("NewService() returned an error: %v", err)
 	}
@@ -386,7 +451,7 @@ func TestService_Logout_Idempotent(t *testing.T) {
 
 func TestService_Login_SessionWriteFails_ReturnsErrorNotToken(t *testing.T) {
 	svc, _, sessions := newTestService(t, sequentialToken("tok-reg", "tok-login"))
-	if _, err := svc.Register(context.Background(), RegisterInput{Email: "a@b.com", Password: "correct horse", DisplayName: "A"}); err != nil {
+	if _, err := svc.Register(context.Background(), RegisterInput{AgeConfirmed: true, AcceptedTerms: true, Email: "a@b.com", Password: "correct horse", DisplayName: "A"}); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -405,7 +470,7 @@ func TestService_Login_RateLimitedPerAccountBeforeBcrypt(t *testing.T) {
 	users := newFakeUserRepo()
 	spy := &spyHasher{inner: NewBcryptHasher(bcrypt.MinCost)}
 	limiter := ratelimit.New(2, 15*time.Minute, fixedNow)
-	svc, err := NewService(users, newFakeSessionRepo(), spy, fakeTxRunner{}, time.Hour, fixedNow, NewToken, limiter)
+	svc, err := NewService(users, newFakeSessionRepo(), spy, fakeTxRunner{}, time.Hour, fixedNow, NewToken, limiter, Options{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -439,7 +504,7 @@ func TestService_Login_RateLimitedPerAccountBeforeBcrypt(t *testing.T) {
 func registerForEmailChange(t *testing.T) (*Service, *fakeUserRepo, user.User) {
 	t.Helper()
 	svc, users, _ := newTestService(t, sequentialToken("t1", "t2"))
-	res, err := svc.Register(context.Background(), RegisterInput{Email: "old@example.com", Password: "correct horse", DisplayName: "Ada"})
+	res, err := svc.Register(context.Background(), RegisterInput{AgeConfirmed: true, AcceptedTerms: true, Email: "old@example.com", Password: "correct horse", DisplayName: "Ada"})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -494,7 +559,7 @@ func TestService_ChangeEmail_TakenAndInvalidInput(t *testing.T) {
 func TestService_ChangeEmail_RateLimitedPerAccount(t *testing.T) {
 	users := newFakeUserRepo()
 	limiter := ratelimit.New(1, 15*time.Minute, fixedNow)
-	svc, err := NewService(users, newFakeSessionRepo(), NewBcryptHasher(bcrypt.MinCost), fakeTxRunner{}, time.Hour, fixedNow, NewToken, limiter)
+	svc, err := NewService(users, newFakeSessionRepo(), NewBcryptHasher(bcrypt.MinCost), fakeTxRunner{}, time.Hour, fixedNow, NewToken, limiter, Options{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -505,5 +570,122 @@ func TestService_ChangeEmail_RateLimitedPerAccount(t *testing.T) {
 
 	if appErr, ok := apperr.As(err); !ok || appErr.Kind != apperr.KindRateLimited {
 		t.Fatalf("second attempt err = %v, want rate_limited", err)
+	}
+}
+
+const iPhoneUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1"
+const windowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+
+func TestService_ListSessions_MarksTheCurrentOneAndLabelsTheDevice(t *testing.T) {
+	svc, users, _ := newTestService(t, sequentialToken("phone-token", "laptop-token"))
+	ctx := context.Background()
+
+	phone, err := svc.Register(ctx, RegisterInput{AgeConfirmed: true, AcceptedTerms: true,
+		Email: "a@b.com", Password: "password123", DisplayName: "Ada", UserAgent: iPhoneUA,
+	})
+	if err != nil {
+		t.Fatalf("Register() returned an error: %v", err)
+	}
+	if _, err := svc.Login(ctx, LoginInput{Email: "a@b.com", Password: "password123", UserAgent: windowsUA}); err != nil {
+		t.Fatalf("Login() returned an error: %v", err)
+	}
+
+	views, err := svc.ListSessions(ctx, users.byEmail["a@b.com"].ID, phone.Token)
+	if err != nil {
+		t.Fatalf("ListSessions() returned an error: %v", err)
+	}
+	if len(views) != 2 {
+		t.Fatalf("got %d sessions, want 2", len(views))
+	}
+
+	current, devices := 0, map[string]bool{}
+	for _, v := range views {
+		devices[v.Device] = true
+		if !v.Current {
+			continue
+		}
+		current++
+		if v.Device != "Safari on iPhone" {
+			t.Errorf("current session Device = %q, want the device that made the request", v.Device)
+		}
+	}
+	if current != 1 {
+		t.Errorf("sessions marked current = %d, want exactly 1", current)
+	}
+	if !devices["Safari on iPhone"] || !devices["Chrome on Windows"] {
+		t.Errorf("Device labels = %v, want both sessions labelled", devices)
+	}
+}
+
+func TestService_SignOutOtherSessions_KeepsTheCallerSignedIn(t *testing.T) {
+	svc, users, _ := newTestService(t, sequentialToken("keep-token", "other-token"))
+	ctx := context.Background()
+
+	if _, err := svc.Register(ctx, RegisterInput{AgeConfirmed: true, AcceptedTerms: true, Email: "a@b.com", Password: "password123", DisplayName: "Ada"}); err != nil {
+		t.Fatalf("Register() returned an error: %v", err)
+	}
+	if _, err := svc.Login(ctx, LoginInput{Email: "a@b.com", Password: "password123"}); err != nil {
+		t.Fatalf("Login() returned an error: %v", err)
+	}
+
+	ended, err := svc.SignOutOtherSessions(ctx, users.byEmail["a@b.com"].ID, "keep-token")
+	if err != nil {
+		t.Fatalf("SignOutOtherSessions() returned an error: %v", err)
+	}
+	if ended != 1 {
+		t.Errorf("ended = %d, want 1", ended)
+	}
+
+	if _, err := svc.Authenticate(ctx, "keep-token"); err != nil {
+		t.Errorf("the session that asked must still authenticate: %v", err)
+	}
+	if _, err := svc.Authenticate(ctx, "other-token"); err == nil {
+		t.Error("the other session should no longer authenticate")
+	}
+}
+
+func TestService_Authenticate_WritesLastUsedAtMostHourly(t *testing.T) {
+	users := newFakeUserRepo()
+	sessions := newFakeSessionRepo()
+	clock := fixedNow()
+	svc, err := NewService(users, sessions, NewBcryptHasher(bcrypt.MinCost), fakeTxRunner{}, 24*time.Hour,
+		func() time.Time { return clock }, sequentialToken("token-1"), allowAll{}, Options{})
+	if err != nil {
+		t.Fatalf("NewService() returned an error: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := svc.Register(ctx, RegisterInput{AgeConfirmed: true, AcceptedTerms: true, Email: "a@b.com", Password: "password123", DisplayName: "Ada"}); err != nil {
+		t.Fatalf("Register() returned an error: %v", err)
+	}
+	lastUsed := func() *time.Time {
+		s, err := sessions.GetByTokenHash(ctx, hashToken("token-1"))
+		if err != nil {
+			t.Fatalf("GetByTokenHash() returned an error: %v", err)
+		}
+		return s.LastUsedAt
+	}
+
+	if _, err := svc.Authenticate(ctx, "token-1"); err != nil {
+		t.Fatalf("Authenticate() returned an error: %v", err)
+	}
+	first := lastUsed()
+	if first == nil {
+		t.Fatal("the first use should record last_used_at")
+	}
+
+	clock = clock.Add(30 * time.Minute)
+	if _, err := svc.Authenticate(ctx, "token-1"); err != nil {
+		t.Fatalf("Authenticate() returned an error: %v", err)
+	}
+	if got := lastUsed(); !got.Equal(*first) {
+		t.Errorf("last_used_at moved within the hour (%v → %v): an active session would write on every request", first, got)
+	}
+
+	clock = clock.Add(31 * time.Minute)
+	if _, err := svc.Authenticate(ctx, "token-1"); err != nil {
+		t.Fatalf("Authenticate() returned an error: %v", err)
+	}
+	if got := lastUsed(); !got.After(*first) {
+		t.Errorf("last_used_at = %v, want it to move once an hour has passed", got)
 	}
 }

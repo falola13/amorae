@@ -17,8 +17,10 @@ export const routes = {
 
   // Signed out
   welcome: "/welcome",
-  login: (opts: { next?: string; expired?: boolean } = {}) => `/login${q({ next: opts.next, reason: opts.expired ? "expired" : undefined })}`,
+  login: (opts: { next?: string; expired?: boolean } = {}) =>
+    `/login${q({ next: opts.next, reason: opts.expired ? "expired" : undefined })}`,
   register: "/register",
+  forgot: "/forgot",
   offline: "/offline",
   terms: "/terms",
   privacy: "/privacy",
@@ -36,7 +38,8 @@ export const routes = {
   prayersSet: "/prayers/set",
   prayersDone: "/prayers/done",
   prayerEdit: (id?: string) => `/prayers/edit${q({ id })}`,
-  prayerMode: (opts: { at?: number; quiet?: boolean } = {}) => `/prayers/mode${q({ at: opts.at, quiet: opts.quiet })}`,
+  prayerMode: (opts: { at?: number; quiet?: boolean } = {}) =>
+    `/prayers/mode${q({ at: opts.at, quiet: opts.quiet })}`,
   history: "/history",
   historyWeek: (id: string) => `/history/${seg(id)}`,
 
@@ -59,4 +62,5 @@ export const routes = {
   settings: "/settings",
   settingsProfile: "/settings/profile",
   settingsNotifications: "/settings/notifications",
+  settingsDevices: "/settings/devices",
 } as const;

@@ -76,6 +76,19 @@ func (r *PostgresRepository) Update(ctx context.Context, u User) (User, error) {
 	}
 	return u, nil
 }
+func (r *PostgresRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string, at time.Time) error {
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1
+	`, id, hash, at)
+	if err != nil {
+		return fmt.Errorf("writing password hash: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *PostgresRepository) SetLastLoginAt(ctx context.Context, id uuid.UUID, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE users SET last_login_at = $2 WHERE id = $1
@@ -100,6 +113,61 @@ func (r *PostgresRepository) scanOne(ctx context.Context, query string, args ...
 		return User{}, fmt.Errorf("querying user: %w", err)
 	}
 	return u, nil
+}
+
+// DeleteMe removes the user. Sessions, this user's membership, and invitations
+// they created go with them through ON DELETE CASCADE. A couple is deleted
+// only when they were its last member; a remaining partner keeps it, and
+// created_by moves to that partner because that foreign key does not cascade.
+func (r *PostgresRepository) DeleteMe(ctx context.Context, id uuid.UUID) error {
+	return r.db.InTx(ctx, func(ctx context.Context) error {
+		var coupleID uuid.UUID
+		err := r.db.Q(ctx).QueryRow(ctx, `
+			SELECT couple_id FROM couple_members WHERE user_id = $1
+		`, id).Scan(&coupleID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("finding membership: %w", err)
+		}
+		if err == nil {
+			if err := r.releaseCouple(ctx, id, coupleID); err != nil {
+				return err
+			}
+		}
+
+		tag, err := r.db.Q(ctx).Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+		if err != nil {
+			return fmt.Errorf("deleting user: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+func (r *PostgresRepository) releaseCouple(ctx context.Context, userID, coupleID uuid.UUID) error {
+	var partnerID uuid.UUID
+	err := r.db.Q(ctx).QueryRow(ctx, `
+		SELECT user_id FROM couple_members
+		WHERE couple_id = $1 AND user_id <> $2
+	`, coupleID, userID).Scan(&partnerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if _, err := r.db.Q(ctx).Exec(ctx, `DELETE FROM couples WHERE id = $1`, coupleID); err != nil {
+			return fmt.Errorf("deleting couple: %w", err)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("finding partner: %w", err)
+	}
+
+	if _, err := r.db.Q(ctx).Exec(ctx, `
+		UPDATE couples SET created_by = $2, updated_at = now()
+		WHERE id = $1 AND created_by = $3
+	`, coupleID, partnerID, userID); err != nil {
+		return fmt.Errorf("transferring couple: %w", err)
+	}
+	return nil
 }
 
 // translateWriteErr turns the one constraint this table can violate — the

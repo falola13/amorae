@@ -13,10 +13,7 @@ export async function getSessionToken(): Promise<string | undefined> {
 
 // Called from Server Actions only — cookies() can't be mutated during
 // Server Component rendering (see Next's cookies() docs).
-export async function setSession(
-  token: string,
-  expiresAt: string,
-): Promise<void> {
+export async function setSession(token: string, expiresAt: string): Promise<void> {
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
     httpOnly: true,

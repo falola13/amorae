@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Document ID** | AMR-REQ-03 |
-| **Version** | 3.0 |
+| **Version** | 3.1 |
 | **Status** | Draft for review |
 | **Owner** | Engineering |
-| **Last updated** | 2026-09-22 |
+| **Last updated** | 2026-09-23 |
 
 ---
 
@@ -50,7 +50,7 @@ docs for "how" rather than duplicating them.
 
 | Environment | Purpose | Data | Notes |
 |---|---|---|---|
-| **dev** | Local development (`docker compose`), `npm run dev` | Disposable, seeded or empty | No service worker (registration is production-only); mock API mode may be on |
+| **dev** | Local development (`docker compose`), `npm run dev` | Disposable, seeded or empty | No service worker (registration is production-only) |
 | **staging** | Pre-production verification, QA, demos | Synthetic or anonymised, never real couples' data | Mirrors production configuration; the only place load or failure tests run |
 | **production** | Real users | Real, private couple data | Targets in this document are production targets unless stated otherwise |
 
@@ -282,7 +282,7 @@ As built: `sessions` is indexed on its token hash (not couple-scoped by design �
 user-scoped). The `couples`, `couple_members` (unique `couple_id, user_id`) and
 `couple_invitations` tables exist with their documented constraints. Feature tables that will
 carry `couple_id` (prayers, events, goals, challenges, journal, appreciations, memories,
-important dates) are specified in 02 §4 but are mostly not yet built (mock only), so their
+important dates) are specified in 02 §4 but are not built yet, so their
 indexes cannot yet be verified in migrations. Status is "Partial": the pattern is established
 for what exists, not yet complete for what doesn't.
 
@@ -440,10 +440,12 @@ rejected. Not built; no idle tracking exists on the `sessions` table today.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Not started | Test |
+| Should | MVP | Partial | Test |
 
 Changing the account password, or completing a password reset, shall revoke every other active
 session for that user, so a stolen session cannot survive the user securing their account.
+A completed reset does this today (every session, in the same transaction as the new password
+hash); password change does not exist yet (FR-ACCT-004).
 
 **Measured by:** a Go integration test asserting other sessions are deleted after a password
 change. Not built; password change/reset do not exist yet (see NFR-SEC-005, Q-02, and password
@@ -654,14 +656,12 @@ production deployment exists to test yet.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Implemented | Inspection |
+| Won't | — | Withdrawn | — |
 
-A production build of the web app shall refuse mock sign-in (which otherwise accepts any email
-and password under `NEXT_PUBLIC_API_MOCK`) unless `ALLOW_MOCK_AUTH=true` is explicitly set,
-marking a deliberate demo deployment rather than a default-on backdoor.
-
-**Measured by:** inspection of `apps/web/src/lib/config.ts` and the mock adapter's guard; a
-build-time or startup check.
+**Withdrawn 2026-09-22.** The requirement was that a production build refuse mock sign-in
+(which accepted any email and password) unless a flag marked a deliberate demo. The mock and
+its sign-in were removed from the web app, so there is no longer a backdoor to guard: the only
+way in is the Go API's own `POST /v1/auth/login`. The ID is kept so nothing renumbers.
 
 ### NFR-SEC-025 Metrics endpoint not publicly exposed
 
@@ -747,19 +747,18 @@ A user shall be able to request and receive a machine-readable (JSON) export of 
 data, fulfilled within 30 days of the request.
 
 **Measured by:** an integration test exercising an export endpoint and checking the response
-covers every table that references the requesting user. No export endpoint exists in Go or in
-the web mock.
+covers every table that references the requesting user. No export endpoint exists.
 
 ### NFR-PRIV-006 Right to deletion
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 A user shall be able to request deletion of their account and personal data, fulfilled within
 30 days, subject to the couple-dissolution rule in Q-09.
 
-`DELETE /v1/users/me` exists only in the web mock (localStorage); no Go endpoint exists.
+The screen and its confirmation exist; no endpoint serves them.
 
 **Measured by:** an integration test against the real endpoint once built, confirming data is
 gone (or scheduled for deletion within the retention window, Q-11) after the call.
@@ -800,8 +799,7 @@ shared couple content is deleted; each partner's individually authored personal 
 their own account.
 
 **Measured by:** an integration test simulating a leave/delete and checking read-only access
-and the 30-day timer. No "leave couple" action exists yet (mock or real), per the as-built
-facts.
+and the 30-day timer. No "leave couple" action exists yet, in the API or the web app.
 
 ### NFR-PRIV-010 Sub-processors and hosting region
 
@@ -1028,6 +1026,23 @@ push, but is never a gate on core functionality.
 
 **Measured by:** manual check that every core flow works in an uninstalled browser tab.
 
+### NFR-COMPAT-005 Adaptive layout
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Must | MVP | Implemented | Demo |
+
+The layout shall adapt to the device it runs on rather than showing a phone column on every
+screen: a bottom tab bar and one column on a phone, a navigation rail and a wider column from
+768px, and a labelled sidebar with sections paired side by side from 1024px, within a 1280px
+maximum. Reading measure shall not grow with the viewport, and exactly one primary navigation
+shall be present at any width. The breakpoints and column widths are specified in
+[04 §6](./04-design-specification.md).
+
+**Measured by:** browser check at 375px, 768px and 1440px on 2026-09-23 (no horizontal overflow;
+nav 236px and column 760px at 1440px). Automated coverage arrives with the web test suite
+(NFR-MAINT-003).
+
 ### NFR-COMPAT-004 Safari storage eviction awareness
 
 | Priority | Release | Status | Verification |
@@ -1145,13 +1160,16 @@ queued writes exist. Not yet applicable: no such writes are built.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started | Inspection |
+| Must | MVP | Implemented | Demo |
 
-Publishing a prayer week and destructive deletes shall be online-only: the client shall not
-queue them while offline, and shall instead disable or explain why the action is unavailable.
+Actions whose meaning depends on when they land (today, undoing an appreciation) shall be
+online-only: the client shall not offer them while offline and shall never queue them. A write
+opts in by being marked `onlineOnly` in its definition. Publishing a prayer week may queue,
+because it is setter-only and idempotent (DEC-21).
 
-**Measured by:** manual check that the publish and delete actions are disabled (not silently
-queued) while offline, once those features exist beyond the mock.
+**Measured by:** browser check on 2026-09-22 (against the in-browser mock, before it was
+removed): Undo disappears when the connection drops and returns with it. An automated test arrives with the web test suite
+(NFR-MAINT-003).
 
 ### NFR-OFFL-008 Cold offline reading
 
@@ -1427,14 +1445,10 @@ yet.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Implemented | Inspection |
+| Won't | — | Withdrawn | — |
 
-`NEXT_PUBLIC_API_MOCK` shall never be enabled in a production deployment; where a demo
-deployment intentionally uses it, `ALLOW_MOCK_AUTH=true` shall be required in addition (see
-NFR-SEC-024).
-
-**Measured by:** the same guard covered by NFR-SEC-024, listed here as an operational control
-on deployment configuration as well as a security control.
+**Withdrawn 2026-09-22.** There is no mock mode, and no flag to get wrong: the web app has one
+transport, to the real API. The ID is kept so nothing renumbers.
 
 ### NFR-OPS-006 Incident severity levels
 
@@ -1493,14 +1507,14 @@ which becomes Must at public launch.
 | PERF | 003, 004 | 001 |
 | AVAIL | 002, 003, 005 | 001, 004 |
 | SCALE | 001, 002, 003, 005 | — |
-| SEC | 002, 003, 004, 005, 006, 007, 010, 011, 012, 013, 014, 016, 017, 018, 020, 022, 024, 025 | 001, 015, 023 |
+| SEC | 002, 003, 004, 005, 006, 007, 010, 011, 012, 013, 014, 016, 017, 018, 020, 022, 025 | 001, 015, 023 |
 | PRIV | 002, 003, 004, 006, 009, 011, 012, 014 | 001, 005, 007, 008, 010, 013 |
 | A11Y | 002, 003, 004, 007 | 001, 005, 008, 009 |
-| COMPAT | 001, 002, 003 | — |
+| COMPAT | 001, 002, 003, 005 | — |
 | OFFL | 001, 002, 003, 004, 005, 006, 007 | — |
 | OBS | 001, 002, 003, 004 | 005, 008 |
 | MAINT | 001, 002, 003, 004, 005, 006 | — |
-| OPS | 001, 002, 004, 005, 007 | 003, 006 |
+| OPS | 001, 002, 004, 007 | 003, 006 |
 
 Read a cell as "`NFR-<CATEGORY>-<NNN>` for each number listed". Some reasoning behind the split:
 
@@ -1569,7 +1583,7 @@ this document introduces the requirement with no v2.0 precedent.
 | NFR-SEC-021 | v2.0 §7 (rate limiting) | Test |
 | NFR-SEC-022 | DEC-08; Q-08 | Test |
 | NFR-SEC-023 | new | Demo |
-| NFR-SEC-024 | ARCHITECTURE (mock mode guard) | Inspection |
+| NFR-SEC-024 | Withdrawn 2026-09-22 (the mock was removed) | — |
 | NFR-SEC-025 | ARCHITECTURE (metrics listener) | Inspection |
 | NFR-PRIV-001 | NDPA 2023; GDPR; Q-17 | Inspection |
 | NFR-PRIV-002 | NDPA 2023; GDPR Art. 9; Q-17 | Demo |
@@ -1598,13 +1612,14 @@ this document introduces the requirement with no v2.0 precedent.
 | NFR-COMPAT-002 | v2.0 §9; 04 design specification | Test |
 | NFR-COMPAT-003 | 01; ARCHITECTURE | Demo |
 | NFR-COMPAT-004 | ADR 0004; DEC-05 | Analysis |
+| NFR-COMPAT-005 | 04 §6 (adaptive layout) | Demo |
 | NFR-OFFL-001 | DEC-04; ADR 0004 | Demo |
 | NFR-OFFL-002 | v2.0 §9.1 | Inspection |
 | NFR-OFFL-003 | DEC-05 | Demo |
 | NFR-OFFL-004 | v2.0 §9.1 (sharpened) | Test |
 | NFR-OFFL-005 | v2.0 §9.1 (idempotency key) | Test |
 | NFR-OFFL-006 | v2.0 §9.1 (conflict rule) | Inspection |
-| NFR-OFFL-007 | v2.0 §9.1 (online-only actions) | Inspection |
+| NFR-OFFL-007 | v2.0 §9.1 (online-only actions); DEC-21 | Demo |
 | NFR-OFFL-008 | Q-01; ADR 0004 | Demo |
 | NFR-OBS-001 | ARCHITECTURE (observability) | Inspection |
 | NFR-OBS-002 | ARCHITECTURE (observability) | Inspection |
@@ -1625,7 +1640,7 @@ this document introduces the requirement with no v2.0 precedent.
 | NFR-OPS-002 | ARCHITECTURE (config fails fast) | Test |
 | NFR-OPS-003 | v2.0 §12 (deployment); NFR-MAINT-005 | Demo |
 | NFR-OPS-004 | new | Demo |
-| NFR-OPS-005 | ARCHITECTURE (mock mode guard) | Inspection |
+| NFR-OPS-005 | Withdrawn 2026-09-22 (the mock was removed) | — |
 | NFR-OPS-006 | new | Inspection |
 | NFR-OPS-007 | NFR-AVAIL-002 / 003 / 004 (cross-reference) | Demo |
 | NFR-OPS-008 | new | Inspection |
@@ -1636,4 +1651,5 @@ this document introduces the requirement with no v2.0 precedent.
 
 | Version | Date | Change |
 |---------|------|--------|
-| 3.0 | 2026-09-22 | New document. Collects the v2.0 security, PWA, NFR, testing, deployment and scalability sections, adds measurable targets, compliance, accessibility, observability and operations requirements, and records current implementation status. |
+| 3.1 | 2026-09-23 | Added NFR-COMPAT-005 (adaptive layout for tablet and desktop). |
+| 3.0 | 2026-09-22 | New document. NFR-SEC-024 and NFR-OPS-005 were withdrawn the same day, when the in-browser mock was removed. Collects the v2.0 security, PWA, NFR, testing, deployment and scalability sections, adds measurable targets, compliance, accessibility, observability and operations requirements, and records current implementation status. |

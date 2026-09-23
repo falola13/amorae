@@ -8,13 +8,20 @@ import { routes } from "@/lib/routes";
 
 export const metadata: Metadata = { title: "Log in" };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; reason?: string }> }) {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; reason?: string }>;
+}) {
   const params = await searchParams;
   return (
     <>
       <SafeTop />
       <TopBar back="Back" backHref={routes.welcome} />
-      <div className="flex flex-col gap-2 px-6 pb-7 pt-3"><Title>Welcome back</Title><Para>Everything is where the two of you left it.</Para></div>
+      <div className="flex flex-col gap-2 px-6 pb-7 pt-3">
+        <Title>Welcome back</Title>
+        <Para>Everything is where the two of you left it.</Para>
+      </div>
       <LoginForm next={safeNext(params.next)} expired={params.reason === "expired"} />
     </>
   );

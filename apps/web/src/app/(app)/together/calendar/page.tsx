@@ -1,22 +1,24 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useState } from 'react';
-import { useCouple } from '@/features/couple/hooks';
-import { useWeek } from '@/features/prayers/hooks';
-import { useEvents } from '@/features/together/hooks';
-import { addDays, dayNum, iso, parse, startOfWeek, time12, weekdayDate } from '@/lib/dates';
-import { routes } from '@/lib/routes';
-import { Icon } from '@/components/icons';
-import { today } from '@/lib/today';
-import { Main } from '@/components/layout/screen';
-import { QueryState } from '@/components/ui/query-state';
-import { BottomActions, LinkButton, Micro, Skeleton, Title, TopBar, cx } from '@/components/ui/kit';
+import Link from "next/link";
+import { useState } from "react";
+import { useCouple } from "@/features/couple/hooks";
+import { useWeek } from "@/features/prayers/hooks";
+import { useEvents } from "@/features/together/hooks";
+import { addDays, dayNum, iso, parse, startOfWeek, time12, weekdayDate } from "@/lib/dates";
+import { routes } from "@/lib/routes";
+import { Icon } from "@/components/icons";
+import { today } from "@/lib/today";
+import { Main } from "@/components/layout/screen";
+import { QueryState } from "@/components/ui/query-state";
+import { BottomActions, LinkButton, Micro, Skeleton, Title, TopBar, cx } from "@/components/ui/kit";
 
 type Item = { time: string; title: string; sub: string; href: string };
 
 export default function Calendar() {
-  const events = useEvents(); const week = useWeek(); const couple = useCouple();
+  const events = useEvents();
+  const week = useWeek();
+  const couple = useCouple();
   const todayIso = iso(today());
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -30,44 +32,127 @@ export default function Calendar() {
         <div className="flex items-center justify-between pt-2">
           <Title>Calendar</Title>
           <div className="-mr-2.5 flex">
-            <button type="button" aria-label="Previous week" onClick={() => { setOffset((o) => o - 1); setSelected(null); }} className="press flex h-11 w-11 items-center justify-center text-ink"><Icon name="left" size={22} /></button>
-            <button type="button" aria-label="Next week" onClick={() => { setOffset((o) => o + 1); setSelected(null); }} className="press flex h-11 w-11 items-center justify-center text-ink"><Icon name="right" size={22} /></button>
+            <button
+              type="button"
+              aria-label="Previous week"
+              onClick={() => {
+                setOffset((o) => o - 1);
+                setSelected(null);
+              }}
+              className="press flex h-11 w-11 items-center justify-center text-ink"
+            >
+              <Icon name="left" size={22} />
+            </button>
+            <button
+              type="button"
+              aria-label="Next week"
+              onClick={() => {
+                setOffset((o) => o + 1);
+                setSelected(null);
+              }}
+              className="press flex h-11 w-11 items-center justify-center text-ink"
+            >
+              <Icon name="right" size={22} />
+            </button>
           </div>
         </div>
         <QueryState queries={[events]} loading={<Skeleton />}>
           {(eventsData) => {
             const byDay = new Map<string, Item[]>();
             const push = (d: string, it: Item) => byDay.set(d, [...(byDay.get(d) ?? []), it]);
-            for (const e of eventsData) if (!e.done) push(e.date, { time: time12(e.start_time) || 'All day', title: e.title, sub: e.location ?? (e.reminder ? `Reminder ${e.reminder}` : ''), href: routes.event(e.id) });
+            for (const e of eventsData)
+              if (!e.done)
+                push(e.date, {
+                  time: time12(e.start_time) || "All day",
+                  title: e.title,
+                  sub: e.location ?? (e.reminder ? `Reminder ${e.reminder}` : ""),
+                  href: routes.event(e.id),
+                });
             // The Sunday that starts a prayer week is a calendar item too.
-            for (const d of days) if (parse(d).getDay() === 0) push(d, { time: 'All day', title: 'Weekly prayer', sub: week.data && d === week.data.week_start ? `A prayer week begins. ${week.data.setter_id === couple.data?.me.id ? 'It’s your week.' : `${couple.data?.partner?.display_name ?? 'Your partner'} sets it.`}` : 'A new prayer week begins.', href: routes.prayers });
-            const shown = days.filter((d) => selected ? d === selected : (byDay.get(d)?.length ?? 0) > 0 && d >= todayIso);
+            for (const d of days)
+              if (parse(d).getDay() === 0)
+                push(d, {
+                  time: "All day",
+                  title: "Weekly prayer",
+                  sub:
+                    week.data && d === week.data.week_start
+                      ? `A prayer week begins. ${week.data.setter_id === couple.data?.me.id ? "It’s your week." : `${couple.data?.partner?.display_name ?? "Your partner"} sets it.`}`
+                      : "A new prayer week begins.",
+                  href: routes.prayers,
+                });
+            const shown = days.filter((d) =>
+              selected ? d === selected : (byDay.get(d)?.length ?? 0) > 0 && d >= todayIso,
+            );
             const list = shown.length ? shown : days.filter((d) => byDay.has(d));
             return (
               <>
                 <div className="-mx-2 mt-3.5 flex border-b border-line pb-3">
                   {days.map((d) => {
-                    const isToday = d === todayIso; const sel = d === selected; const dot = (byDay.get(d)?.length ?? 0) > 0;
+                    const isToday = d === todayIso;
+                    const sel = d === selected;
+                    const dot = (byDay.get(d)?.length ?? 0) > 0;
                     return (
-                      <button key={d} type="button" aria-current={isToday ? 'date' : undefined} aria-pressed={sel} onClick={() => setSelected(sel ? null : d)} className="press flex grow basis-0 flex-col items-center gap-1 p-0">
-                        <span className="text-[12px] font-semibold text-stone">{'SMTWTFS'[parse(d).getDay()]}</span>
-                        <span className={cx('tabular flex h-10 w-10 items-center justify-center rounded-full text-[16px] font-semibold', isToday ? 'bg-plum font-bold text-surface' : sel ? 'bg-plum-tint text-plum' : 'text-ink')}>{dayNum(d)}</span>
-                        <span className={cx('h-1 w-1 rounded-full', dot ? 'bg-plum' : 'bg-transparent')} />
+                      <button
+                        key={d}
+                        type="button"
+                        aria-current={isToday ? "date" : undefined}
+                        aria-pressed={sel}
+                        onClick={() => setSelected(sel ? null : d)}
+                        className="press flex grow basis-0 flex-col items-center gap-1 p-0"
+                      >
+                        <span className="text-[12px] font-semibold text-stone">
+                          {"SMTWTFS"[parse(d).getDay()]}
+                        </span>
+                        <span
+                          className={cx(
+                            "tabular flex h-10 w-10 items-center justify-center rounded-full text-[16px] font-semibold",
+                            isToday
+                              ? "bg-plum font-bold text-surface"
+                              : sel
+                                ? "bg-plum-tint text-plum"
+                                : "text-ink",
+                          )}
+                        >
+                          {dayNum(d)}
+                        </span>
+                        <span
+                          className={cx("h-1 w-1 rounded-full", dot ? "bg-plum" : "bg-transparent")}
+                        />
                       </button>
                     );
                   })}
                 </div>
-                {list.length === 0 ? <div className="py-8 text-support text-stone">Nothing planned this week yet.</div> : null}
+                {list.length === 0 ? (
+                  <div className="py-8 text-support text-stone">Nothing planned this week yet.</div>
+                ) : null}
                 {list.map((d) => (
                   <section key={d} className="flex flex-col border-b border-line pb-2.5 pt-3.5">
-                    <Micro tone={d === todayIso ? 'plum' : 'stone'} className="pb-1">{d === todayIso ? 'Today, ' : ''}{weekdayDate(d)}</Micro>
+                    <Micro tone={d === todayIso ? "plum" : "stone"} className="pb-1">
+                      {d === todayIso ? "Today, " : ""}
+                      {weekdayDate(d)}
+                    </Micro>
                     {(byDay.get(d) ?? []).map((it) => (
-                      <Link key={it.href} href={it.href} className="press flex min-h-12 items-baseline gap-3.5 py-1 text-ink no-underline">
-                        <span className="tabular w-16 shrink-0 text-support text-stone">{it.time}</span>
-                        <span className="flex flex-col"><span className="text-[16px] font-semibold">{it.title}</span>{it.sub ? <span className="text-support text-stone">{it.sub}</span> : null}</span>
+                      <Link
+                        key={it.href}
+                        href={it.href}
+                        className="press flex min-h-12 items-baseline gap-3.5 py-1 text-ink no-underline"
+                      >
+                        <span className="tabular w-16 shrink-0 text-support text-stone">
+                          {it.time}
+                        </span>
+                        <span className="flex flex-col">
+                          <span className="text-[16px] font-semibold">{it.title}</span>
+                          {it.sub ? (
+                            <span className="text-support text-stone">{it.sub}</span>
+                          ) : null}
+                        </span>
                       </Link>
                     ))}
-                    {(byDay.get(d) ?? []).length === 0 ? <div className="py-2 text-support text-stone">Nothing planned. Add something you&rsquo;d love to do together.</div> : null}
+                    {(byDay.get(d) ?? []).length === 0 ? (
+                      <div className="py-2 text-support text-stone">
+                        Nothing planned. Add something you&rsquo;d love to do together.
+                      </div>
+                    ) : null}
                   </section>
                 ))}
               </>
@@ -75,7 +160,11 @@ export default function Calendar() {
           }}
         </QueryState>
       </Main>
-      <BottomActions><LinkButton href={routes.eventNew()} icon="plus">Add an event</LinkButton></BottomActions>
+      <BottomActions>
+        <LinkButton href={routes.eventNew()} icon="plus">
+          Add an event
+        </LinkButton>
+      </BottomActions>
     </>
   );
 }

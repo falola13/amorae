@@ -12,7 +12,12 @@ import { routes } from "@/lib/routes";
 import { usePush } from "@/lib/pwa/push";
 
 function Preview({ when, text }: { when: string; text: string }) {
-  return <div className="flex flex-col gap-0.5 border-b border-line py-3.5"><div className="text-[13px] font-semibold text-stone">{when}</div><div className="text-[16px] font-medium">{text}</div></div>;
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-line py-3.5">
+      <div className="text-[13px] font-semibold text-stone">{when}</div>
+      <div className="text-[16px] font-medium">{text}</div>
+    </div>
+  );
 }
 
 // Explain first, then ask (spec 19.3). "Not now" is a first-class choice.
@@ -21,10 +26,17 @@ export default function NotificationPermissionPage() {
   const onboarding = useOnboarding();
   const { request } = usePush();
   const [busy, setBusy] = useState(false);
-  const finish = () => onboarding.mutate({ notifications: true }, { onSuccess: () => router.replace(routes.home) });
+  const finish = () =>
+    onboarding.mutate({ notifications: true }, { onSuccess: () => router.replace(routes.home) });
   const enable = async () => {
     setBusy(true);
-    try { await request(); } catch { /* permission request failed; still continue onboarding */ } finally { setBusy(false); }
+    try {
+      await request();
+    } catch {
+      /* permission request failed; still continue onboarding */
+    } finally {
+      setBusy(false);
+    }
     finish();
   };
   return (
@@ -33,17 +45,30 @@ export default function NotificationPermissionPage() {
       <div className="h-11 shrink-0" />
       <div className="flex grow flex-col gap-6 px-6 pt-3">
         <Icon name="bell" size={28} strokeWidth={1.4} className="text-plum" />
-        <div className="flex flex-col gap-2"><Title>Stay close to what you&rsquo;ve planned</Title><Para>A few calm reminders about your shared life, and nothing else. For example:</Para></div>
+        <div className="flex flex-col gap-2">
+          <Title>Stay close to what you&rsquo;ve planned</Title>
+          <Para>A few calm reminders about your shared life, and nothing else. For example:</Para>
+        </div>
         <div className="flex flex-col border-t border-line">
           <Preview when="On Sundays" text="Your new prayer week is ready." />
-          <Preview when="Before something you’ve planned" text="You have a date tonight at 7:00 pm." />
-          <Preview when="When your partner shares something" text="Adeola added something to your shared journal." />
+          <Preview
+            when="Before something you’ve planned"
+            text="You have a date tonight at 7:00 pm."
+          />
+          <Preview
+            when="When your partner shares something"
+            text="Adeola added something to your shared journal."
+          />
         </div>
         <Para size="support">You choose which ones you get, anytime, in Settings.</Para>
       </div>
       <Bottom>
-        <Button onClick={enable} loading={busy}>Enable notifications</Button>
-        <Button variant="text" onClick={finish}>Not now</Button>
+        <Button onClick={enable} loading={busy}>
+          Enable notifications
+        </Button>
+        <Button variant="text" onClick={finish}>
+          Not now
+        </Button>
       </Bottom>
     </>
   );

@@ -2,9 +2,13 @@
 
 import { redirect } from "next/navigation";
 
-import { loginSchema, registerSchema, type LoginInput, type RegisterInput } from "@/lib/api/schemas";
+import {
+  loginSchema,
+  registerSchema,
+  type LoginInput,
+  type RegisterInput,
+} from "@/lib/api/schemas";
 import { clearSession, getSessionToken, setSession } from "@/lib/auth/session";
-import { env } from "@/lib/env";
 import { toActionError, type ActionError } from "@/lib/forms";
 import { safeNext } from "@/lib/safe-next";
 import { login, logout, register } from "./api";
@@ -14,17 +18,11 @@ import { routes } from "@/lib/routes";
 // session cookie (docs/adr/0002). The forms validate with React Hook Form +
 // Zod first; the same Zod schema runs again here.
 
-const MOCK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
 export async function loginAction(input: LoginInput): Promise<ActionError | undefined> {
   const parsed = loginSchema.safeParse(input);
-  if (!parsed.success) return { message: "Check the highlighted fields.", fields: zodFields(parsed.error) };
+  if (!parsed.success)
+    return { message: "Check the highlighted fields.", fields: zodFields(parsed.error) };
   const next = safeNext(parsed.data.next);
-
-  if (env.MOCK_AUTH) {
-    await setSession("mock-session", new Date(Date.now() + MOCK_TTL_MS).toISOString());
-    redirect(next);
-  }
 
   let result;
   try {
@@ -38,16 +36,12 @@ export async function loginAction(input: LoginInput): Promise<ActionError | unde
 
 export async function registerAction(input: RegisterInput): Promise<ActionError | undefined> {
   const parsed = registerSchema.safeParse(input);
-  if (!parsed.success) return { message: "Check the highlighted fields.", fields: zodFields(parsed.error) };
-
-  if (env.MOCK_AUTH) {
-    await setSession("mock-session", new Date(Date.now() + MOCK_TTL_MS).toISOString());
-    redirect(routes.couple({ fresh: true }));
-  }
+  if (!parsed.success)
+    return { message: "Check the highlighted fields.", fields: zodFields(parsed.error) };
 
   let result;
   try {
-    result = await register(parsed.data.email, parsed.data.password, parsed.data.display_name);
+    result = await register(parsed.data);
   } catch (error) {
     return toActionError(error);
   }
@@ -57,7 +51,7 @@ export async function registerAction(input: RegisterInput): Promise<ActionError 
 
 export async function logoutAction(): Promise<void> {
   const token = await getSessionToken();
-  if (token && !env.MOCK_AUTH) {
+  if (token) {
     try {
       await logout(token);
     } catch {
@@ -69,8 +63,13 @@ export async function logoutAction(): Promise<void> {
   redirect(routes.welcome);
 }
 
-function zodFields(error: { issues: { path: PropertyKey[]; message: string }[] }): Record<string, string> {
+function zodFields(error: {
+  issues: { path: PropertyKey[]; message: string }[];
+}): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const i of error.issues) { const k = String(i.path[0] ?? ""); if (k && !out[k]) out[k] = i.message; }
+  for (const i of error.issues) {
+    const k = String(i.path[0] ?? "");
+    if (k && !out[k]) out[k] = i.message;
+  }
   return out;
 }

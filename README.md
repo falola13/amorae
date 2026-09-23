@@ -27,21 +27,13 @@ the dependency rule, how SOLID maps onto the files, and the scaling path. The
 HTTP contract is in [`docs/API.md`](docs/API.md), and the decisions behind it
 are in [`docs/adr/`](docs/adr).
 
-## Quick start (front end only, mock API)
+## What works today
 
-The Go API has auth and users today; the prayer and Together modules are
-still to come. Until then the web app runs end to end against a built-in mock:
-
-```bash
-cp apps/web/.env.example apps/web/.env.local     # NEXT_PUBLIC_API_MOCK is on
-npm --prefix apps/web install
-npm run dev:web                                   # http://localhost:3000
-```
-
-Log in with any email and a 10+ character password. Settings has a "Try the
-week states" switch to preview the three Home states. Turn the mock flag off
-once the Go endpoints in `docs/API.md` exist. Mock sign-in accepts any
-password, so a production build refuses it unless `ALLOW_MOCK_AUTH=true`.
+The Go API has auth, users and couple pairing; the prayer and Together
+modules are still to come. The web app talks only to the real API, so a
+screen whose endpoint doesn't exist yet says "Not available yet" where its
+content would go, and the rest of the screen keeps working. Build a module in
+Go and its screens come to life with no front-end flag to flip.
 
 ## Quick start (everything in Docker)
 

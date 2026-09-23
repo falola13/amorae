@@ -54,7 +54,7 @@ definition of done set out in [`README.md`](./README.md) §2–§4. In short:
 
 - **Shall** is mandatory, **should** is recommended, **may** is optional.
 - Every requirement carries Priority (Must/Should/Could/Won't), Release (MVP/Post-MVP),
-  Implementation status (Implemented/Partial/Mock only/Not started) and Verification
+  Implementation status (Implemented/Partial/UI only/Not started) and Verification
   (Test/Demo/Inspection/Analysis).
 - Acceptance criteria are Given/When/Then, numbered `.AC1`, `.AC2`, … under their requirement.
 - A requirement that cannot proceed until a `Q-NN` is answered says so: *Blocked by Q-NN*.
@@ -294,7 +294,7 @@ The system shall rate-limit authentication attempts per BR-AUTH-02.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started — Blocked by Q-04 | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let a user reset a forgotten password through a time-limited emailed link.
 
@@ -461,7 +461,7 @@ password (Q-03 recommendation, matching DEC-07's email-change pattern).
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let a signed-in user permanently delete their account after re-authenticating
 (Q-03 recommendation).
@@ -475,10 +475,8 @@ The system shall let a signed-in user permanently delete their account after re-
   the client shall require the current password before submitting, in addition to the
   confirmation dialog.
 
-*Status note:* today's mock (`DELETE /v1/users/me`) deletes on an in-app confirmation dialog
-alone; AC2's password re-entry does not exist in the mock or in Go. Status is **Mock only**
-because the endpoint and the confirmation UI exist; the re-authentication step is a gap recorded
-here rather than as a separate requirement.
+*Status note:* the screen and its confirmation dialog exist; no Go endpoint does. AC2's password
+re-entry is not built either, and is recorded here rather than as a separate requirement.
 
 #### FR-ACCT-006 Data export
 
@@ -520,10 +518,10 @@ when a user signs out.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Not started — Blocked by Q-19 | Test |
+| Should | MVP | Implemented | Test |
 
 The system shall let a signed-in user see their own active sessions and end every session other
-than the current one.
+than the current one (DEC-23).
 
 **Acceptance criteria**
 
@@ -532,6 +530,11 @@ than the current one.
   creation time and last use, and never show the partner's sessions.
 - **FR-ACCT-008.AC2** Given the user chooses "sign out other devices", when it completes, then
   every session except the current one shall be deleted and shall respond 401 on next use.
+- **FR-ACCT-008.AC3** Given a session list, when it is returned, then it shall carry no token
+  hash, no raw user agent and no IP address — only a coarse device label — and it shall never
+  include the partner's sessions.
+- **FR-ACCT-008.AC4** Given an active session, when it is used repeatedly, then its last-used
+  time shall be written at most once an hour.
 
 ---
 
@@ -635,9 +638,7 @@ The system shall let either partner set the couple's display name and relationsh
   partners.
 
 *Contract note:* the in-progress Go couples module registers `PATCH /v1/couples/me`, hence
-**Partial**. [`../API.md`](../API.md) lists it under "implemented by the web mock", but the mock
-adapter (`apps/web/src/lib/api/mock/adapter.ts`) has no handler for it; either the mock gains one
-or API.md is corrected when the Go endpoint lands.
+**Partial**. No screen calls it yet.
 
 #### FR-PAIR-006 Set own role label
 
@@ -655,7 +656,7 @@ shown to their partner but carrying no permission.
   couple screen.
 
 *Contract note:* as with FR-PAIR-005, `PATCH /v1/couples/role` is registered in the in-progress
-Go couples module but has no mock handler, although API.md lists it as mock-implemented.
+Go couples module, with no screen calling it yet.
 
 #### FR-PAIR-007 Onboarding flags
 
@@ -717,9 +718,8 @@ be deterministic and idempotent, and AI is never involved in whose turn it is.
   scripture reference and verse text; order is the array order (`position`).
 - **BR-PRAY-05** — Once the setter publishes a week, the partner can view it; once the partner has
   completed any point in a published week, its points become read-only, even to the setter (per
-  [`../API.md`](../API.md)'s contract for `POST /prayers/current/publish`). The current mock
-  adapter does not enforce this restriction on `PUT /prayers/current/points`; recorded as a known
-  conformance gap, not a change to the rule.
+  [`../API.md`](../API.md)'s contract for `POST /prayers/current/publish`). Nothing enforces this yet, because the
+  endpoint is not built; the Go module must.
 - **BR-PRAY-06** — Completion is per partner and per point
   (`unique(prayer_point_id, user_id)`), so marking a point twice never creates a duplicate, and
   one partner's completion is never visible to the other as something they can edit.
@@ -728,7 +728,7 @@ be deterministic and idempotent, and AI is never involved in whose turn it is.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall show a signed-in partner their couple's current prayer week (Sunday-to-Saturday,
 in the couple's timezone).
@@ -746,7 +746,7 @@ in the couple's timezone).
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let the current week's setter write, reorder and save up to 10 draft prayer
 points, each with an optional scripture reference and verse text.
@@ -768,7 +768,7 @@ points, each with an optional scripture reference and verse text.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let the setter publish their drafted week so their partner can see it.
 
@@ -785,7 +785,7 @@ The system shall let the setter publish their drafted week so their partner can 
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Demo |
+| Must | MVP | UI only | Demo |
 
 The system shall show the non-setter partner a "waiting" status, with no points, while the
 current week is still a draft.
@@ -799,7 +799,7 @@ current week is still a draft.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let each partner mark and unmark their own completion of a published point,
 independent of their partner's.
@@ -816,7 +816,7 @@ independent of their partner's.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let each partner record their own short reflection on a prayer week.
 
@@ -829,7 +829,7 @@ The system shall let each partner record their own short reflection on a prayer 
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall list a couple's past prayer weeks, newest first.
 
@@ -843,7 +843,7 @@ The system shall list a couple's past prayer weeks, newest first.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall show the full detail of one specific prayer week by id.
 
@@ -903,7 +903,7 @@ couple's event returns 404 (DEC-19).
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner create a shared event with a title, date, optional start/end
 time, location, reminder, notes and checklist.
@@ -918,7 +918,7 @@ time, location, reminder, notes and checklist.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall list a couple's events to both partners identically.
 
@@ -931,7 +931,7 @@ The system shall list a couple's events to both partners identically.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner edit any field of a shared event.
 
@@ -946,7 +946,7 @@ The system shall let either partner edit any field of a shared event.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner mark a shared event complete, or reopen it.
 
@@ -959,7 +959,7 @@ The system shall let either partner mark a shared event complete, or reopen it.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Mock only | Test |
+| Should | MVP | UI only | Test |
 
 The system shall let either partner toggle an individual checklist item on an event.
 
@@ -984,7 +984,7 @@ The system shall let either partner permanently delete a shared event.
   partner.
 
 *Contract note:* the v2.0 spec required full create/read/update/delete for events, but the current
-contract ([`../API.md`](../API.md)) and the mock only expose create, read, update and completion
+contract ([`../API.md`](../API.md)) only exposes create, read, update and completion
 toggling — no delete endpoint exists yet in either. Recorded as a gap against the old spec rather
 than silently dropped.
 
@@ -1002,7 +1002,7 @@ prayer week. No enterprise calendar complexity: no drag-resize, no overlapping-e
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Demo |
+| Must | MVP | UI only | Demo |
 
 The system shall show a couple's upcoming events and current prayer week together, in date order.
 
@@ -1012,14 +1012,14 @@ The system shall show a couple's upcoming events and current prayer week togethe
   opens the calendar, then the client shall list them merged and sorted by date, nearest first.
 
 *Implementation note:* the calendar has no dedicated backend of its own; it composes the FR-EVT
-and FR-PRAY reads on the client, so its status follows theirs (Mock only) and it is verified by
+and FR-PRAY reads on the client, so its status follows theirs (UI only) and it is verified by
 demo rather than a distinct API test.
 
 #### FR-CAL-002 Open entry detail
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Demo |
+| Must | MVP | UI only | Demo |
 
 The system shall open an entry's detail screen when it is tapped from the calendar.
 
@@ -1051,7 +1051,7 @@ sum of `progress[].amount`, computed on read rather than stored and incremented.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner create a shared goal with a title, optional description
 ("why"), a target value and unit, and start/end dates.
@@ -1065,7 +1065,7 @@ The system shall let either partner create a shared goal with a title, optional 
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall list a couple's goals to both partners identically, each with its running total.
 
@@ -1079,7 +1079,7 @@ The system shall list a couple's goals to both partners identically, each with i
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall show a single goal's full detail, including its progress log.
 
@@ -1092,7 +1092,7 @@ The system shall show a single goal's full detail, including its progress log.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner add a progress entry to a shared goal.
 
@@ -1144,7 +1144,7 @@ optional and never framed with penalty language.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall show a couple's current multi-day challenge with each day's prompt and status.
 
@@ -1158,7 +1158,7 @@ The system shall show a couple's current multi-day challenge with each day's pro
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let a partner mark a challenge day done or skipped.
 
@@ -1183,7 +1183,7 @@ The system shall let either partner start a new multi-day challenge from a templ
 - **FR-CHAL-003.AC1** Given a couple with no active challenge, when either partner starts one
   from a template, then the API shall create it with day 1 through N and respond 201.
 
-*Contract note:* the current API contract has no create endpoint; the mock always serves one
+*Contract note:* the current API contract has no create endpoint; it assumes one
 pre-seeded "current" challenge. Recorded as a gap against the v2.0 spec, which required a couple
 to be able to start a challenge.
 
@@ -1206,7 +1206,7 @@ each tagged and dated.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner add a private, couple-shared journal entry with a tag and
 body text.
@@ -1221,7 +1221,7 @@ body text.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall list a couple's journal entries to both partners identically, in date order.
 
@@ -1245,17 +1245,17 @@ there is no feed, no likes, no reactions.
 - **BR-APPR-01** — An appreciation has no stored recipient field; because a couple has exactly two
   members, the recipient is always implicitly "the other partner" (the same two-person
   simplification as DEC-16).
-- **BR-APPR-02** — The sender can undo (delete) an appreciation shortly after sending it. The
-  client shows an "Undo" action on the send-confirmation toast for **5 seconds**
-  (`apps/web/src/app/(app)/together/appreciation/page.tsx`); the `DELETE` endpoint itself accepts
-  the call at any time, so today the window is enforced only by the client hiding the control, not
-  by the server. The window length and server enforcement are Q-22.
+- **BR-APPR-02** — The sender can undo (delete) an appreciation shortly after sending it
+  (DEC-21). The client offers "Undo" on the send-confirmation toast for **5 seconds**, only while
+  online, and never queues it offline. The API accepts the delete only from the sender and only
+  within **30 seconds** of sending (the extra time absorbs a slow connection); after that it
+  answers 409 `undo_window_closed`, and for the partner's note 403 `forbidden`.
 
 #### FR-APPR-001 Send appreciation
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let a partner send a short appreciation note to their partner.
 
@@ -1278,7 +1278,7 @@ The system shall notify only the receiving partner when an appreciation is sent,
 - **FR-APPR-002.AC1** Given an appreciation is sent, when it is stored, then the system shall
   queue exactly one push notification, addressed to the recipient only.
 
-*Status note:* sending itself is Mock only (FR-APPR-001); this requirement covers push delivery,
+*Status note:* sending itself is UI only (FR-APPR-001); this requirement covers push delivery,
 which depends on the worker and push-sending infrastructure (FR-NOTF-007, Q-16) and is Not
 started.
 
@@ -1286,7 +1286,7 @@ started.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let the sender withdraw an appreciation shortly after sending it, per BR-APPR-02.
 
@@ -1296,8 +1296,16 @@ The system shall let the sender withdraw an appreciation shortly after sending i
   confirmation toast within 5 seconds, then the client shall delete it and it shall disappear
   from both partners' view.
 - **FR-APPR-003.AC2** Given more than 5 seconds have passed, when the sender wants to remove it,
-  then the client shall no longer offer Undo (the server does not yet enforce this as a time
-  limit; see BR-APPR-02).
+  then the client shall no longer offer Undo.
+- **FR-APPR-003.AC3** Given the device is offline, when the confirmation toast is showing, then
+  the client shall not offer Undo, and no undo shall ever be queued for later.
+- **FR-APPR-003.AC4** Given a delete arrives more than 30 seconds after sending, or from the
+  partner who did not send it, when the API processes it, then it shall refuse with 409
+  `undo_window_closed` or 403 `forbidden` respectively, and the note shall remain.
+
+*Status note:* AC1–AC3 were verified in the browser on 2026-09-22, while the in-browser mock
+still existed; they need re-checking against the Go endpoint once it lands. AC4 is the contract
+for that endpoint (`../API.md`).
 
 ### 3.11 MEM — Memories
 
@@ -1310,7 +1318,7 @@ A private, couple-shared timeline of moments — read as a quiet archive, not a 
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner add a memory with a title, date, optional location and
 optional note.
@@ -1324,7 +1332,7 @@ optional note.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall list a couple's memories to both partners identically, as a quiet archive rather
 than a feed.
@@ -1373,7 +1381,7 @@ contract. See §4(b).
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let either partner add an important date with a title, date, optional subtitle
 and optional reminder flag.
@@ -1387,7 +1395,7 @@ and optional reminder flag.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall list a couple's important dates to both partners identically.
 
@@ -1425,7 +1433,7 @@ reminders)
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let each user set their own notification preferences, independent of their
 partner's.
@@ -1441,7 +1449,7 @@ partner's.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let each user set an `HH:MM` reminder time, interpreted in their own timezone,
 not the couple's.
@@ -1459,7 +1467,7 @@ not the couple's.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Mock only | Test |
+| Must | MVP | UI only | Test |
 
 The system shall let a user subscribe their browser to push notifications.
 
@@ -1553,12 +1561,12 @@ networks, and clear about what is and is not safe to do offline.
 - **BR-PWA-03** — The resumable write set today, read from `apps/web/src/features/prayers/writes.ts`,
   `apps/web/src/features/together/writes.ts` and `apps/web/src/features/settings/writes.ts`, all
   registered together in `apps/web/src/components/providers.tsx`, is: prayer completion toggle,
-  save draft prayer points, **publish a prayer week**, save a weekly reflection, save an event,
-  complete/reopen an event, toggle an event checklist item, create a goal, log goal progress,
-  mark/skip a challenge day, add a journal entry, send an appreciation, **undo (delete) an
-  appreciation**, add a memory, add a milestone, and save notification preferences. Account and
-  pairing actions (register, login, create/join a couple, delete account) have no `writes.ts` and
-  are never queued offline.
+  save draft prayer points, publish a prayer week (DEC-21), save a weekly reflection, save an
+  event, complete/reopen an event, toggle an event checklist item, create a goal, log goal
+  progress, mark/skip a challenge day, add a journal entry, send an appreciation, add a memory,
+  add a milestone, and save notification preferences. Undoing an appreciation is defined there
+  but marked `onlineOnly`, so it is never queued (DEC-21). Account and pairing actions (register,
+  login, create/join a couple, delete account) have no `writes.ts` and are never queued offline.
 
 #### FR-PWA-001 Installable
 
@@ -1692,7 +1700,7 @@ The client shall warn a user before logging them out if they have unsynced offli
 |---|---|---|---|
 | Must | MVP | Not started | Test |
 
-Before a queued, non-idempotent write is sent to the real (non-mock) API, the client shall attach
+Before a queued, non-idempotent write is sent to the API, the client shall attach
 a client-generated idempotency key so a retried send cannot be applied twice.
 
 **Acceptance criteria**
@@ -1703,8 +1711,8 @@ a client-generated idempotency key so a retried send cannot be applied twice.
 - **FR-PWA-009.AC2** Given the same write is retried after a partial failure, when it is sent
   again, then the API shall recognise the repeated key and shall not create a second record.
 
-*Status note:* this is required before non-idempotent writes in BR-PWA-03 go live against the
-real Go API; today they run only against the mock, which does not need it.
+*Status note:* this is required before the non-idempotent writes in BR-PWA-03 reach a real
+endpoint. None of those endpoints exists yet, so nothing is at risk today.
 
 #### FR-PWA-010 Conflict rule: last write wins
 
@@ -1728,22 +1736,23 @@ this rule; it matters only for fields like an event's title or a journal entry's
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Partial | Test |
+| Should | MVP | Implemented | Demo |
 
-The client shall require an active connection for irreversible or coordination-sensitive actions
-rather than queue them offline.
+The client shall require an active connection for actions whose meaning depends on when they
+land, rather than queue them offline (DEC-21).
 
 **Acceptance criteria**
 
-- **FR-PWA-011.AC1** Given the device is offline, when a user attempts to publish a prayer week
-  or permanently delete a resource, then the client shall block the action and explain that it
-  needs a connection.
+- **FR-PWA-011.AC1** Given the device is offline, when a user would delete a resource (today:
+  undoing an appreciation), then the client shall not offer the action, and if it is triggered
+  anyway it shall fail at once rather than be queued.
+- **FR-PWA-011.AC2** Given the device is offline, when the setter publishes a prayer week, then
+  the client may queue it: publishing is setter-only and idempotent, so a late send is harmless
+  (DEC-21).
 
-*Status note:* this is the intended rule carried over from the v2.0 spec, but it does not match
-today's code: `publish` (FR-PRAY-003) and `undoAppreciation` (FR-APPR-003, a delete) are both in
-the registered, resumable write set (BR-PWA-03) and are queued offline like any other write
-today. Status is recorded as **Partial** — account/couple actions are correctly blocked, but
-these two specific actions are not. Which of the two should stay queueable is Q-22.
+*Status note:* a write marked `onlineOnly` in its definition (`apps/web/src/lib/query/mutations.ts`)
+never pauses and is never registered as resumable. Account and couple actions have no offline
+write definition and are never queued.
 
 #### FR-PWA-012 Cold offline reading
 
@@ -1922,7 +1931,7 @@ column (only `accepted_at`); the v2.0 draft schema included one. Recorded here r
 silently carried forward.
 
 **Proposed** — everything else. Names are aligned with `apps/web/src/lib/api/types.ts` (the
-contract the web mock and, eventually, Go both implement); differences from the v2.0 draft schema
+contract the screens were built against, which Go will implement or change); differences from the v2.0 draft schema
 are called out because they change what a future migration needs to build.
 
 | Entity | Purpose | Key attributes | Ownership | Notes / differences from v2.0 |
@@ -1962,7 +1971,7 @@ This document does not restate it.
 ### 5.2 HTTP API
 
 The Go API is the source of truth for the wire contract; [`../API.md`](../API.md) documents it in
-full, including the "proposed" endpoints the web mock currently answers. This document does not
+full, including the planned endpoints nothing serves yet. This document does not
 reproduce the endpoint list or payload examples — only the conventions that shape every
 requirement above:
 
@@ -2025,7 +2034,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-AUTH-005 | G-05 | TBD — Blocked by Q-03 | Not started | None yet |
 | FR-AUTH-006 | G-05 | `POST /v1/auth/register` | Implemented | Go integration tests (auth) |
 | FR-AUTH-007 | G-05 | `POST /v1/auth/login`, `PUT /v1/users/me/email` | Implemented | Go integration tests (auth) |
-| FR-AUTH-008 | G-05 | TBD — Blocked by Q-04 | Not started | None yet |
+| FR-AUTH-008 | G-05 | `POST /v1/auth/forgot`, `POST /v1/auth/reset` | Implemented | Go unit + Postgres integration tests |
 | FR-AUTH-009 | G-05 | TBD — Blocked by Q-05 | Not started | None yet |
 | FR-AUTH-010 | G-05 | TBD — Blocked by Q-10 | Not started | None yet |
 | FR-AUTH-011 | G-05 | — (registration screen copy) | Partial | Manual demo 2026-09-22 |
@@ -2034,58 +2043,58 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-ACCT-002 | G-05 | `PUT /v1/users/me/email` | Implemented | Go integration tests (users) |
 | FR-ACCT-003 | G-05 | TBD — Blocked by Q-05 | Not started | None yet |
 | FR-ACCT-004 | G-05 | TBD | Not started | None yet |
-| FR-ACCT-005 | G-05 | `DELETE /v1/users/me` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-ACCT-005 | G-05 | `DELETE /v1/users/me` | UI only | Screen built; no endpoint to test against |
 | FR-ACCT-006 | G-05 | TBD | Not started | None yet |
 | FR-ACCT-007 | G-05 | — (client only) | Implemented | Manual demo 2026-09-22 |
-| FR-ACCT-008 | G-05 | TBD — Blocked by Q-19 | Not started | None yet |
-| FR-PAIR-001 | G-01 | `POST /v1/couples` | Partial | Manual demo 2026-09-22 (web against mock); Go unit tests (couples, in development) |
+| FR-ACCT-008 | G-05 | `GET /v1/sessions`, `DELETE /v1/sessions/others` | Implemented | Go unit + Postgres integration tests; browser check 2026-09-23 |
+| FR-PAIR-001 | G-01 | `POST /v1/couples` | Partial | Browser check 2026-09-22 against the Go API; Go unit tests (couples, in development) |
 | FR-PAIR-002 | G-01 | `GET /v1/couples/me` | Partial | Manual demo 2026-09-22 |
-| FR-PAIR-003 | G-01 | `POST /v1/couples/join` | Partial | Manual demo 2026-09-22 (web against mock); Go unit tests (couples, in development) |
+| FR-PAIR-003 | G-01 | `POST /v1/couples/join` | Partial | Browser check 2026-09-22 against the Go API; Go unit tests (couples, in development) |
 | FR-PAIR-004 | G-01 | TBD — Blocked by Q-08 | Not started | None yet |
 | FR-PAIR-005 | G-01 | `PATCH /v1/couples/me` | Partial | Go handler in the in-progress couples module; no tests yet |
 | FR-PAIR-006 | G-01 | `PATCH /v1/couples/role` | Partial | Go handler in the in-progress couples module; no tests yet |
-| FR-PAIR-007 | G-01 | `PATCH /v1/couples/me/onboarding` | Partial | Go handler and migration in progress; manual demo 2026-09-22 (web against mock) |
+| FR-PAIR-007 | G-01 | `PATCH /v1/couples/me/onboarding` | Partial | Go handler and migration in progress |
 | FR-PAIR-008 | G-05 | TBD — Blocked by Q-09 | Not started | None yet |
-| FR-PRAY-001 | G-02 | `GET /v1/prayers/current` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-PRAY-002 | G-02 | `PUT /v1/prayers/current/points` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-PRAY-003 | G-02 | `POST /v1/prayers/current/publish` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-PRAY-004 | G-02 | `GET /v1/prayers/current` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-PRAY-005 | G-02 | `POST`, `DELETE /v1/prayers/points/:id/complete` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-PRAY-006 | G-02 | `PATCH /v1/prayers/weeks/:id/reflection` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-PRAY-007 | G-02 | `GET /v1/prayers/history` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-PRAY-008 | G-02 | `GET /v1/prayers/weeks/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-PRAY-001 | G-02 | `GET /v1/prayers/current` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-002 | G-02 | `PUT /v1/prayers/current/points` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-003 | G-02 | `POST /v1/prayers/current/publish` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-004 | G-02 | `GET /v1/prayers/current` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-005 | G-02 | `POST`, `DELETE /v1/prayers/points/:id/complete` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-006 | G-02 | `PATCH /v1/prayers/weeks/:id/reflection` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-007 | G-02 | `GET /v1/prayers/history` | UI only | Screen built; no endpoint to test against |
+| FR-PRAY-008 | G-02 | `GET /v1/prayers/weeks/:id` | UI only | Screen built; no endpoint to test against |
 | FR-PRAY-009 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-PRAY-010 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
-| FR-EVT-001 | G-03 | `POST /v1/events` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-EVT-002 | G-03 | `GET /v1/events` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-EVT-003 | G-03 | `PATCH /v1/events/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-EVT-004 | G-03 | `POST`, `DELETE /v1/events/:id/complete` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-EVT-005 | G-03 | `PATCH /v1/events/:id/checklist/:item` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-EVT-001 | G-03 | `POST /v1/events` | UI only | Screen built; no endpoint to test against |
+| FR-EVT-002 | G-03 | `GET /v1/events` | UI only | Screen built; no endpoint to test against |
+| FR-EVT-003 | G-03 | `PATCH /v1/events/:id` | UI only | Screen built; no endpoint to test against |
+| FR-EVT-004 | G-03 | `POST`, `DELETE /v1/events/:id/complete` | UI only | Screen built; no endpoint to test against |
+| FR-EVT-005 | G-03 | `PATCH /v1/events/:id/checklist/:item` | UI only | Screen built; no endpoint to test against |
 | FR-EVT-006 | G-03 | TBD | Not started | None yet |
-| FR-CAL-001 | G-03 | `GET /v1/events`, `GET /v1/prayers/current` | Mock only | Manual demo 2026-09-22 |
-| FR-CAL-002 | G-03 | — (client navigation) | Mock only | Manual demo 2026-09-22 |
-| FR-GOAL-001 | G-03 | `POST /v1/goals` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-GOAL-002 | G-03 | `GET /v1/goals` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-GOAL-003 | G-03 | `GET /v1/goals/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-GOAL-004 | G-03 | `POST /v1/goals/:id/progress` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-CAL-001 | G-03 | `GET /v1/events`, `GET /v1/prayers/current` | UI only | Manual demo 2026-09-22 |
+| FR-CAL-002 | G-03 | — (client navigation) | UI only | Manual demo 2026-09-22 |
+| FR-GOAL-001 | G-03 | `POST /v1/goals` | UI only | Screen built; no endpoint to test against |
+| FR-GOAL-002 | G-03 | `GET /v1/goals` | UI only | Screen built; no endpoint to test against |
+| FR-GOAL-003 | G-03 | `GET /v1/goals/:id` | UI only | Screen built; no endpoint to test against |
+| FR-GOAL-004 | G-03 | `POST /v1/goals/:id/progress` | UI only | Screen built; no endpoint to test against |
 | FR-GOAL-005 | G-03 | TBD | Not started | None yet |
-| FR-CHAL-001 | G-03 | `GET /v1/challenges/current` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-CHAL-002 | G-03 | `PATCH /v1/challenges/current/days/:n` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-CHAL-001 | G-03 | `GET /v1/challenges/current` | UI only | Screen built; no endpoint to test against |
+| FR-CHAL-002 | G-03 | `PATCH /v1/challenges/current/days/:n` | UI only | Screen built; no endpoint to test against |
 | FR-CHAL-003 | G-03 | TBD | Not started | None yet |
-| FR-JRNL-001 | G-04 | `POST /v1/journal` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-JRNL-002 | G-04 | `GET /v1/journal` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-APPR-001 | G-04 | `POST /v1/appreciations` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-JRNL-001 | G-04 | `POST /v1/journal` | UI only | Screen built; no endpoint to test against |
+| FR-JRNL-002 | G-04 | `GET /v1/journal` | UI only | Screen built; no endpoint to test against |
+| FR-APPR-001 | G-04 | `POST /v1/appreciations` | UI only | Screen built; no endpoint to test against |
 | FR-APPR-002 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
-| FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-MEM-001 | G-04 | `POST /v1/memories` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-MEM-002 | G-04 | `GET /v1/memories` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | UI only | Browser check 2026-09-22 against the mock, before it was removed (AC1–AC3) |
+| FR-MEM-001 | G-04 | `POST /v1/memories` | UI only | Screen built; no endpoint to test against |
+| FR-MEM-002 | G-04 | `GET /v1/memories` | UI only | Screen built; no endpoint to test against |
 | FR-MEM-003 | G-04 | TBD — Blocked by Q-06 | Not started | None yet |
-| FR-DATE-001 | G-04 | `POST /v1/milestones` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-DATE-002 | G-04 | `GET /v1/milestones` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-DATE-001 | G-04 | `POST /v1/milestones` | UI only | Screen built; no endpoint to test against |
+| FR-DATE-002 | G-04 | `GET /v1/milestones` | UI only | Screen built; no endpoint to test against |
 | FR-DATE-003 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
-| FR-NOTF-001 | G-05 | `GET`, `PATCH /v1/notifications/preferences` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-NOTF-002 | G-05 | `PATCH /v1/notifications/preferences` | Mock only | Manual demo 2026-09-22 (web against mock) |
-| FR-NOTF-003 | G-05 | `POST /v1/notifications/subscribe` | Mock only | Manual demo 2026-09-22 (web against mock) |
+| FR-NOTF-001 | G-05 | `GET`, `PATCH /v1/notifications/preferences` | UI only | Screen built; no endpoint to test against |
+| FR-NOTF-002 | G-05 | `PATCH /v1/notifications/preferences` | UI only | Screen built; no endpoint to test against |
+| FR-NOTF-003 | G-05 | `POST /v1/notifications/subscribe` | UI only | Screen built; no endpoint to test against |
 | FR-NOTF-004 | G-05 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-NOTF-005 | G-05 | — (notification copy) | Not started | None yet |
 | FR-NOTF-006 | G-05 | — (client only) | Partial | Manual demo 2026-09-22 |
@@ -2100,7 +2109,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-PWA-008 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-009 | G-05 | TBD | Not started | None yet |
 | FR-PWA-010 | G-05 | TBD | Not started | None yet |
-| FR-PWA-011 | G-05 | — (client) | Partial | Manual demo 2026-09-22 |
+| FR-PWA-011 | G-05 | — (client) | Implemented | Browser check 2026-09-22 (undo hidden and not queued offline) |
 | FR-PWA-012 | G-05 | TBD — Blocked by Q-01 | Not started | None yet |
 | FR-PWA-013 | G-05 | — (client) | Partial | Manual demo 2026-09-22 |
 | FR-AI-001 | G-02 | TBD | Not started | None yet |
@@ -2136,6 +2145,6 @@ reconciled against the code as built.
 
 | Version | Date | Change |
 |---|---|---|
-| 3.0 | 2026-09-22 | Full rewrite as an ISO/IEC/IEEE 29148-style Software Requirements Specification (`AMR-REQ-02`). Every requirement now carries a permanent ID, Priority, Release, Implementation status and Verification method, with Given/When/Then acceptance criteria and a traceability matrix. Reconciled against the code as built on 2026-09-22 (couples module Partial/in development; prayers, events, goals, challenges, journal, appreciations, memories, milestones, notification preferences and account deletion are Mock only; scheduler, push delivery, email, object storage and AI are Not started). Recorded, rather than silently resolved, the gaps this reconciliation found between the v2.0 spec, [`../API.md`](../API.md), `types.ts` and the actual mock/Go behaviour — see the business-rule and contract notes throughout §3 and the differences column in §4(b). Non-functional, architecture, testing, deployment and scalability content moved out to their own documents (Appendix A); decisions and open questions now live solely in [05](./05-decisions-and-open-questions.md), cited by ID rather than restated. |
+| 3.0 | 2026-09-22 | Later the same day: the mock was removed (DEC-22), so statuses read "UI only", and the appreciation undo became online-only (DEC-21). Full rewrite as an ISO/IEC/IEEE 29148-style Software Requirements Specification (`AMR-REQ-02`). Every requirement now carries a permanent ID, Priority, Release, Implementation status and Verification method, with Given/When/Then acceptance criteria and a traceability matrix. Reconciled against the code as built on 2026-09-22 (couples module Partial/in development; prayers, events, goals, challenges, journal, appreciations, memories, milestones, notification preferences and account deletion are UI only; scheduler, push delivery, email, object storage and AI are Not started). Recorded, rather than silently resolved, the gaps this reconciliation found between the v2.0 spec, [`../API.md`](../API.md), `types.ts` and the actual mock/Go behaviour — see the business-rule and contract notes throughout §3 and the differences column in §4(b). Non-functional, architecture, testing, deployment and scalability content moved out to their own documents (Appendix A); decisions and open questions now live solely in [05](./05-decisions-and-open-questions.md), cited by ID rather than restated. |
 | 2.0 | 2026-09-21 | Split out of the combined spec. Resolved vague feature lists into Must / Should / Later with acceptance criteria. Added full data model (columns, types, enums, constraints), API conventions and example payloads, a deterministic scheduler algorithm, concrete security controls, offline sync rules, non-functional targets, and a scalability section. |
 

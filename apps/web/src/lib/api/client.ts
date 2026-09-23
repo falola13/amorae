@@ -25,7 +25,10 @@ const API_VERSION_PATH = "/v1";
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { method = "GET", body, token } = options;
 
-  const headers: Record<string, string> = { Accept: "application/json", ...(await currentVisitorHeaders()) };
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(await currentVisitorHeaders()),
+  };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -45,14 +48,19 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   if (response.status === 204) return undefined as T;
 
+  const retryAfter = response.headers.get("retry-after");
+
   let payload: unknown;
   try {
     payload = await response.json();
   } catch {
+    // A failure with no JSON body is the API's router talking, not a handler:
+    // let toApiError read it (a bare 404 means "not built yet", not a crash).
+    if (!response.ok) throw toApiError(response.status, undefined, retryAfter);
     throw networkError(response.status);
   }
 
-  if (!response.ok) throw toApiError(response.status, payload);
+  if (!response.ok) throw toApiError(response.status, payload, retryAfter);
   return unwrapData<T>(payload);
 }
 

@@ -233,7 +233,6 @@ src/
   lib/api/client.ts       the ONLY server-side fetch (Server Actions)
   lib/api/envelope.ts     the Go envelopes → data / ApiError, shared by both clients
   lib/api/upstream.ts     headers every server→Go call carries (visitor IP + BFF secret), shared by client + proxy
-  lib/api/mock/           axios adapter + localStorage store that answers the v1 contract until the Go modules exist
   lib/api/schemas.ts      Zod schemas: React Hook Form validates with them, Server Actions re-parse with them
   lib/api/types.ts        the contract (snake_case, mirrors docs/API.md)
   lib/query/              client.ts (QueryClient + global policies) · mutations.ts (defineWrite/useWrite)
@@ -241,7 +240,6 @@ src/
   lib/legal.ts            facts the Terms and Privacy pages share (updated date, contact, session length)
   lib/store/              Zustand, client-only state: ui (prayer-mode session, install prompt) · toast
   lib/routes.ts           every in-app URL as a typed builder
-  lib/config.ts           public build-time config (isMockApi)
   lib/auth/session.ts     the ONLY place that touches the session cookie
   components/ui/          kit.tsx (design system) · query-state.tsx (loading / error / ready for every screen)
   components/layout/      app shell, tab bar, network banner, toaster
@@ -268,16 +266,14 @@ otherwise resolve to the API's `/readyz`), and it refuses state-changing
 requests from another site (the `Sec-Fetch-Site`/`Origin` rule Go's
 `http.CrossOriginProtection` uses), a second line behind `SameSite=Lax`.
 
-**Mock mode** (`NEXT_PUBLIC_API_MOCK`, on by default in `.env.example`) lets
-the front end run end to end before the Go modules for prayers, events, goals
-and the rest exist. One build-time flag (`lib/config.ts`) drives both halves:
-sign-in issues a local session for any email and password, and the axios
-transport is swapped for `lib/api/mock/adapter.ts`, loaded lazily so it never
-ships to real users. It answers the contract in `docs/API.md` from a
-localStorage store with the same envelopes and status codes. Because mock
-sign-in accepts any password, a production build refuses it unless
-`ALLOW_MOCK_AUTH=true` marks a deliberate demo. Call sites, hooks and screens
-do not change when the real endpoints land: turn the flag off.
+**Screens the API hasn't caught up with.** The web app only ever talks to the
+real Go API. The screens for prayers, events, goals and the rest are built
+against the contract in `docs/API.md`, and Go serves only some of it so far.
+Its router answers a path it doesn't know with a bare 404, with none of the
+error envelope every real failure carries, so `lib/api/envelope.ts` turns that
+into `not_available` and the screen says "Not available yet" where the content
+would be (`<QueryState>`), instead of claiming something broke. Build the Go
+module and the screen works, with nothing to change on the front end.
 
 The frontend follows the same rules as the backend:
 
@@ -298,6 +294,14 @@ The frontend follows the same rules as the backend:
 - **Mutation errors have one handler.** The QueryClient toasts the API's
   user-safe message for any failed write. A form that shows errors inline
   opts out with `meta: { handlesError: true }`. Pages never hand-roll toasts.
+- **Effects are for the outside world, not for state.** Subscriptions, timers,
+  imperative DOM (the dialog's focus trap), navigation, registering the service
+  worker: yes. Copying server data into component state: no. A form takes its
+  server values through React Hook Form's `values` with
+  `resetOptions: { keepDirtyValues: true }`, never an effect calling `reset()`
+  — queries refetch when the window regains focus, and that effect would
+  overwrite whatever the person had half-typed (it did, until 2026-09-23).
+  Anything you can derive during render, derive during render.
 - **Every write is declared once.** Each feature lists its writes in
   `features/<name>/writes.ts` with `defineWrite({ mutationKey, mutationFn,
   invalidates })`. Screens use them through `useWrite(def)`; the QueryClient

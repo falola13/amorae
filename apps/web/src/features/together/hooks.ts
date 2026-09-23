@@ -9,12 +9,15 @@ import { togetherWrites as w } from "./writes";
 
 // Reads
 export const useEvents = () => useQuery({ queryKey: keys.events, queryFn: api.events });
-export const useEvent = (id: string) => useQuery({ queryKey: keys.event(id), queryFn: () => api.event(id), enabled: !!id });
+export const useEvent = (id: string) =>
+  useQuery({ queryKey: keys.event(id), queryFn: () => api.event(id), enabled: !!id });
 export const useGoals = () => useQuery({ queryKey: keys.goals, queryFn: api.goals });
-export const useGoal = (id: string) => useQuery({ queryKey: keys.goal(id), queryFn: () => api.goal(id), enabled: !!id });
+export const useGoal = (id: string) =>
+  useQuery({ queryKey: keys.goal(id), queryFn: () => api.goal(id), enabled: !!id });
 export const useChallenge = () => useQuery({ queryKey: keys.challenge, queryFn: api.challenge });
 export const useJournal = () => useQuery({ queryKey: keys.journal, queryFn: api.journal });
-export const useAppreciations = () => useQuery({ queryKey: keys.appreciations, queryFn: api.appreciations });
+export const useAppreciations = () =>
+  useQuery({ queryKey: keys.appreciations, queryFn: api.appreciations });
 export const useMemories = () => useQuery({ queryKey: keys.memories, queryFn: api.memories });
 export const useMilestones = () => useQuery({ queryKey: keys.milestones, queryFn: api.milestones });
 

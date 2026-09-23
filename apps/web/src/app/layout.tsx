@@ -36,7 +36,12 @@ export const metadata: Metadata = {
     ],
     other: [{ rel: "mask-icon", url: "/icons/safari-pinned-tab.svg", color: brand.colors.plum }],
   },
-  appleWebApp: { capable: true, title: brand.name, statusBarStyle: "default", startupImage: startupImages },
+  appleWebApp: {
+    capable: true,
+    title: brand.name,
+    statusBarStyle: "default",
+    startupImage: startupImages,
+  },
   other: { "apple-mobile-web-app-capable": "yes" },
   formatDetection: { telephone: false },
 };

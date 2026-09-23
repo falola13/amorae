@@ -1,16 +1,25 @@
 import type { PrayerWeek } from "@/lib/api/types";
 
 /** "you", or the partner's name — lowercase, for inline sentences like "set by {word}". */
-export const setterWord = (week: PrayerWeek, meId: string | undefined, partnerName: string): string =>
-  week.setter_id === meId ? "you" : partnerName;
+export const setterWord = (
+  week: PrayerWeek,
+  meId: string | undefined,
+  partnerName: string,
+): string => (week.setter_id === meId ? "you" : partnerName);
 
 /** "You", or the partner's name — capitalized, as the subject of a sentence. */
-export const setterLabel = (week: PrayerWeek, meId: string | undefined, partnerName: string): string =>
-  week.setter_id === meId ? "You" : partnerName;
+export const setterLabel = (
+  week: PrayerWeek,
+  meId: string | undefined,
+  partnerName: string,
+): string => (week.setter_id === meId ? "You" : partnerName);
 
 /** "You set the prayers" / "{partner} set the prayers". */
-export const setterSentence = (week: PrayerWeek, meId: string | undefined, partnerName: string): string =>
-  `${setterLabel(week, meId, partnerName)} set the prayers`;
+export const setterSentence = (
+  week: PrayerWeek,
+  meId: string | undefined,
+  partnerName: string,
+): string => `${setterLabel(week, meId, partnerName)} set the prayers`;
 
 /**
  * The prayer index to open prayer mode at: `at` if it's a whole number in

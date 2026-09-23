@@ -163,3 +163,136 @@ func TestPostgresRepository_UpdateEmailAndTimezone(t *testing.T) {
 		t.Errorf("timezone after Update = %q, want Africa/Lagos", reread.Timezone)
 	}
 }
+
+func TestPostgresRepository_DeleteMe_RemovesSoleCouple(t *testing.T) {
+	db := dbtest.New(t)
+	repo := user.NewPostgresRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	owner, err := user.New(uniqueEmail(t), "Ada", "hash", now)
+	if err != nil {
+		t.Fatalf("user.New: %v", err)
+	}
+	if _, err := repo.Create(ctx, owner); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	coupleID := uuid.New()
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO couples (id, name, timezone, created_by, created_at, updated_at)
+		VALUES ($1, 'Ada & partner', 'UTC', $2, $3, $3)
+	`, coupleID, owner.ID, now); err != nil {
+		t.Fatalf("insert couple: %v", err)
+	}
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO couple_members (id, couple_id, user_id, joined_at)
+		VALUES ($1, $2, $3, $4)
+	`, uuid.New(), coupleID, owner.ID, now); err != nil {
+		t.Fatalf("insert member: %v", err)
+	}
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO couple_invitations (id, couple_id, code, created_by, expires_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`, uuid.New(), coupleID, "A"+uuid.NewString()[:5], owner.ID, now.Add(24*time.Hour)); err != nil {
+		t.Fatalf("insert invitation: %v", err)
+	}
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`, []byte(uuid.NewString()), owner.ID, now, now.Add(time.Hour)); err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	if err := repo.DeleteMe(ctx, owner.ID); err != nil {
+		t.Fatalf("DeleteMe: %v", err)
+	}
+	if _, err := repo.GetByID(ctx, owner.ID); err != user.ErrNotFound {
+		t.Fatalf("GetByID after delete: err = %v, want ErrNotFound", err)
+	}
+	for _, q := range []struct {
+		name  string
+		query string
+	}{
+		{"couple", `SELECT count(*) FROM couples WHERE id = $1`},
+		{"members", `SELECT count(*) FROM couple_members WHERE couple_id = $1`},
+		{"invitations", `SELECT count(*) FROM couple_invitations WHERE couple_id = $1`},
+	} {
+		var n int
+		if err := db.Q(ctx).QueryRow(ctx, q.query, coupleID).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", q.name, err)
+		}
+		if n != 0 {
+			t.Errorf("%s rows = %d, want 0", q.name, n)
+		}
+	}
+}
+
+func TestPostgresRepository_DeleteMe_KeepsPartnersCouple(t *testing.T) {
+	db := dbtest.New(t)
+	repo := user.NewPostgresRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	owner, _ := user.New(uniqueEmail(t), "Ada", "hash", now)
+	partner, _ := user.New(uniqueEmail(t), "Bo", "hash", now)
+	for _, u := range []user.User{owner, partner} {
+		if _, err := repo.Create(ctx, u); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+	}
+
+	coupleID := uuid.New()
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO couples (id, name, timezone, created_by, created_at, updated_at)
+		VALUES ($1, 'Ada & Bo', 'UTC', $2, $3, $3)
+	`, coupleID, owner.ID, now); err != nil {
+		t.Fatalf("insert couple: %v", err)
+	}
+	for _, userID := range []uuid.UUID{owner.ID, partner.ID} {
+		if _, err := db.Q(ctx).Exec(ctx, `
+			INSERT INTO couple_members (id, couple_id, user_id, joined_at)
+			VALUES ($1, $2, $3, $4)
+		`, uuid.New(), coupleID, userID, now); err != nil {
+			t.Fatalf("insert member: %v", err)
+		}
+	}
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO couple_invitations (id, couple_id, code, created_by, expires_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`, uuid.New(), coupleID, "B"+uuid.NewString()[:5], owner.ID, now.Add(24*time.Hour)); err != nil {
+		t.Fatalf("insert invitation: %v", err)
+	}
+
+	if err := repo.DeleteMe(ctx, owner.ID); err != nil {
+		t.Fatalf("DeleteMe: %v", err)
+	}
+
+	var createdBy uuid.UUID
+	if err := db.Q(ctx).QueryRow(ctx, `SELECT created_by FROM couples WHERE id = $1`, coupleID).Scan(&createdBy); err != nil {
+		t.Fatalf("couple should remain: %v", err)
+	}
+	if createdBy != partner.ID {
+		t.Errorf("created_by = %v, want partner %v", createdBy, partner.ID)
+	}
+
+	var members int
+	if err := db.Q(ctx).QueryRow(ctx, `
+		SELECT count(*) FROM couple_members WHERE couple_id = $1 AND user_id = $2
+	`, coupleID, partner.ID).Scan(&members); err != nil {
+		t.Fatalf("count partner membership: %v", err)
+	}
+	if members != 1 {
+		t.Errorf("partner memberships = %d, want 1", members)
+	}
+
+	var invites int
+	if err := db.Q(ctx).QueryRow(ctx, `
+		SELECT count(*) FROM couple_invitations WHERE created_by = $1
+	`, owner.ID).Scan(&invites); err != nil {
+		t.Fatalf("count invitations: %v", err)
+	}
+	if invites != 0 {
+		t.Errorf("creator invitations = %d, want 0", invites)
+	}
+}

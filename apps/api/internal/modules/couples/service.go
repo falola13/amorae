@@ -3,6 +3,7 @@ package couples
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"strings"
 	"time"
@@ -16,23 +17,51 @@ import (
 type Repository interface {
 	Create(ctx context.Context, inviteCode string, inviteExpiresAt time.Time, input COUPLES) (COUPLES, error)
 	Join(ctx context.Context, userID uuid.UUID, code string, at time.Time) error
-	GetForUser(ctx context.Context, userID uuid.UUID) (Mine, error)
+	GetForUser(ctx context.Context, userID uuid.UUID, now time.Time) (Mine, error)
 	UpdateCouples(ctx context.Context, coupleID uuid.UUID, start *time.Time, name *string) error
 	UpdateRole(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, role string) error
 	UpdateOnboarding(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, install *bool, notifications *bool) error
+	ReplaceInvite(ctx context.Context, userID uuid.UUID, code string, expiresAt, at time.Time) error
 }
+
+// AttemptLimiter caps join attempts per person, so invite codes can't be
+// guessed by brute force. ratelimit.Limiter satisfies it.
+type AttemptLimiter interface {
+	Allow(key string) (allowed bool, retryAfter time.Duration)
+}
+
+// Events counts product events for metrics. Counts only, never content.
+type Events interface {
+	CoupleCreated()
+	CouplePaired()
+}
+
+type noEvents struct{}
+
+func (noEvents) CoupleCreated() {}
+func (noEvents) CouplePaired()  {}
 
 // How long an invite code stays usable. Read through the service clock so a
 // test can move time past it.
 const inviteTTL = 7 * 24 * time.Hour
 
+// With 17.6 million codes a collision is rare; three draws make one that
+// repeats practically impossible.
+const inviteCodeTries = 3
+
 type Service struct {
-	repo Repository
-	now  func() time.Time
+	repo     Repository
+	now      func() time.Time
+	attempts AttemptLimiter
+	events   Events
 }
 
-func NewService(repo Repository, now func() time.Time) *Service {
-	return &Service{repo: repo, now: now}
+// events may be nil, which counts nothing.
+func NewService(repo Repository, now func() time.Time, attempts AttemptLimiter, events Events) *Service {
+	if events == nil {
+		events = noEvents{}
+	}
+	return &Service{repo: repo, now: now, attempts: attempts, events: events}
 }
 
 type CoupleCreateInput struct {
@@ -105,17 +134,53 @@ func (s *Service) Create(ctx context.Context, createdBy uuid.UUID, creatorName s
 		return COUPLES{}, err
 	}
 
-	inviteCode, err := s.newInviteCode()
+	var created COUPLES
+	err = s.withFreshCode(func(code string) error {
+		created, err = s.repo.Create(ctx, code, now.Add(inviteTTL), value)
+		return err
+	})
 	if err != nil {
 		return COUPLES{}, err
 	}
+	s.events.CoupleCreated()
+	return created, nil
+}
 
-	return s.repo.Create(ctx, inviteCode, now.Add(inviteTTL), value)
+// withFreshCode calls write with a new invite code, drawing again when the
+// repository reports the code is taken. Each try is its own transaction,
+// because a failed insert aborts the one it ran in.
+func (s *Service) withFreshCode(write func(code string) error) error {
+	for try := 0; ; try++ {
+		code, err := s.newInviteCode()
+		if err != nil {
+			return apperr.Internal(err)
+		}
+		err = write(code)
+		if !errors.Is(err, errCodeTaken) || try == inviteCodeTries-1 {
+			return err
+		}
+	}
+}
+
+// RegenerateInvite replaces the pending invite with a new code and a fresh
+// seven days. The old code stops working at once. Only a couple still
+// waiting for a partner has an invite, so a full one gets ErrCoupleFull.
+func (s *Service) RegenerateInvite(ctx context.Context, userID uuid.UUID) (Mine, error) {
+	now := s.now()
+	if err := s.withFreshCode(func(code string) error {
+		return s.repo.ReplaceInvite(ctx, userID, code, now.Add(inviteTTL), now)
+	}); err != nil {
+		return Mine{}, err
+	}
+	return s.GetMine(ctx, userID)
 }
 
 // Joining answers with the same view GetMine returns: the caller has just
 // gained a partner, and that partner is the first thing the next screen shows.
 func (s *Service) Join(ctx context.Context, userID uuid.UUID, code string) (Mine, error) {
+	if ok, retryAfter := s.attempts.Allow("join:" + userID.String()); !ok {
+		return Mine{}, apperr.RateLimited(retryAfter)
+	}
 	code = normalizeInviteCode(code)
 	if code == "" {
 		return Mine{}, apperr.Validation(map[string]string{
@@ -125,6 +190,7 @@ func (s *Service) Join(ctx context.Context, userID uuid.UUID, code string) (Mine
 	if err := s.repo.Join(ctx, userID, code, s.now()); err != nil {
 		return Mine{}, err
 	}
+	s.events.CouplePaired()
 	return s.GetMine(ctx, userID)
 }
 
@@ -139,7 +205,7 @@ func normalizeInviteCode(code string) string {
 }
 
 func (s *Service) GetMine(ctx context.Context, userID uuid.UUID) (Mine, error) {
-	return s.repo.GetForUser(ctx, userID)
+	return s.repo.GetForUser(ctx, userID, s.now())
 }
 
 // Both updates return the whole couple, the same shape GetMine returns, so a

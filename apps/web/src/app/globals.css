@@ -17,7 +17,6 @@
   --color-plum: #5b2a4a;
   --color-plum-dark: #47203a;
   --color-plum-tint: #f1e8ee;
-  --color-plum-soft: #b59aab;
   --color-green: #3f6b52;
   --color-green-tint: #e4ede6;
   --color-amber: #7f5210;
@@ -76,11 +75,78 @@
   --animate-fade: fade 0.24s ease-out both;
   --animate-draw: draw 0.32s 0.08s ease-out forwards;
 
-  @keyframes breathe { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
-  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  @keyframes sheet { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
-  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes draw { to { stroke-dashoffset: 0; } }
+  /* Splash. The two halves of the mark draw toward the shared centre, then the
+     wordmark and tagline lift in. Each keyframe sets only the "from" state, so
+     with reduced motion (animations off) the finished composition still shows. */
+  --animate-splash-mark: splash-mark 0.6s ease-out both;
+  --animate-splash-arc-a: mark-draw 0.85s 0.1s cubic-bezier(0.4, 0, 0.2, 1) both;
+  --animate-splash-arc-b: mark-draw 0.85s 0.28s cubic-bezier(0.4, 0, 0.2, 1) both;
+  --animate-splash-word: splash-in 0.45s 0.55s ease-out both;
+  --animate-splash-tag: splash-in 0.45s 0.72s ease-out both;
+  /* Only shows if the app is still waiting once the opening has played: its
+     arrival is the "still working" signal, so nothing competes with the mark. */
+  --animate-splash-wait: splash-in 0.4s 1.2s ease-out both;
+
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes sheet {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  /* pathLength="1" normalises every arc, so one offset value draws any length. */
+  @keyframes mark-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+  }
+  @keyframes splash-mark {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+  }
+  @keyframes splash-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
 }
 
 /* `inline` so Tailwind references the variable next/font defines on <html>. */
@@ -116,33 +182,87 @@ body {
 
 /* Installed: behave like an app. Prayers, notes and inputs stay selectable. */
 @media (display-mode: standalone) {
-  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  p, article, input, textarea, [data-selectable] { -webkit-user-select: text; user-select: text; }
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  p,
+  article,
+  input,
+  textarea,
+  [data-selectable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
 
-h1, h2, h3 { text-wrap: balance; }
-p { text-wrap: pretty; }
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
 
-a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role="switch"]:focus-visible {
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="switch"]:focus-visible {
   outline: 2px solid var(--color-plum);
   outline-offset: 2px;
   border-radius: 8px;
 }
 
-input::placeholder, textarea::placeholder { color: var(--color-stone); opacity: 1; }
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-stone);
+  opacity: 1;
+}
 /* 16px minimum keeps iOS Safari from zooming on focus. */
-input, textarea, select { font-size: max(16px, 1em); }
+input,
+textarea,
+select {
+  font-size: max(16px, 1em);
+}
+button {
+  cursor: pointer;
+}
 
 @utility press {
-  transition: transform 0.12s ease-out, filter 0.12s ease-out;
-  &:active { transform: scale(0.98); filter: brightness(0.86); }
+  transition:
+    transform 0.12s ease-out,
+    filter 0.12s ease-out;
+  &:active {
+    transform: scale(0.98);
+    filter: brightness(0.86);
+  }
 }
-@utility tabular { font-variant-numeric: tabular-nums; }
-@utility pb-safe { padding-bottom: max(var(--safe-bottom), 16px); }
-@utility pt-safe { padding-top: calc(var(--safe-top) + 12px); }
-@utility draw-check { stroke-dasharray: 32; stroke-dashoffset: 32; }
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+@utility pb-safe {
+  padding-bottom: max(var(--safe-bottom), 16px);
+}
+@utility pt-safe {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+@utility draw-check {
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-  .draw-check { stroke-dashoffset: 0 !important; }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .draw-check {
+    stroke-dashoffset: 0 !important;
+  }
 }

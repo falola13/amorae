@@ -5,9 +5,10 @@ import { useState, useSyncExternalStore } from "react";
 import { http } from "@/lib/api/http";
 
 type PushState = "unsupported" | "default" | "granted" | "denied";
-const current = (): PushState => (!("Notification" in window) || !("serviceWorker" in navigator) ? "unsupported" : Notification.permission);
-
-
+const current = (): PushState =>
+  !("Notification" in window) || !("serviceWorker" in navigator)
+    ? "unsupported"
+    : Notification.permission;
 
 function urlBase64ToUint8Array(base64: string) {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
@@ -17,7 +18,11 @@ function urlBase64ToUint8Array(base64: string) {
 
 // Ask only after the permission screen has explained the value (spec 19.3).
 export function usePush() {
-  const initial = useSyncExternalStore(() => () => {}, current, () => "default" as PushState);
+  const initial = useSyncExternalStore(
+    () => () => {},
+    current,
+    () => "default" as PushState,
+  );
   const [override, setState] = useState<PushState | null>(null);
   const state = override ?? initial;
   const request = async (): Promise<PushState> => {
@@ -28,7 +33,14 @@ export function usePush() {
     const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     try {
       const reg = await navigator.serviceWorker.ready;
-      const sub = (await reg.pushManager.getSubscription()) ?? (key ? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) }) : null);
+      const sub =
+        (await reg.pushManager.getSubscription()) ??
+        (key
+          ? await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(key),
+            })
+          : null);
       if (sub) await http.post("/notifications/subscribe", sub.toJSON());
     } catch {
       /* subscription is best effort; the preference is still saved */

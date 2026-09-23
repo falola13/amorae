@@ -8,7 +8,8 @@ import { togetherApi as api } from "./api";
 export const togetherWrites = {
   saveEvent: defineWrite({
     mutationKey: ["events", "save"],
-    mutationFn: ({ id, input }: { id?: string; input: EventInput }) => (id ? api.updateEvent(id, input) : api.createEvent(input)),
+    mutationFn: ({ id, input }: { id?: string; input: EventInput }) =>
+      id ? api.updateEvent(id, input) : api.createEvent(input),
     invalidates: [keys.events],
   }),
   completeEvent: defineWrite({
@@ -18,7 +19,8 @@ export const togetherWrites = {
   }),
   checklist: defineWrite({
     mutationKey: ["events", "checklist"],
-    mutationFn: ({ id, item, done }: { id: string; item: string; done: boolean }) => api.checklist(id, item, done),
+    mutationFn: ({ id, item, done }: { id: string; item: string; done: boolean }) =>
+      api.checklist(id, item, done),
     invalidates: [keys.events],
   }),
   createGoal: defineWrite({
@@ -33,12 +35,14 @@ export const togetherWrites = {
   }),
   challengeDay: defineWrite({
     mutationKey: ["challenge", "day"],
-    mutationFn: ({ n, patch }: { n: number; patch: Partial<ChallengeDay> }) => api.challengeDay(n, patch),
+    mutationFn: ({ n, patch }: { n: number; patch: Partial<ChallengeDay> }) =>
+      api.challengeDay(n, patch),
     invalidates: [keys.challenge],
   }),
   addJournal: defineWrite({
     mutationKey: ["journal", "add"],
-    mutationFn: ({ tag, text }: { tag: JournalEntry["tag"]; text: string }) => api.addJournal(tag, text),
+    mutationFn: ({ tag, text }: { tag: JournalEntry["tag"]; text: string }) =>
+      api.addJournal(tag, text),
     invalidates: [keys.journal],
   }),
   sendAppreciation: defineWrite({
@@ -46,10 +50,13 @@ export const togetherWrites = {
     mutationFn: (text: string) => api.sendAppreciation(text),
     invalidates: [keys.appreciations],
   }),
+  // Only meaningful within seconds of sending, so it is never queued offline:
+  // replayed hours later, it would delete a note the partner has already read.
   undoAppreciation: defineWrite({
     mutationKey: ["appreciations", "undo"],
     mutationFn: (id: string) => api.undoAppreciation(id),
     invalidates: [keys.appreciations],
+    onlineOnly: true,
   }),
   addMemory: defineWrite({
     mutationKey: ["memories", "add"],

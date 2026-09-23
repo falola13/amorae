@@ -6,13 +6,48 @@ import { ApiError } from "./errors";
 export const NETWORK_ERROR_MESSAGE = "We couldn't reach the server. Please try again.";
 export const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
+/** The endpoint doesn't exist in the Go API yet, as opposed to a failure. */
+export const NOT_AVAILABLE_CODE = "not_available";
+export const NOT_AVAILABLE_MESSAGE = "This part of Amorae isn't available yet.";
+
 interface ErrorEnvelope {
   error?: { code?: string; message?: string; fields?: Record<string, string>; request_id?: string };
 }
 
-/** Maps a non-2xx response body to an ApiError whose message is safe to show. */
-export function toApiError(status: number, body: unknown): ApiError {
+/** "in a moment" / "in 40 seconds" / "in about 2 minutes", for a 429's wait. */
+export function waitPhrase(seconds: number): string {
+  if (seconds <= 10) return "in a moment";
+  if (seconds < 60) return `in ${seconds} seconds`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `in about ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+  const hours = Math.round(minutes / 60);
+  return `in about ${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
+/**
+ * Maps a non-2xx response body to an ApiError whose message is safe to show.
+ * `retryAfterHeader` is the response's `Retry-After`, which turns the API's
+ * "wait a moment" into a wait the user can actually plan around.
+ */
+export function toApiError(status: number, body: unknown, retryAfterHeader?: unknown): ApiError {
   const err = (body as ErrorEnvelope | null | undefined)?.error;
+  const retryAfter = Number(retryAfterHeader);
+  if (status === 429 && Number.isFinite(retryAfter) && retryAfter > 0) {
+    return new ApiError(
+      status,
+      err?.code ?? "rate_limited",
+      `Too many attempts. Try again ${waitPhrase(Math.ceil(retryAfter))}.`,
+      err?.fields,
+      err?.request_id,
+      Math.ceil(retryAfter),
+    );
+  }
+  // The Go API wraps every error it sends, including "event not found", in
+  // the envelope. A bare 404/405/501 comes from its router instead: nothing
+  // is registered at that path or method yet. Retrying can't help, so say so.
+  if (!err && (status === 404 || status === 405 || status === 501)) {
+    return new ApiError(status, NOT_AVAILABLE_CODE, NOT_AVAILABLE_MESSAGE);
+  }
   return new ApiError(
     status,
     err?.code ?? "unknown_error",

@@ -1,6 +1,7 @@
 package couples
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,14 +15,27 @@ import (
 const maxRoleRunes = 32
 
 var (
-	ErrInviteInvalid = apperr.Invalid("invite_invalid", "This invite is not valid.")
-	ErrInviteExpired = apperr.Invalid("invite_expired", "This invite has expired.")
-	ErrInviteUsed    = apperr.Invalid("invite_used", "This invite has already been used.")
-	ErrInviteRevoked = apperr.Invalid("invite_revoked", "This invite is no longer valid.")
+	ErrInviteInvalid = inviteError("invite_invalid", "This invite is not valid.")
+	ErrInviteExpired = inviteError("invite_expired", "This invite has expired.")
+	ErrInviteUsed    = inviteError("invite_used", "This invite has already been used.")
+	ErrInviteRevoked = inviteError("invite_revoked", "This invite is no longer valid.")
 	ErrCoupleFull    = apperr.Conflict("couple_full", "This couple already has two members.")
 	ErrAlreadyPaired = apperr.Conflict("already_paired", "You are already in a couple.")
 	ErrNotFound      = apperr.NotFound("couple_not_found", "You are not in a couple yet.")
+
+	// errCodeTaken means a freshly drawn invite code already exists; the
+	// service draws another. It never reaches a client.
+	errCodeTaken = errors.New("invite code taken")
 )
+
+// inviteError keeps a specific code, so the client can tell "expired" from
+// "already used", and repeats the message under fields.code, so the join form
+// shows it beneath the code input like any other field error.
+func inviteError(code, message string) *apperr.Error {
+	err := apperr.Invalid(code, message)
+	err.Fields = map[string]string{"code": message}
+	return err
+}
 
 // A role is how a member labels themselves in the couple ("Husband", "Wife",
 // whatever they prefer) and grants no permissions, so the wording is left to

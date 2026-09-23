@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Document ID** | AMR-REQ-04 |
-| **Version** | 3.0 |
+| **Version** | 3.2 |
 | **Status** | Draft for review |
 | **Owner** | Design |
-| **Last updated** | 2026-09-22 |
+| **Last updated** | 2026-09-23 |
 
 ---
 
@@ -108,7 +108,6 @@ or text palette, so it cannot be used to build a working dark mode on its own. T
 | `--color-plum` | `#5b2a4a` | — | Primary accent: primary buttons, active nav item, links, focus ring |
 | `--color-plum-dark` | `#47203a` | — | Accent pressed/hover (alias `--color-accent-hover`) |
 | `--color-plum-tint` | `#f1e8ee` | — | Accent tint background, e.g. `Initial` avatar fill |
-| `--color-plum-soft` | `#b59aab` | — | Mid-tone plum; e.g. visited-but-unprayed dots in the Prayer Mode progress strip |
 | `--color-green` | `#3f6b52` | — | Positive/success text and icon |
 | `--color-green-tint` | `#e4ede6` | — | Positive background: `Banner`, `Alert` success, `StatusMark` done, `Checkbox` checked |
 | `--color-amber` | `#7f5210` | — | Warning text and icon |
@@ -175,6 +174,10 @@ elevation in the shipped UI is hairline borders (`--color-line`) only, consisten
 | `--animate-sheet` | `sheet 0.32s cubic-bezier(0.2,0.8,0.2,1) both` (fade + translateY 24px) | Bottom sheet entrance |
 | `--animate-fade` | `fade 0.24s ease-out both` | Sheet scrim |
 | `--animate-draw` | `draw 0.32s 0.08s ease-out forwards` (stroke-dashoffset) | Prayer completion checkmark draw-on |
+| `--animate-splash-mark` | `splash-mark 0.6s ease-out both` (fade + scale 0.92) | The mark on the splash |
+| `--animate-splash-arc-a` / `-arc-b` | `mark-draw 0.85s ease-out both`, delayed 0.1s and 0.28s | The mark's two arcs drawing toward the centre |
+| `--animate-splash-word` / `-tag` | `splash-in 0.45s ease-out both`, delayed 0.55s and 0.72s | Wordmark, then tagline, lifting in |
+| `--animate-splash-wait` | `splash-in 0.4s 1.2s ease-out both` | The waiting indicator, after the opening has played |
 
 The `.press` utility (`transition: transform 0.12s ease-out, filter 0.12s ease-out`; active state
 `scale(0.98)` + `brightness(0.86)`) is the de facto tap-feedback timing across nearly every
@@ -196,7 +199,7 @@ motion picture, including `prefers-reduced-motion` behaviour.
 | `elev-1` / `elev-2` box-shadow tokens | Dropped entirely; no `--shadow-*` tokens in `globals.css` |
 | `dur-fast`/`dur-base`/`dur-slow` + `ease-standard` shared scale | Replaced by named `--animate-*` composites, each with its own duration and easing (see 3.4) |
 | Palette: `charcoal`, `stone-light`, `hairline`, `berry` (secondary accent), `clay` | `ink` (renamed, hex shifted), `stone-light` and `hairline` dropped (no code equivalent), `berry` dropped (no secondary accent exists), `clay` → `red` |
-| `plum-soft` = light accent tint `#F0E7EC` | Renamed `--color-plum-tint` (`#f1e8ee`). **Naming collision:** code has a *different* `--color-plum-soft` (`#b59aab`), a mid-tone value not present in v2.0 |
+| `plum-soft` = light accent tint `#F0E7EC` | Renamed `--color-plum-tint` (`#f1e8ee`). A later mid-tone `--color-plum-soft` (`#b59aab`) was removed on 2026-09-22 because it failed non-text contrast (§3.6) |
 | No tint-pair tokens for status colours | New: `--color-paper`, `--color-photo`, `--color-red-tint`, `--color-green-tint`, `--color-amber-tint` |
 | Type scale: page title 26/32, section title 19/26, body 15/24, caption 13/18 (weight 500, 0.04em tracking) | `--text-title` 28px, `--text-section` 20px, `--text-body` 16px (deliberately ≥16px, see §4), `--text-support` 14px (renamed "caption" → "support"); `--text-micro` keeps 12px but weight is 700 (not 500) and tracking is 0.08em (not 0.04em) |
 | Invite code example `AB12-CD34` | `ABC-123` (`DEC-08`) |
@@ -204,7 +207,7 @@ motion picture, including `prefers-reduced-motion` behaviour.
 ### 3.6 Contrast
 
 Computed against the token hex values above (relative luminance, WCAG 2.x formula). Every text
-pair passes **4.5:1**. One non-text pair fails its 3:1 minimum (`plum-soft`, below).
+pair passes **4.5:1**, and every non-text status colour in use passes **3:1**.
 
 | Pair | Ratio | Result |
 |---|---|---|
@@ -224,15 +227,18 @@ pair passes **4.5:1**. One non-text pair fails its 3:1 minimum (`plum-soft`, bel
 | plum `#5b2a4a` on plum-tint `#f1e8ee` | 9.34:1 | Pass (4.5:1) |
 | green `#3f6b52` on bg `#f7f4ef` | 5.57:1 | Pass (4.5:1) |
 | edge `#8f857b` on bg `#f7f4ef` (border/icon, non-text) | 3.30:1 | Pass (3:1 non-text minimum only — do not use `edge` for text) |
-| plum-soft `#b59aab` on bg `#f7f4ef` (Prayer Mode progress dots, non-text) | 2.34:1 | **Fail** (below the 3:1 non-text minimum, SC 1.4.11). **Gap:** the dot state must also be conveyed by shape or fill, or the colour darkened to reach 3:1 |
+| plum `#5b2a4a` on paper `#f2ede5` (Prayer Mode strip, prayed) | 9.61:1 | Pass (3:1 non-text) |
+| edge `#8f857b` on paper `#f2ede5` (Prayer Mode strip, not yet prayed) | 3.10:1 | Pass (3:1 non-text) |
+| plum `#5b2a4a` against edge `#8f857b` (prayed vs not yet, side by side) | 3.10:1 | Pass (3:1 between states) |
 | **Dark-mode equivalents** — only pair computable from documented values | | |
 | plum-tint (dark accent) `#e9d5e1` on ink `#24201f` | 11.58:1 | Pass (4.5:1) — theoretical only; no dark background/surface token exists to pair it with beyond `ink` itself |
 | surface `#fffdfa` on ink `#24201f` (hypothetical dark body text) | 15.89:1 | Pass (4.5:1) — hypothetical; `ink` as a dark background and `surface` as dark-mode body text are not implemented anywhere in code |
 
 No text pair in the built light-mode palette falls below 4.5:1. `--color-edge` is a border/icon
 colour (3.30:1, meeting only the 3:1 non-text threshold) and must never be used for text; no
-component read does so. `--color-plum-soft` fails even the non-text threshold and must not be
-the only signal of a state.
+component read does so. The Prayer Mode strip was fixed on 2026-09-22: it used `plum-soft` for
+prayed points (2.20:1 on paper) and `faint` for the rest (1.26:1); it now uses plum and `edge`, and
+marks the current point by height. The `faint` colour must never mark a state on its own.
 
 ---
 
@@ -283,7 +289,7 @@ About 30 icon names are defined (`home`, `together`, `book`, `clock`, `check`, `
 first letter — no photo-avatar component exists yet; every avatar in the read code is an initial.
 
 **Photos.** No stock imagery anywhere in the app. `--color-photo` (`#eae3d9`) is reserved as the
-placeholder/frame background for user photos (memories); the memories screen itself is Mock only
+placeholder/frame background for user photos (memories); the memories screen itself is UI only
 (Section 8) so the actual photo-frame treatment could not be verified against a real image upload
 — treat photo framing inside `radius-card` as a **Gap** to confirm once Memories is built against
 the real API (`Q-06` covers where photos are stored).
@@ -308,11 +314,28 @@ splash view, 48px on `/offline`, and favicon/home-screen sizes per `BRAND.md`'s 
 
 *(Normative)*
 
-**Frame.** `Screen` (`components/layout/screen.tsx`) is the outer shell for every screen: a single
-column, `mx-auto`, `max-w-[520px]`, filling `min-h-[100dvh]` — the dynamic viewport unit, so the
-layout survives the iOS Safari/PWA chrome resizing under keyboard or scroll. Minimum supported
-width is 320px (iPhone SE class); the layout is single-column throughout, so nothing needs to
-reflow at that width.
+**Frame.** `Screen` (`components/layout/screen.tsx`) is the outer shell for every screen: a
+column, `mx-auto`, filling `min-h-[100dvh]` — the dynamic viewport unit, so the layout survives
+the iOS Safari/PWA chrome resizing under keyboard or scroll. Minimum supported width is 320px
+(iPhone SE class).
+
+**Breakpoints.** Three shapes, one layout. The width a tablet or desktop adds goes to navigation
+and to sections side by side — never to longer lines of text, which are no easier to read at
+1200px than at 600px.
+
+| From | Shape | Navigation | Signed-in column |
+|---|---|---|---|
+| base (phone) | One column, actions within thumb reach | `TabBar`, five items, sticky at the bottom | 520px |
+| `md` 768px (iPad portrait) | One column beside a rail | `SideNav` as an icon rail, 88px | 680px |
+| `lg` 1024px (iPad landscape, desktop PWA) | Column with sections paired where it helps | `SideNav` expanded to 236px, icon + label, wordmark at the top | 760px |
+
+The signed-in shell (`AppShell`) centres that column in whatever the navigation leaves, inside a
+1280px maximum, so a wide monitor gets margins rather than a stretched app. `Screen size="app"`
+carries those widths; everything outside the shell — sign-up, onboarding, the legal pages — keeps
+the 520px column at every size, because a form does not improve by getting wider.
+
+Only one navigation exists at a time: each is `display: none` at the other's widths, which also
+keeps it out of the accessibility tree, so there is never a second "Primary" landmark.
 
 **Safe areas.** `:root` defines `--safe-top` / `--safe-bottom` from `env(safe-area-inset-*)`.
 `SafeTop` reserves `calc(var(--safe-top) + 42px)` above content on screens that draw their own top
@@ -322,15 +345,19 @@ area; the `pt-safe` utility adds `calc(var(--safe-top) + 12px)`; the `pb-safe` u
 under a landscape notch; `viewport-fit=cover` (set in `app/layout.tsx`) is what lets pages draw
 under the status bar/home indicator in the first place.
 
-**Navigation structure.** `TabBar` (`components/layout/tab-bar.tsx`) is a five-item bottom nav —
-Home, Together, Prayers, History, Settings — sticky at the bottom, active item in bold plum
-(`aria-current="page"`), inactive in `text-stone`. It hides itself while the on-screen keyboard is
-open (`visualViewport` shrink of more than 150px). `AppShell` wraps every signed-in screen except
-Prayer Mode (which gets its own full-bleed chrome, no tab bar, no `NetworkBanner`) in `Screen` +
-`NetworkBanner` + the page + `TabBar`.
+**Navigation structure.** The five destinations — Home, Together, Prayers, History, Settings —
+are declared once (`components/layout/nav-items.ts`) and rendered by whichever navigation the
+width calls for. `TabBar` is the phone's bottom bar: active item in bold plum
+(`aria-current="page"`), inactive in `text-stone`, hidden while the on-screen keyboard is open
+(`visualViewport` shrink of more than 150px). `SideNav` is the rail or sidebar from `md`, with the
+active item on a plum-tint pill and a hover state for pointer devices. `AppShell` wraps every
+signed-in screen except Prayer Mode (its own full-bleed chrome, no navigation, no `NetworkBanner`)
+in `SideNav` + `Screen` + `NetworkBanner` + the page + `TabBar`.
 
-**Content width and one-hand reach.** The 520px max column keeps content centred and readable on
-larger phones/tablets without becoming a dashboard. Primary actions sit low on the screen:
+**Content width and one-hand reach.** The column keeps content centred and readable at every size
+without becoming a dashboard. Where a screen has genuinely independent parts, they pair up from
+`lg` instead of stacking: the Together hub's four sections go two-by-two, and Home puts tonight's
+event beside "This week". Lists and reading screens stay one column at every width. Primary actions sit low on the screen:
 `BottomActions`/`Bottom` pin CTAs above the safe-area/tab bar, and `LinkButton`/`Button` are full
 width at a 54px (primary) or 44px (secondary/text) minimum height, so the primary action on any
 screen is reachable without a grip shift. Row-based lists (`Row`, `DateRow`, `PrayerRow`,
@@ -396,8 +423,8 @@ requires, the row says **Gap**.
 | `ComposeBar` | Compose-screen header: Cancel / title / Done | — | default, `busy` (spinner replaces Done, disabled) | 44px height meets 44×44 exactly (no margin above minimum) |
 | `BottomActions` | Sticky action area above the tab bar / home indicator | `safe` (adds safe-area padding) | — | Layout only |
 | `Banner` | Inline status line (offline, synced) | tone `amber`/`green` | — | `role="status"`. **Gap:** no manual dismiss control on the component itself; visibility is driven entirely by app state (`NetworkBanner`) |
-| `Sheet` | Bottom sheet / modal | — | open/closed | `role="dialog"` `aria-modal="true"` `aria-labelledby`; backdrop button has `aria-label="Close"`. **Gap:** no visible focus trap or explicit initial-focus/return-focus handling in this component — verify against NFR-A11Y before relying on it for a complex form |
-| `Toast` | Transient confirmation | optional action | Auto-dismissed after 4000ms by `Toaster` | `role="status"` (implicit polite live region) |
+| `Sheet` | Bottom sheet on a phone; centred dialog (440px, hairline border) from `md` | — | open/closed | `role="dialog"` `aria-modal="true"` `aria-labelledby`; backdrop button has `aria-label="Close"`. Escape closes it, Tab is trapped inside, focus starts on the first control and returns to whatever opened it, and the page behind is scroll-locked (`lib/hooks/use-dialog.ts`) |
+| `Toast` | Transient confirmation; above the tab bar on a phone, centred near the bottom edge (420px) from `md` | optional action | Auto-dismissed after 4000ms by `Toaster` | `role="status"` (implicit polite live region) |
 
 ### 7.6 Loading, empty and error — `components/ui/states.tsx`, `query-state.tsx`
 
@@ -406,9 +433,10 @@ requires, the row says **Gap**.
 | `Skeleton` | Text-shaped loading placeholder | `lines` count | Breathing opacity animation | `aria-hidden="true"`. **Gap:** nothing announces "loading" to assistive technology; a screen reader user gets silence until content or an error arrives |
 | `Ghost` | Shaped loading placeholder | `lines`/`frames`/`bars`/`dots` | Static (dimmed steps) | `aria-hidden="true"` |
 | `EmptyState` | No-data state | `ghost` kind, headline, text, one CTA | — | CTA is a normal `Button`/`LinkButton`, so it carries its own accessible name |
-| `ErrorState` | Recoverable error | secondary action slot | — | `role="alert"` — announced automatically when it mounts, which is what makes it the correct component for a failed async result (§11) |
+| `LoadProblem` | The inline notice for content that didn't load | tone `error` (red icon, optional "Try again") / `quiet` (stone icon, offline or not-built) | — | `role="alert"` when tone is error, `role="status"` when quiet; "Try again" is a 44px target. Takes only its own space, so the rest of the screen stays usable |
+| `ErrorState` | Whole-screen failure, app shell and error boundaries only | secondary action slot | — | `role="alert"` — announced automatically when it mounts (§11) |
 | `Alert` | Inline error/success line | `variant` error/success | — | `role="alert"` (error) or `role="status"` (success) |
-| `QueryState` | The loading/empty/error/ready switch for a screen's data | — | Renders `Skeleton` while pending, `ErrorState` with offline-specific copy ("You're offline") when the query is paused, `ErrorState` with the server's message on failure, else the ready content | Central to Section 10; every screen that fetches data is expected to go through this component rather than hand-rolling its own loading branch |
+| `QueryState` | The loading/failed/offline/ready switch for a screen's data | `frame` wraps the notice; `inPage` frames it like a page body when the QueryState *is* the page | Renders `Skeleton` while pending, a `LoadProblem` worded for the cause (failed, not built yet, gone, offline), else the ready content | Central to Section 10; every screen that fetches data goes through it rather than hand-rolling a loading branch |
 
 ### 7.7 Domain rows — `prayer-row.tsx`, `date-row.tsx`, `pick-row.tsx`, `scripture.tsx`
 
@@ -436,7 +464,8 @@ requires, the row says **Gap**.
 | `SplashView` | Brand loading screen while the couple query resolves | — | — | `role="status"` region around the loading label |
 | `Toaster` | Renders the current global toast | — | Auto-dismiss 4000ms | Delegates to `Toast` (`role="status"`) |
 | `NetworkBanner` | Offline / just-synced status line | — | offline (amber), just-synced (green), hidden (online, nothing pending) | Delegates to `Banner` (`role="status"`); see §10 |
-| `TabBar` | Five-item bottom navigation | — | active/inactive per tab, hidden while the keyboard is open | `nav aria-label="Primary"`, `aria-current="page"` on the active tab; each tab is ≥52px tall |
+| `TabBar` | Five-item bottom navigation, phone only (`md:hidden`) | — | active/inactive per tab, hidden while the keyboard is open | `nav aria-label="Primary"`, `aria-current="page"` on the active tab; each tab is ≥52px tall |
+| `SideNav` | Primary navigation from `md`: icon rail, labelled sidebar from `lg` | rail / expanded | active (plum-tint pill), inactive, hover (pointer devices) | `nav aria-label="Primary"`, `aria-current="page"`; rows are 58px (rail) and 48px (expanded); hidden below `md`, so only one Primary landmark exists |
 | `AppShell` | Signed-in shell: couple gate, network banner, tab bar | — | loading (`SplashView`), error with retry (`ErrorState`), unpaired (redirect to `/couple`), session-expired (redirect to `/login`), ready | Orchestrates the top-level state patterns in Section 10 |
 
 **Component count:** 46 exported components/hooks-with-UI across 13 `components/ui` files and 6
@@ -456,9 +485,9 @@ none yet (NFR-MAINT, `Q-15`), so no screen is "Implemented" in that stricter sen
 - **Implemented** — the screen's primary data comes from the real Go API (or the screen has no
   data dependency at all and is fully built).
 - **Partial** — the screen's primary data comes from an API surface that is still in development
-  (the couples module — `PAIR`) or the screen mixes real and mock data.
-- **Mock only** — the screen's primary data comes entirely from the in-browser mock
-  (`NEXT_PUBLIC_API_MOCK`); the Go endpoint does not exist yet.
+  (the couples module — `PAIR`) or the screen mixes data from built and unbuilt endpoints.
+- **UI only** — the screen is built, but no Go endpoint serves its data yet, so it shows the
+  "Not available yet" notice in place of its content (§10).
 
 | ID | Route | Screen | Module | Required states | Status |
 |---|---|---|---|---|---|
@@ -468,33 +497,33 @@ none yet (NFR-MAINT, `Q-15`), so no screen is "Implemented" in that stricter sen
 | SCR-04 | `/couple` | Create or join couple | PAIR | loading, error | Partial |
 | SCR-05 | `/join` | Join couple (enter code) | PAIR | loading, error, empty (invalid code) | Partial |
 | SCR-06 | `/invite` | Invite partner (share code) | PAIR | loading, error | Partial |
-| SCR-07 | `/notifications` (onboarding) | Notification permission | NOTF | — (native OS prompt) | Mock only (subscribe endpoint is mock) |
+| SCR-07 | `/notifications` (onboarding) | Notification permission | NOTF | — (native OS prompt) | UI only (subscribe endpoint is mock) |
 | SCR-08 | `/install` | PWA install guidance | PWA | — | Implemented |
 | SCR-09 | `/` | Home | PRAY/EVT/GOAL (couple-gated) | loading, empty, offline, pending-sync | Partial |
-| SCR-10 | `/together` | Together hub | EVT/CAL/GOAL/CHAL/JRNL/APPR/MEM/DATE | loading | Mock only |
-| SCR-11 | `/together/calendar` | Couple calendar | CAL | loading, empty, error | Mock only |
-| SCR-12 | `/together/events` | Events list | EVT | loading, empty, error | Mock only |
-| SCR-13 | `/together/events/new` | Create/edit event | EVT | loading (edit), error (validation) | Mock only |
-| SCR-14 | `/together/events/[id]` | Event detail | EVT | loading, error, not-found | Mock only |
-| SCR-15 | `/together/goals` | Shared goals | GOAL | loading, empty, error | Mock only |
-| SCR-16 | `/together/goals/new` | Create goal | GOAL | error (validation) | Mock only |
-| SCR-17 | `/together/goals/[id]` | Goal detail | GOAL | loading, error, not-found | Mock only |
-| SCR-18 | `/together/challenges` | Challenges | CHAL | loading, empty | Mock only |
-| SCR-19 | `/together/journal` | Journal | JRNL | loading, empty, error | Mock only |
-| SCR-20 | `/together/appreciation` | Appreciation | APPR | loading, empty, error | Mock only |
-| SCR-21 | `/together/memories` | Memories | MEM | loading, empty, error | Mock only |
-| SCR-22 | `/together/milestones` | Milestones and important dates | DATE | loading, empty | Mock only |
-| SCR-23 | `/prayers` | Current prayer week | PRAY | loading, empty, waiting-for-partner, offline, error | Mock only |
-| SCR-24 | `/prayers/[id]` | Prayer detail | PRAY | loading, error | Mock only |
-| SCR-25 | `/prayers/mode` | Prayer Mode (distraction-free) | PRAY | loading, empty (no points → quiet prayer) | Mock only |
-| SCR-26 | `/prayers/set` | Set this week's prayers | PRAY | loading, error (validation) | Mock only |
-| SCR-27 | `/prayers/edit` | Edit a single prayer point | PRAY | error (validation) | Mock only |
-| SCR-28 | `/prayers/done` | Prayer completion state | PRAY | — | Mock only |
-| SCR-29 | `/history` | Prayer history | PRAY | loading, empty, error | Mock only |
-| SCR-30 | `/history/[id]` | Prayer history week detail | PRAY | loading, error, not-found | Mock only |
+| SCR-10 | `/together` | Together hub | EVT/CAL/GOAL/CHAL/JRNL/APPR/MEM/DATE | loading | UI only |
+| SCR-11 | `/together/calendar` | Couple calendar | CAL | loading, empty, error | UI only |
+| SCR-12 | `/together/events` | Events list | EVT | loading, empty, error | UI only |
+| SCR-13 | `/together/events/new` | Create/edit event | EVT | loading (edit), error (validation) | UI only |
+| SCR-14 | `/together/events/[id]` | Event detail | EVT | loading, error, not-found | UI only |
+| SCR-15 | `/together/goals` | Shared goals | GOAL | loading, empty, error | UI only |
+| SCR-16 | `/together/goals/new` | Create goal | GOAL | error (validation) | UI only |
+| SCR-17 | `/together/goals/[id]` | Goal detail | GOAL | loading, error, not-found | UI only |
+| SCR-18 | `/together/challenges` | Challenges | CHAL | loading, empty | UI only |
+| SCR-19 | `/together/journal` | Journal | JRNL | loading, empty, error | UI only |
+| SCR-20 | `/together/appreciation` | Appreciation | APPR | loading, empty, error | UI only |
+| SCR-21 | `/together/memories` | Memories | MEM | loading, empty, error | UI only |
+| SCR-22 | `/together/milestones` | Milestones and important dates | DATE | loading, empty | UI only |
+| SCR-23 | `/prayers` | Current prayer week | PRAY | loading, empty, waiting-for-partner, offline, error | UI only |
+| SCR-24 | `/prayers/[id]` | Prayer detail | PRAY | loading, error | UI only |
+| SCR-25 | `/prayers/mode` | Prayer Mode (distraction-free) | PRAY | loading, empty (no points → quiet prayer) | UI only |
+| SCR-26 | `/prayers/set` | Set this week's prayers | PRAY | loading, error (validation) | UI only |
+| SCR-27 | `/prayers/edit` | Edit a single prayer point | PRAY | error (validation) | UI only |
+| SCR-28 | `/prayers/done` | Prayer completion state | PRAY | — | UI only |
+| SCR-29 | `/history` | Prayer history | PRAY | loading, empty, error | UI only |
+| SCR-30 | `/history/[id]` | Prayer history week detail | PRAY | loading, error, not-found | UI only |
 | SCR-31 | `/settings` | Settings | ACCT | loading, error | Partial |
 | SCR-32 | `/settings/profile` | Profile | ACCT | loading, error (validation) | Implemented |
-| SCR-33 | `/settings/notifications` | Notification preferences | NOTF | loading, error | Mock only |
+| SCR-33 | `/settings/notifications` | Notification preferences | NOTF | loading, error | UI only |
 | SCR-34 | `/offline` | Cold-start offline page | PWA | — (static, precached) | Implemented |
 | SCR-35 | `/privacy` | Privacy policy | — (no module defined; see note) | — | Implemented (content marked draft, `Q-17`) |
 | SCR-36 | `/terms` | Terms | — (no module defined; see note) | — | Implemented (content marked draft, `Q-17`) |
@@ -514,8 +543,9 @@ entry for static legal pages. They are left without a module code rather than fo
   to §9 and §10 instead of the screen table.
 - *Offline state* (v2.0 #35, generic) — split into the cold-start `/offline` page (SCR-34) and the
   in-app `NetworkBanner` state pattern (§10); there was never a single generic "offline screen".
-- *Error state* (v2.0 #36, generic) — not one screen. Implemented as `ErrorState` (used inside
-  `QueryState` on almost every data screen) plus the two error boundaries (SCR-38).
+- *Error state* (v2.0 #36, generic) — not one screen. Implemented as the inline `LoadProblem`
+  (through `QueryState`, on every data screen) plus the two error boundaries and the app shell,
+  which are the only full-screen failures (SCR-38).
 - *Empty states* (v2.0 #37, generic) — not one screen; `EmptyState` is used per-screen (§10).
 
 **Routes that exist but were not in the v2.0 inventory:**
@@ -542,7 +572,7 @@ one fixed layout:
   praying" / "Open prayer mode" CTA (label depends on completion), and the partner's prayer count.
 
 This matches the old spec's intent ("prioritizes today, then this week, then one or two
-meaningful actions") but is more literally state-driven than the old static mock implied — there
+meaningful actions") but is more literally state-driven than the old static design implied — there
 is no single "Home" layout, there are three, chosen by data.
 
 ### 8.3 Together hub
@@ -587,6 +617,17 @@ Motion tokens are listed in full in §3.4. In practice:
 - **Loading:** `Skeleton` and the plum "breathing" line on `SplashView` pulse opacity
   (`--animate-breathe`, 1.8s, infinite) rather than spin — no blocking full-screen spinner exists
   anywhere in the components read.
+- **Opening (`SplashView`):** the mark draws itself — one arc toward the shared centre, then the
+  other (`--animate-splash-arc-a` / `-arc-b`, `pathLength="1"` so one offset draws either) while
+  the whole mark fades up from 0.92 scale; the wordmark lifts in at 0.55s and the tagline at
+  0.72s. About a second end to end, under the time a cold load usually takes, and it states the
+  logo's own idea rather than decorating the wait. The waiting indicator (the breathing line and
+  its label) is held back until 1.2s, so nothing competes with the mark and a fast open is only
+  the animation; on a slow one the indicator arriving *is* the "still working" signal. After 8
+  seconds the label says so outright ("Still opening. This is taking longer than usual.") rather
+  than breathing at someone indefinitely. Every keyframe sets only the *from* state, so
+  with reduced motion the finished composition is simply what renders (verified: with animations
+  off, the arcs sit at dashoffset 0 and both lines at opacity 1).
 - **What's absent, by design:** no bounce/spring easing anywhere except the sheet curve above, no
   confetti, no floating/idle animation outside the two deliberate "breathing" uses, no animation
   that isn't tied to a state change. This matches the old spec's "avoid" list.
@@ -622,15 +663,18 @@ its own branches, so the matrix below is enforced in one place, not copy-pasted 
 |---|---|
 | **Loading** | `QueryState` renders `Skeleton` (or a screen-supplied `loading` node matching the final layout) while any query is missing data. No full-screen blocking spinner exists in the component set. |
 | **Empty** | Per-screen `EmptyState`: a `Ghost` placeholder, a warm headline, one line of text, one clear CTA. Not part of `QueryState` itself — each screen decides what "no data" means for its own content and renders `EmptyState` accordingly. |
-| **Error (query failure)** | `QueryState` renders `ErrorState` with `title="This didn't load"` and the server's own message when it is an API error (`isApiError`), else the generic `GENERIC_ERROR_MESSAGE` ("Something went wrong. Please try again.") — never a stack trace, error code, or field name. A "Try again" button re-fetches every missing query. |
-| **Offline (query paused, not failed)** | `QueryState` distinguishes this from a hard failure: `title="You're offline"`, `text="This will load when you're back online."` — same retry affordance, different, accurate copy. |
+| **Error (query failure)** | `QueryState` renders the compact `LoadProblem` in place of the missing content only, never the screen: `title="This didn't load"` with the server's own message when it is an API error (`isApiError`), else `GENERIC_ERROR_MESSAGE` — never a stack trace, error code, or field name. "Try again" re-fetches every missing query. A screen made of independent parts wraps each in its own `QueryState`, so one failure can't blank the rest. |
+| **Not available yet (no endpoint)** | The Go router answers an unregistered path with a bare 404, with none of the error envelope a real failure carries, so `toApiError` maps it to `not_available` and `QueryState` shows a quiet `LoadProblem`: "Not available yet · This part of Amorae is still being built", with no Try again, because retrying can't help. This is the normal state of any screen whose module Go hasn't built yet. |
+| **Gone (the API's own 404)** | An enveloped 404 (deleted, or another couple's resource, `DEC-19`) reads "This isn't here anymore" with the API's message, and offers no retry. |
+| **Offline (query paused, not failed)** | `QueryState` distinguishes this from a hard failure: a quiet `LoadProblem`, `title="You're offline"`, `text="This will load when you're back online."`, with no button — React Query loads it when the connection returns. |
+| **Whole-screen failure** | `ErrorState` (centred, large, primary "Try again") is reserved for when nothing at all can be shown: the app shell before the couple has ever loaded, and the route error boundaries (SCR-38). A failed background refresh with the couple already cached keeps the app usable instead. |
 | **Offline (ambient, in-app)** | `NetworkBanner`: a subtle inline `Banner` ("Offline · Showing your saved content"), never a full-screen takeover — content underneath stays usable, matching `DEC-04`/`DEC-05`. Not shown in Prayer Mode (`AppShell` skips `NetworkBanner` there). |
 | **Back online / synced** | `NetworkBanner` shows a green "Back online · N change(s) synced" banner for 3.5 seconds (`useSyncedCount`), derived from the drop in TanStack Query's paused-mutation count, then disappears on its own. |
 | **Cold-start offline** | `/offline` (SCR-34), a static page precached by the service worker, shown when a navigation can't be reached at all (`DEC-04`). Contains no personal data — the service worker caches this one page for everyone, not per user. |
 | **Pending offline changes / unsynced warning on logout** | The web exposes the paused-mutation count via `usePausedCount()`/`useMutationState` (`lib/query/offline.ts`). The logout confirmation sheet (`app/(app)/settings/page.tsx`) reads it: 0 pending → "Your prayers and everything you've shared stay safe. You'll just need to log in again."; N pending → red warning text naming the exact count ("1 change hasn't synced yet. If you log out now, it'll be lost. Reconnect first to keep it.") before the user can confirm. Matches `DEC-05`. |
-| **Push permission denied** | `usePush()` (`lib/pwa/push.ts`) exposes a `"denied"` state from the browser's `Notification.permission`. **Gap:** `settings/notifications/page.tsx` does not read this state — its switches call `save.mutate` regardless of the OS-level permission, so a user who denied the browser prompt sees toggles that appear "on" with no indication that no notification will actually arrive. This should show a banner or disable the switches when `state === "denied"`. |
+| **Push permission denied** | `usePush()` exposes the browser's `Notification.permission`. The notification settings screen reads it and leads with a quiet `LoadProblem` when it is `denied` ("Notifications are blocked") or `unsupported` ("This browser can't show notifications"), each saying the preferences below are still saved — switches that cannot deliver anything would otherwise read as working. |
 | **Session expired** | `SESSION_EXPIRED_EVENT` (`lib/api/http.ts`) triggers `AppShell` to clear signed-in state and `router.replace(routes.login({ expired: true }))`. `/login?reason=expired` shows "Your session expired. Please log in again." Any unsaved paused mutations are cleared with the signed-out state (`DEC-05`). |
-| **Rate limited (429)** | **Gap.** No screen or shared component reads a 429 status or a `Retry-After` header specifically; a rate-limited request would currently surface through the generic error path (`GENERIC_ERROR_MESSAGE` or the server's message if the envelope carries one). `DEC-11` defines the limits server-side, but the client has no dedicated "Too many attempts — try again in Xs" copy yet. Required for `/login` and `/register` (`AUTH` shares its attempt limit with email change, `DEC-07`). |
+| **Rate limited (429)** | `toApiError` reads the `Retry-After` header and rewrites the message as "Too many attempts. Try again in about 2 minutes." (`waitPhrase`: "in a moment" under 10s, then seconds, minutes, hours). It reaches the sign-in and sign-up forms as their form-level error and everything else as the usual toast, so the limits in `DEC-11` are legible wherever they trip. |
 | **Not found** | `app/not-found.tsx`: plain "That page isn't here" / "Nothing of yours is lost. Head back to your space." with a "Go home" button — no technical detail, no distinction from a cross-couple 404. This is exactly what `DEC-19` requires: a request for another couple's resource returns 404 and must look identical to an unknown route, to prevent resource enumeration. Confirmed: the copy carries no request ID or code. |
 
 ---
@@ -641,9 +685,8 @@ its own branches, so the matrix below is enforced in one place, not copy-pasted 
 this section states the design-level requirements those targets are checked against.)*
 
 - **Contrast:** every light-mode text/background pair in §3.6 passes 4.5:1 for normal text; `edge`
-  (borders/icons only) passes the 3:1 non-text minimum and must never carry text. **Gap:**
-  `plum-soft` fails the 3:1 non-text minimum in the Prayer Mode progress strip (§3.6). Dark mode
-  has no palette to check (`Q-21`).
+  (borders/icons only) passes the 3:1 non-text minimum and must never carry text. Status marks use
+  plum or `edge`, never `faint` alone (§3.6). Dark mode has no palette to check (`Q-21`).
 - **Target size:** the 44×44px design standard is met or exceeded by every interactive component
   in §7 except `TopBar`'s back control and `ComposeBar`'s three controls, which land exactly at
   44px (no margin above the minimum, still compliant) — see the per-component notes in §7.5.
@@ -664,10 +707,9 @@ this section states the design-level requirements those targets are checked agai
   and transitions removed outright, not swapped).
 - **Colour independence:** confirmed component-by-component in §7 — `StatusMark` (icon + label,
   not colour alone), `Segments` (numeric `aria-label`), `SettingRow`'s destructive tone (red *and*
-  the word "Delete"), `Checkbox`/prayer completion (icon + colour together). The one exception is
-  the Prayer Mode progress strip, whose current/prayed/upcoming dots differ by colour only (see
-  the contrast gap above).
-- **Screen-reader announcements for async results:** `ErrorState` and `Alert` (error variant) use
+  the word "Delete"), `Checkbox`/prayer completion (icon + colour together), and the Prayer Mode
+  progress strip (current point marked by height; prayed vs not yet at 3:1).
+- **Screen-reader announcements for async results:** `LoadProblem` (error tone), `ErrorState` and `Alert` (error variant) use
   `role="alert"`; `Banner`, `Toast`, and `Alert` (success variant) use `role="status"` — both are
   live regions, so a query failure, a toast, or an offline/synced banner is announced without a
   manual `aria-live` wire-up. **Gap:** `Skeleton`/`Ghost` (the loading state itself) announce
@@ -812,6 +854,8 @@ carried over from v2.0 unchanged in substance.)*
 
 | Version | Date | Change |
 |---------|------|--------|
-| 3.0 | 2026-09-22 | Full rework against the codebase as built. Reconciled every token, type-scale value, radius, elevation and motion value against `apps/web/src/app/globals.css` and `docs/BRAND.md` (`DEC-14`); added a "Changed from v2.0" table and a computed WCAG contrast table (every text pair passes 4.5:1; `plum-soft` fails the 3:1 non-text minimum). Rewrote the component specification against the real files in `components/ui/` and `components/layout/`, marking gaps where the code lacks a state this document requires. Rebuilt the screen inventory from the actual route tree (38 screens) with a status per screen (Implemented/Partial/Mock only) and reconciled it against the v2.0 inventory. Rewrote state patterns, accessibility and content/UX writing sections against shipped copy and behaviour, flagging gaps (rate-limited copy, push-denied handling, loading-state screen-reader announcements, dark mode) rather than asserting them as built. Updated Appendix A's master prompt to the current palette and typeface. |
+| 3.2 | 2026-09-23 | Closed the recorded gaps: dialogs now handle Escape, focus trap, initial and returned focus and a scroll lock; 429 responses read `Retry-After` and say how long to wait; notification settings lead with the browser's denied/unsupported push permission. |
+| 3.1 | 2026-09-23 | Added the splash waiting indicator (late-revealed, with a slow-load message) and the adaptive layout: breakpoint table, `SideNav` (rail from `md`, labelled sidebar from `lg`), responsive column widths, paired sections on Home and the Together hub, `Sheet` as a centred dialog and `Toast` recentred from `md`. Documented the splash animation and its motion tokens. |
+| 3.0 | 2026-09-22 | Full rework against the codebase as built. Later the same day: the in-browser mock was removed, so screen statuses read "UI only"; error states became the inline `LoadProblem`, with `ErrorState` reserved for whole-screen failures. Reconciled every token, type-scale value, radius, elevation and motion value against `apps/web/src/app/globals.css` and `docs/BRAND.md` (`DEC-14`); added a "Changed from v2.0" table and a computed WCAG contrast table (every text pair passes 4.5:1; the one failing non-text pair, `plum-soft` in the Prayer Mode strip, was fixed and the token removed). Rewrote the component specification against the real files in `components/ui/` and `components/layout/`, marking gaps where the code lacks a state this document requires. Rebuilt the screen inventory from the actual route tree (38 screens) with a status per screen (Implemented/Partial/UI only) and reconciled it against the v2.0 inventory. Rewrote state patterns, accessibility and content/UX writing sections against shipped copy and behaviour, flagging gaps (rate-limited copy, push-denied handling, loading-state screen-reader announcements, dark mode) rather than asserting them as built. Updated Appendix A's master prompt to the current palette and typeface. |
 | 2.0 | 2026-09-21 | Split out of the combined spec. Added a real token system (hex colour, spacing, radius, elevation, motion), a typography scale table, a component list with states, a grouped screen inventory, a state-pattern matrix, concrete accessibility criteria, and a UX writing library. Moved the master prompt to an appendix. |
 
