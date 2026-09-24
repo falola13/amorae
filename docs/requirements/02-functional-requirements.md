@@ -1428,7 +1428,7 @@ A private, couple-shared timeline of moments — read as a quiet archive, not a 
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner add a memory with a title, date, optional location and
 optional note.
@@ -1437,12 +1437,20 @@ optional note.
 
 - **FR-MEM-001.AC1** Given a title and date, when either partner adds a memory, then the API
   shall store it against the couple with `has_photo` false and return it with a generated id.
+- **FR-MEM-001.AC2** Given a request that sets `has_photo` true, when it is stored, then the API
+  shall ignore that field and store `has_photo` false.
+
+*Note on `has_photo`:* the client posts the whole `Memory` shape it holds, `has_photo` included,
+and the decoder refuses fields it has not been told about — so the field is accepted and then
+thrown away. Whether a photo exists is the server's to say, and it becomes true when one is
+actually stored (FR-MEM-003), never because a request claimed it. A memory that says it has a
+picture it does not have is a broken screen.
 
 #### FR-MEM-002 View memories
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall list a couple's memories to both partners identically, as a quiet archive rather
 than a feed.
@@ -1450,7 +1458,11 @@ than a feed.
 **Acceptance criteria**
 
 - **FR-MEM-002.AC1** Given a couple with memories, when either partner requests the list, then
-  the API shall return the same memories to both.
+  the API shall return the same memories to both, newest first.
+
+*Not a feed:* a memory has no author, no reactions and no comments. Either partner may keep one
+and it belongs to them both (DEC-16). Every feature that would make this a feed is one the two of
+them would then have to manage, and the point is an archive to read back.
 
 #### FR-MEM-003 Attach a photo
 
@@ -1465,6 +1477,12 @@ The system shall let either partner attach one photo to a memory.
 - **FR-MEM-003.AC1** Given a memory and an image file under the configured size cap, when a
   partner uploads it, then the system shall store it in private object storage, strip EXIF and
   GPS data, and set `has_photo` true (Q-06 recommendation).
+
+*Status note:* still blocked. Q-06 chose the shape — private bucket, short-lived signed URLs,
+images only, 10 MB, EXIF and GPS stripped — but no bucket exists and nothing can set `has_photo`.
+The composer's "Add a photo" button, which had no handler behind it and never could have worked,
+has been removed rather than left to be tapped; putting it back is a line of markup once there is
+somewhere for the file to go.
 
 ---
 
@@ -2249,8 +2267,8 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-APPR-001 | G-04 | `POST /v1/appreciations` | UI only | Screen built; no endpoint to test against |
 | FR-APPR-002 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | UI only | Browser check 2026-09-22 against the mock, before it was removed (AC1–AC3) |
-| FR-MEM-001 | G-04 | `POST /v1/memories` | UI only | Screen built; no endpoint to test against |
-| FR-MEM-002 | G-04 | `GET /v1/memories` | UI only | Screen built; no endpoint to test against |
+| FR-MEM-001 | G-04 | `POST /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
+| FR-MEM-002 | G-04 | `GET /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
 | FR-MEM-003 | G-04 | TBD — Blocked by Q-06 | Not started | None yet |
 | FR-DATE-001 | G-04 | `POST /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |
 | FR-DATE-002 | G-04 | `GET /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |

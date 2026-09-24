@@ -354,7 +354,7 @@ those two names meet.
 | `PATCH /v1/challenges/current/days/:n` `{ done?, skipped? }` | 200 `Challenge`. Marks the day **for the caller only** (DEC-30); `done` and `skipped` in the response are theirs, `partner_done` and `partner_skipped` are the other's. `false` un-marks it, which is not the same as skipping; sending neither is 400 |
 | `GET`, `POST /v1/journal` | `{ tag, text }` |
 | `GET`, `POST /v1/appreciations` · `DELETE /v1/appreciations/:id` | delete is the sender's undo: 204 within 30 seconds of sending; 403 `forbidden` for the partner's note; 409 `undo_window_closed` after the window. The web app offers Undo for 5 seconds and never queues it offline |
-| `GET`, `POST /v1/memories` | photo upload is a later addition |
+| `GET`, `POST /v1/memories` | A couple's kept moments, newest first, the same for both of them. No author, no reactions, no comments — an archive, not a feed. `location` and `note` are optional. `has_photo` is accepted on POST and ignored: the server decides whether a photo exists, and nothing sets it true until FR-MEM-003 has a bucket to put files in |
 | `GET`, `POST /v1/milestones` | The dates a couple keeps: birthdays, anniversaries, the day they met — one entity, not one per kind (BR-DATE-01). `date` is the day it happened, never the next time it comes round; which year's occurrence is being looked at is worked out by whoever asks (the list screen, the reminder worker). Either partner may add one and it belongs to them both, so there is no author. `reminder` means "remind us every year" and defaults to true; a date with it off is kept but never announced. Listed oldest first — what counts as "coming up" depends on today, so the client decides it |
 
 ### Notifications

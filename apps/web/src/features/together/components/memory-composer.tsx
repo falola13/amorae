@@ -66,12 +66,14 @@ export function MemoryComposer({ open, onClose }: { open: boolean; onClose: () =
           error={errors.note?.message}
           {...register("note")}
         />
+        {/* "Add a photo" used to sit here and do nothing at all: no handler,
+            no upload, no way for it to work — photos wait on the bucket Q-06
+            chose (FR-MEM-003). A button that does nothing is worse than no
+            button, and putting it back is a line of markup when there is
+            somewhere for the file to go. */}
         <div className="flex flex-col gap-1">
           <Button type="submit" loading={add.isPending}>
             Save this moment
-          </Button>
-          <Button type="button" variant="text" icon="image">
-            Add a photo
           </Button>
         </div>
       </form>

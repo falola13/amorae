@@ -23,6 +23,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/export"
 	"github.com/falola13/amorae/apps/api/internal/modules/goals"
 	"github.com/falola13/amorae/apps/api/internal/modules/health"
+	"github.com/falola13/amorae/apps/api/internal/modules/memories"
 	"github.com/falola13/amorae/apps/api/internal/modules/milestones"
 	"github.com/falola13/amorae/apps/api/internal/modules/notifications"
 	"github.com/falola13/amorae/apps/api/internal/modules/prayers"
@@ -115,6 +116,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	milestonesRepo := milestones.NewPostgresRepository(db)
 	milestonesSvc := milestones.NewService(milestonesRepo, togetherCouples, now)
 
+	memoriesRepo := memories.NewPostgresRepository(db)
+	memoriesSvc := memories.NewService(memoriesRepo, togetherCouples, now)
+
 	// Leaving a couple freezes it rather than deleting it; this is what
 	// finally deletes it, once both partners have had the retention window
 	// to read and export (FR-PAIR-008).
@@ -147,6 +151,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	goalsHandler := goals.NewHandler(goalsSvc)
 	challengesHandler := challenges.NewHandler(challengesSvc, togetherCouples)
 	milestonesHandler := milestones.NewHandler(milestonesSvc)
+	memoriesHandler := memories.NewHandler(memoriesSvc)
 
 	// --- HTTP ---
 	mux := http.NewServeMux()
@@ -169,6 +174,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	goalsHandler.RegisterRoutes(v1)
 	challengesHandler.RegisterRoutes(v1)
 	milestonesHandler.RegisterRoutes(v1)
+	memoriesHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
 	// logs and responds with the request id. ClientIP resolves the caller
