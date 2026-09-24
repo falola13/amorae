@@ -252,4 +252,24 @@ const (
 	KindWeekPublished  = "week_published"
 	KindPrayerReminder = "prayer_reminder"
 	KindEventReminder  = "event_reminder"
+	KindImportantDate  = "important_date"
 )
+
+// OccursOn reports whether a kept date comes round on the given day —
+// same month, same day, any year.
+//
+// The twenty-ninth of February is the whole reason this is a function. Three
+// years in four it does not exist, and a couple married on it should still
+// hear from us: it moves to the twenty-eighth, which is the convention every
+// calendar uses and the only one that does not skip an anniversary.
+func OccursOn(date, day time.Time) bool {
+	month, dayOfMonth := date.Month(), date.Day()
+	if month == time.February && dayOfMonth == 29 && !isLeapYear(day.Year()) {
+		dayOfMonth = 28
+	}
+	return day.Month() == month && day.Day() == dayOfMonth
+}
+
+func isLeapYear(y int) bool {
+	return y%4 == 0 && (y%100 != 0 || y%400 == 0)
+}

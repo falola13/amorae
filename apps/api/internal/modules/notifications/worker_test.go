@@ -139,6 +139,7 @@ func TestForReminder(t *testing.T) {
 type fakeRepo struct {
 	candidates []Candidate
 	events     []EventCandidate
+	dates      []ImportantDateCandidate
 	subs       []Subscription
 	claimed    map[string]bool
 	released   []string
@@ -153,6 +154,9 @@ func (f *fakeRepo) CurrentWeekCandidates(context.Context, time.Time) ([]Candidat
 }
 func (f *fakeRepo) DueEventReminders(context.Context, time.Time) ([]EventCandidate, error) {
 	return f.events, nil
+}
+func (f *fakeRepo) ImportantDates(context.Context) ([]ImportantDateCandidate, error) {
+	return f.dates, nil
 }
 func (f *fakeRepo) ClaimSend(_ context.Context, userID uuid.UUID, kind, key string, _ time.Time) (bool, error) {
 	k := userID.String() + kind + key
@@ -535,6 +539,155 @@ func TestForEventReminder(t *testing.T) {
 		}
 		if strings.Contains(n.Message.Body, "at ") {
 			t.Errorf("body = %q, there is no time to give", n.Message.Body)
+		}
+	})
+}
+
+func TestOccursOn(t *testing.T) {
+	leapDay := time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC)
+	day := func(y int, m time.Month, d int) time.Time {
+		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	}
+
+	t.Run("the same day of any year", func(t *testing.T) {
+		wedding := day(2019, time.September, 30)
+		if !OccursOn(wedding, day(2026, time.September, 30)) {
+			t.Error("an anniversary did not come round")
+		}
+		if OccursOn(wedding, day(2026, time.September, 29)) {
+			t.Error("it came round a day early")
+		}
+	})
+
+	t.Run("the twenty-ninth of February falls back to the twenty-eighth", func(t *testing.T) {
+		// 2026 has no 29th. Skipping it would mean three years in four with
+		// no anniversary at all.
+		if !OccursOn(leapDay, day(2026, time.February, 28)) {
+			t.Error("a leap-day anniversary was skipped in a common year")
+		}
+		if OccursOn(leapDay, day(2026, time.March, 1)) {
+			t.Error("it landed on the wrong day")
+		}
+	})
+
+	t.Run("and stays put in a leap year", func(t *testing.T) {
+		if !OccursOn(leapDay, day(2028, time.February, 29)) {
+			t.Error("a leap-day anniversary moved in a leap year")
+		}
+		if OccursOn(leapDay, day(2028, time.February, 28)) {
+			t.Error("it came round twice")
+		}
+	})
+
+	t.Run("2100 is not a leap year", func(t *testing.T) {
+		if !OccursOn(leapDay, day(2100, time.February, 28)) {
+			t.Error("the century rule was missed")
+		}
+	})
+}
+
+func TestForImportantDates(t *testing.T) {
+	if _, err := time.LoadLocation("Africa/Lagos"); err != nil {
+		t.Skip("no timezone database here")
+	}
+	base := ImportantDateCandidate{
+		UserID: uuid.New(), MilestoneID: uuid.New(),
+		Title:    "Our wedding",
+		Timezone: "Africa/Lagos",
+		Date:     time.Date(2019, 9, 30, 0, 0, 0, 0, time.UTC),
+		Reminder: true,
+		Prefs:    Preferences{ImportantDates: true},
+	}
+	// 08:00 Lagos is 07:00 UTC.
+	morningOfTheDay := time.Date(2026, 9, 30, 7, 0, 0, 0, time.UTC)
+	weekBefore := time.Date(2026, 9, 23, 7, 0, 0, 0, time.UTC)
+
+	t.Run("a week's notice, so there is time to do something", func(t *testing.T) {
+		due := ForImportantDates(base, weekBefore)
+		if len(due) != 1 {
+			t.Fatalf("got %d notifications, want one", len(due))
+		}
+		if !strings.Contains(due[0].Message.Body, "30 September") {
+			t.Errorf("body = %q, should name the day", due[0].Message.Body)
+		}
+		if due[0].Message.Title != "Our wedding" {
+			t.Errorf("title = %q, should name the date", due[0].Message.Title)
+		}
+	})
+
+	t.Run("and the morning itself, counting the years", func(t *testing.T) {
+		due := ForImportantDates(base, morningOfTheDay)
+		if len(due) != 1 {
+			t.Fatalf("got %d notifications, want one", len(due))
+		}
+		if !strings.Contains(due[0].Message.Body, "7 years today") {
+			t.Errorf("body = %q, want the years counted", due[0].Message.Body)
+		}
+	})
+
+	t.Run("the two are claimed apart", func(t *testing.T) {
+		// One key for both would mean the week's notice silenced the day.
+		week := ForImportantDates(base, weekBefore)
+		day := ForImportantDates(base, morningOfTheDay)
+		if week[0].Key == day[0].Key {
+			t.Error("both leads share a key, so only one could ever be sent")
+		}
+	})
+
+	t.Run("nothing in the small hours", func(t *testing.T) {
+		// 02:00 Lagos on the day itself.
+		if due := ForImportantDates(base, time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC)); len(due) != 0 {
+			t.Errorf("got %d notifications before anyone was awake", len(due))
+		}
+	})
+
+	t.Run("but a late tick the same day still catches it", func(t *testing.T) {
+		// 22:00 Lagos. An anniversary missed is missed for a year.
+		if due := ForImportantDates(base, time.Date(2026, 9, 30, 21, 0, 0, 0, time.UTC)); len(due) != 1 {
+			t.Errorf("got %d notifications, want the day's one", len(due))
+		}
+	})
+
+	t.Run("an ordinary day says nothing", func(t *testing.T) {
+		if due := ForImportantDates(base, time.Date(2026, 6, 14, 7, 0, 0, 0, time.UTC)); len(due) != 0 {
+			t.Errorf("got %d notifications on a day that is not the day", len(due))
+		}
+	})
+
+	t.Run("a date kept but not celebrated is never announced", func(t *testing.T) {
+		c := base
+		c.Reminder = false
+		if due := ForImportantDates(c, morningOfTheDay); len(due) != 0 {
+			t.Error("a date with its reminder off was announced")
+		}
+	})
+
+	t.Run("nor is one somebody has switched off", func(t *testing.T) {
+		c := base
+		c.Prefs.ImportantDates = false
+		if due := ForImportantDates(c, morningOfTheDay); len(due) != 0 {
+			t.Error("a preference was ignored")
+		}
+	})
+
+	t.Run("the first year is a day, not an anniversary", func(t *testing.T) {
+		c := base
+		c.Date = time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+		due := ForImportantDates(c, morningOfTheDay)
+		if len(due) != 1 {
+			t.Fatalf("got %d notifications, want one", len(due))
+		}
+		if strings.Contains(due[0].Message.Body, "0 years") {
+			t.Errorf("body = %q, nobody says nought years", due[0].Message.Body)
+		}
+	})
+
+	t.Run("one year reads as one, not 1", func(t *testing.T) {
+		c := base
+		c.Date = time.Date(2025, 9, 30, 0, 0, 0, 0, time.UTC)
+		due := ForImportantDates(c, morningOfTheDay)
+		if !strings.Contains(due[0].Message.Body, "One year today") {
+			t.Errorf("body = %q", due[0].Message.Body)
 		}
 	})
 }

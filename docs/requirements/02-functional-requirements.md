@@ -1472,7 +1472,7 @@ contract. See §4(b).
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner add an important date with a title, date, optional subtitle
 and optional reminder flag.
@@ -1486,7 +1486,7 @@ and optional reminder flag.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall list a couple's important dates to both partners identically.
 
@@ -1500,7 +1500,7 @@ The system shall list a couple's important dates to both partners identically.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Not started — Blocked by Q-16 | Test |
+| Should | MVP | Implemented | Test |
 
 The system shall notify both partners ahead of an important date flagged for a reminder.
 
@@ -1508,6 +1508,16 @@ The system shall notify both partners ahead of an important date flagged for a r
 
 - **FR-DATE-003.AC1** Given an important date with `reminder` true, when its date approaches,
   then the worker shall enqueue a push notification to both partners in time to be useful.
+
+*Built:* two notifications, not one. A week's notice is the one you can act on — book the table,
+take the day off — and the morning itself is the one that matters, because nobody wants to hear
+about their anniversary only in time to plan it. Each is claimed separately, so one being sent
+never swallows the other. Both go out at 8am in the couple's own timezone and stay due for the
+rest of that day: a prayer reminder missed by an hour can go out tomorrow, an anniversary
+cannot. The twenty-ninth of February falls back to the twenty-eighth in the three years out of
+four that have no twenty-ninth, on the client and the server alike, so the day the screen counts
+down to and the day the notification arrives are never a day apart. A date with its reminder off
+is kept and never announced.
 
 ---
 
@@ -1596,9 +1606,9 @@ appreciation content on a lock screen.
 - **FR-NOTF-005.AC1** Given any notification category, when it is composed, then its title and
   body shall describe the type of activity (for example "Adeola sent you an appreciation note")
   without quoting or previewing the private content itself.
-- **FR-NOTF-005.AC2** Given an event reminder, when it is composed, then it may name the event
-  and say when it is, and shall carry nothing else about it — not its location, its notes or its
-  checklist.
+- **FR-NOTF-005.AC2** Given an event reminder or an important-date reminder, when it is composed,
+  then it may name the event or date and say when it is, and shall carry nothing else about it —
+  not an event's location, notes or checklist, and not a date's subtitle.
 
 *Scope note:* AC2 is a deliberate exception, and the line it draws is between private writing and
 a shared plan. A prayer, a journal entry and an appreciation note are things one person wrote;
@@ -1634,7 +1644,7 @@ spend it.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Partial — prayers and events | Test |
+| Must | MVP | Partial — prayers, events and important dates | Test |
 
 The worker shall send a push notification for each enabled category, respecting each user's own
 preferences and reminder time.
@@ -1656,7 +1666,9 @@ two for the same one. This is why the worker ticks every five minutes rather tha
 minutes before" on an hourly tick can arrive after the thing it was warning about. The reminder
 names the event and says when it is, and nothing else about it (FR-NOTF-005.AC2).
 
-Appreciation, journal, goals, challenges and important dates wait on those modules.
+And important dates (FR-DATE-003), respecting `important_dates`.
+
+Appreciation, journal, goals and challenges wait on those modules.
 
 **Acceptance criteria**
 
@@ -2076,7 +2088,7 @@ are called out because they change what a future migration needs to build.
 | `JournalEntry` | A shared journal entry. | `id`, `author_id`, `date`, `tag`, `text` | Couple | `tag` is `Gratitude`\|`Reflection`\|`Memory`\|`Appreciation`\|`Plans` — different casing and set from v2.0's `journal_type` (which also had `prayer_reflection`). No `photo_url`, `related_event_id` or `updated_at`. |
 | `Appreciation` | A note from one partner to the other. | `id`, `from_id`, `date`, `text` | Couple | No recipient field (BR-APPR-01); no `read_at` (v2.0 had one for a "seen" state). |
 | `Memory` | One entry in the memories archive. | `id`, `title`, `date`, `location?`, `note?`, `has_photo` | Couple | v2.0 had `photo_url`, `related_event_id`, `created_by`, `updated_at`; none of these are in the built type. Photo storage itself is Q-06. |
-| `Milestone` (`important_dates`) | A birthday, anniversary or milestone. | `id`, `title`, `date`, `sub?`, `reminder?` | Couple | BR-DATE-01. No structured `type` field exists in the built type, unlike DEC-17's description and v2.0's `important_date_type` enum; `sub` is free text, and there is no `is_recurring` flag. |
+| `Milestone` (`milestones`) | A birthday, anniversary or milestone. | `id`, `title`, `date`, `sub?`, `reminder?` | Couple | BR-DATE-01; the table is `milestones`, named for the route, the type and the module rather than v2.0's `important_dates`. No structured `type` field exists in the built type, unlike DEC-17's description and v2.0's `important_date_type` enum; `sub` is free text, and there is no `is_recurring` flag. |
 | `PushSubscription` | One browser's push endpoint. | `id`, `user_id`, `endpoint` (unique), `p256dh`, `auth`, `user_agent?`, `created_at`, `last_used_at?` | Self | Matches the v2.0 draft; not yet built. |
 | `NotificationPrefs` | One user's notification settings. | `new_week`, `prayer_reminder`, `reminder_time`, `event_reminders`, `important_dates`, `appreciation`, `journal`, `goals`, `challenges` | Self | v2.0 modelled this as one `jsonb` map; the built type is a flat object with the same semantics, one row per user. |
 
@@ -2221,9 +2233,9 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-MEM-001 | G-04 | `POST /v1/memories` | UI only | Screen built; no endpoint to test against |
 | FR-MEM-002 | G-04 | `GET /v1/memories` | UI only | Screen built; no endpoint to test against |
 | FR-MEM-003 | G-04 | TBD — Blocked by Q-06 | Not started | None yet |
-| FR-DATE-001 | G-04 | `POST /v1/milestones` | UI only | Screen built; no endpoint to test against |
-| FR-DATE-002 | G-04 | `GET /v1/milestones` | UI only | Screen built; no endpoint to test against |
-| FR-DATE-003 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-DATE-001 | G-04 | `POST /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |
+| FR-DATE-002 | G-04 | `GET /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |
+| FR-DATE-003 | G-04 | Worker (`ForImportantDates`) | Implemented | Go unit tests; worker run against the database 2026-09-24 |
 | FR-NOTF-001 | G-03 | `GET`, `PATCH /v1/notifications/preferences` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
 | FR-NOTF-002 | G-03 | `PATCH /v1/notifications/preferences` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |
 | FR-NOTF-003 | G-03 | `POST /v1/notifications/subscribe` | Implemented | Go unit tests; 19-check API pass and browser check 2026-09-23 |

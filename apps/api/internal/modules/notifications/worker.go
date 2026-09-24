@@ -181,6 +181,94 @@ func whenItIs(day time.Time, startTime string, at time.Time, zone *time.Location
 	return when + "."
 }
 
+// importantDateLeads are the two moments a kept date is worth saying
+// something about, and why there are two.
+//
+// A week's notice is the one you can act on — book the table, buy the thing,
+// take the day off. The morning itself is the one that matters: nobody wants
+// to be told about their anniversary only in time to plan it. Each is claimed
+// separately, so one being sent never swallows the other.
+var importantDateLeads = []struct {
+	days int
+	name string
+}{
+	{days: 7, name: "week"},
+	{days: 0, name: "day"},
+}
+
+// ForImportantDates is what to say, if anything, about the dates this couple
+// keeps — a birthday, an anniversary, the day they met.
+//
+// It returns however many are due, which is nearly always none: a kept date
+// is a day of the year, and the question asked of it every tick is whether
+// today, or the day a week from today, is that day.
+//
+// The reminder goes out on the morning, in the couple's zone, and stays due
+// for the rest of that day. A prayer reminder missed by an hour can go out
+// tomorrow; an anniversary cannot, so any tick that runs at all that day
+// catches it.
+func ForImportantDates(c ImportantDateCandidate, now time.Time) []Notification {
+	if !c.Prefs.ImportantDates || !c.Reminder {
+		return nil
+	}
+
+	zone, err := time.LoadLocation(c.Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	local := now.In(zone)
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, zone)
+	if local.Before(today.Add(reminderMorning * time.Hour)) {
+		return nil // still the small hours; nobody needs this yet
+	}
+
+	var due []Notification
+	for _, lead := range importantDateLeads {
+		on := today.AddDate(0, 0, lead.days)
+		if !OccursOn(c.Date, on) {
+			continue
+		}
+		due = append(due, Notification{
+			UserID: c.UserID,
+			Kind:   KindImportantDate,
+			// The occurrence, not the date: the same anniversary comes round
+			// every year and each year is its own send.
+			Key: fmt.Sprintf("%s:%s:%s", c.MilestoneID, on.Format(time.DateOnly), lead.name),
+			Message: push.Message{
+				Title: c.Title,
+				Body:  howFarOff(c.Date, on, lead.days),
+				Path:  "/together/milestones",
+				Tag:   KindImportantDate,
+			},
+		})
+	}
+	return due
+}
+
+// howFarOff says when it is and, when the date has a history, how long it has
+// been. "Three years today" is the thing worth saying; "2023" is a fact they
+// already have.
+func howFarOff(date, on time.Time, days int) string {
+	years := on.Year() - date.Year()
+	if days > 0 {
+		if years > 0 {
+			return fmt.Sprintf("%s — %s.", plural(years, "year"), on.Format("Monday 2 January"))
+		}
+		return fmt.Sprintf("In a week — %s.", on.Format("Monday 2 January"))
+	}
+	if years > 0 {
+		return plural(years, "year") + " today."
+	}
+	return "Today."
+}
+
+func plural(n int, unit string) string {
+	if n == 1 {
+		return "One " + unit
+	}
+	return fmt.Sprintf("%d %ss", n, unit)
+}
+
 // statusDraft mirrors the prayers module's value without importing it: the
 // worker reads the column, and one string is a smaller thing to owe another
 // module than a dependency is.
@@ -206,10 +294,25 @@ type EventCandidate struct {
 	Prefs     Preferences
 }
 
+// ImportantDateCandidate is one person and one date their couple keeps.
+type ImportantDateCandidate struct {
+	UserID      uuid.UUID
+	MilestoneID uuid.UUID
+	Title       string
+	// The couple's zone: a date they share is not two dates.
+	Timezone string
+	Date     time.Time
+	// "Remind us every year", as the composer puts it. A date kept without
+	// it belongs to their story and is never announced.
+	Reminder bool
+	Prefs    Preferences
+}
+
 // WorkerRepository is what the worker needs of storage.
 type WorkerRepository interface {
 	CurrentWeekCandidates(ctx context.Context, now time.Time) ([]Candidate, error)
 	DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error)
+	ImportantDates(ctx context.Context) ([]ImportantDateCandidate, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
@@ -269,6 +372,14 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 		if n, ok := ForEventReminder(c, now); ok {
 			due = append(due, n)
 		}
+	}
+
+	dates, err := w.repo.ImportantDates(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range dates {
+		due = append(due, ForImportantDates(c, now)...)
 	}
 
 	sent := 0

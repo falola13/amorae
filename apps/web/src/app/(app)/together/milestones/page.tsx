@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMilestones } from "@/features/together/hooks";
 import { MilestoneComposer } from "@/features/together/components/milestone-composer";
-import { nextOccurrence } from "@/features/together/milestones";
-import { daysUntil, iso } from "@/lib/dates";
+import { countdown, nextOccurrence } from "@/features/together/milestones";
+import { iso } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { DateRow } from "@/components/ui/date-row";
 import { today } from "@/lib/today";
@@ -66,7 +66,7 @@ export default function Milestones() {
                         date={d.next}
                         title={d.title}
                         sub={d.sub}
-                        right={`in ${daysUntil(d.next, today())} days`}
+                        right={countdown(d.next, today())}
                       />
                     ))}
                   </Section>

@@ -11,8 +11,8 @@ import {
   useMemories,
   useMilestones,
 } from "@/features/together/hooks";
-import { nextOccurrence } from "@/features/together/milestones";
-import { daysUntil, iso, longDate, relativeDay, time12 } from "@/lib/dates";
+import { countdown, nextOccurrence } from "@/features/together/milestones";
+import { iso, longDate, relativeDay, time12 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { Icon } from "@/components/icons";
 import { today } from "@/lib/today";
@@ -147,34 +147,41 @@ export default function Together() {
             }}
           </QueryState>
         </Section>
+        {/* One QueryState each, as this component asks for: these two rows
+            need nothing from each other, and sharing one meant the module
+            that is not built yet hid the one that is. */}
         <Section label="Remember" className="mb-4 mt-[22px]">
-          <QueryState queries={[memories, milestones]} loading={<Skeleton lines={2} />}>
-            {(memoriesData, milestonesData) => {
+          <QueryState queries={[memories]} loading={<Skeleton lines={1} />}>
+            {(memoriesData) => {
               const m = memoriesData[0];
-              const upcomingDates = milestonesData
-                .map((d) => ({ ...d, in: daysUntil(nextOccurrence(d.date, todayIso), today()) }))
-                .filter((d) => d.in >= 0)
-                .sort((a, b) => a.in - b.in)[0];
               return (
-                <>
-                  <Row
-                    icon="image"
-                    title="Memories"
-                    sub={m ? `Last saved ${longDate(m.date)}` : "Your story starts here"}
-                    href={routes.memories}
-                  />
-                  <Row
-                    icon="bookmark"
-                    title="Milestones"
-                    sub={
-                      upcomingDates
-                        ? `${upcomingDates.title} in ${upcomingDates.in} days`
-                        : "The dates that matter to us"
-                    }
-                    href={routes.milestones}
-                    last
-                  />
-                </>
+                <Row
+                  icon="image"
+                  title="Memories"
+                  sub={m ? `Last saved ${longDate(m.date)}` : "Your story starts here"}
+                  href={routes.memories}
+                />
+              );
+            }}
+          </QueryState>
+          <QueryState queries={[milestones]} loading={<Skeleton lines={1} />}>
+            {(milestonesData) => {
+              const soonest = milestonesData
+                .filter((d) => d.reminder)
+                .map((d) => ({ ...d, next: nextOccurrence(d.date, todayIso) }))
+                .sort((a, b) => a.next.localeCompare(b.next))[0];
+              return (
+                <Row
+                  icon="bookmark"
+                  title="Milestones"
+                  sub={
+                    soonest
+                      ? `${soonest.title} ${countdown(soonest.next, today()).toLowerCase()}`
+                      : "The dates that matter to us"
+                  }
+                  href={routes.milestones}
+                  last
+                />
               );
             }}
           </QueryState>

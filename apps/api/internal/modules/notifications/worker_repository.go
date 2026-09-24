@@ -144,6 +144,47 @@ func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Tim
 	return out, nil
 }
 
+// ImportantDates is every person in a live couple paired with a date that
+// couple has asked to be reminded of.
+//
+// It takes no window, unlike DueEventReminders: whether a kept date comes
+// round today is a question about a day of the year, and SQL narrowing it
+// would mean comparing month and day across each couple's own timezone and
+// each year's own February. A couple keeps a handful of these. When that
+// stops being true, the narrowing to add is on (month, day) over the two
+// local days any couple could currently be in.
+func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDateCandidate, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT u.id, ms.id, ms.title, c.timezone, ms.date, ms.reminder,
+		       COALESCE(p.important_dates, true)
+		FROM milestones ms
+		JOIN couples c ON c.id = ms.couple_id
+		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN notification_preferences p ON p.user_id = u.id
+		WHERE c.dissolved_at IS NULL
+		  AND ms.reminder
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("finding dates to remind about: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ImportantDateCandidate
+	for rows.Next() {
+		var c ImportantDateCandidate
+		if err := rows.Scan(&c.UserID, &c.MilestoneID, &c.Title, &c.Timezone,
+			&c.Date, &c.Reminder, &c.Prefs.ImportantDates); err != nil {
+			return nil, fmt.Errorf("scanning date to remind about: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding dates to remind about: %w", err)
+	}
+	return out, nil
+}
+
 // ClaimSend records that this notification is being sent, and reports whether
 // this caller is the one that got to send it.
 //
