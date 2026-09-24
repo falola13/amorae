@@ -16,6 +16,7 @@ import {
   Title,
 } from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
+import { isApiError } from "@/lib/api/errors";
 import { useCouple } from "@/features/couple/hooks";
 import { setterWord } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
@@ -47,6 +48,8 @@ import { today } from "@/lib/today";
 export function HomeScreen() {
   const couple = useCouple();
   const week = useWeek();
+  // Not a failure: there is no week until there are two of them.
+  const waitingForPartner = isApiError(week.error) && week.error.code === "waiting_for_partner";
   const events = useEvents();
   const goals = useGoals();
   const history = useHistory();
@@ -218,23 +221,38 @@ export function HomeScreen() {
             ) : undefined
           }
         >
-          <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
-            {(wk) => (
-              <Row
-                icon="book"
-                title="Weekly prayer"
-                sub={`Set by ${setterWord(wk, me.id, partner)} · you’ve prayed ${wk.my_completed.length} of ${wk.points.length}`}
-                href={routes.prayers}
-              >
-                <Segments
-                  total={wk.points.length}
-                  done={wk.my_completed.length}
-                  height={4}
-                  className="mb-0.5 mt-1.5 w-24"
-                />
-              </Row>
-            )}
-          </QueryState>
+          {/* Before a partner joins there is no week and cannot be one: praying
+              together alternates between two people, so one person has no turn
+              to take. The API says exactly that (409 waiting_for_partner) and
+              nothing here listened, so the very first thing a new account saw
+              on its own home screen was a card saying this could not be
+              loaded. It loaded fine. There was simply nothing to load yet. */}
+          {waitingForPartner ? (
+            <Row
+              icon="book"
+              title="Weekly prayer"
+              sub="Starts when your partner joins"
+              href={routes.invite}
+            />
+          ) : (
+            <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
+              {(wk) => (
+                <Row
+                  icon="book"
+                  title="Weekly prayer"
+                  sub={`Set by ${setterWord(wk, me.id, partner)} · you’ve prayed ${wk.my_completed.length} of ${wk.points.length}`}
+                  href={routes.prayers}
+                >
+                  <Segments
+                    total={wk.points.length}
+                    done={wk.my_completed.length}
+                    height={4}
+                    className="mb-0.5 mt-1.5 w-24"
+                  />
+                </Row>
+              )}
+            </QueryState>
+          )}
           {nextEvent ? (
             <Row
               icon="calendar"
