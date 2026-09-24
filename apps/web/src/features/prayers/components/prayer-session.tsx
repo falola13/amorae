@@ -32,7 +32,7 @@ export function PrayerSession({
   const last = i === n - 1;
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col bg-paper md:max-w-[640px]">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col grain bg-paper md:max-w-[640px]">
       <div className="shrink-0" style={{ height: "calc(var(--safe-top) + 12px)" }} />
       <div className="flex h-11 shrink-0 items-center justify-between px-3">
         <Link

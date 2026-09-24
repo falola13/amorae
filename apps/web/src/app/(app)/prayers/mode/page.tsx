@@ -49,7 +49,7 @@ function PrayerMode() {
   if (quiet) return <QuietPrayer timer={timer} />;
 
   const loading = (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col bg-paper px-8 pt-24">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col grain bg-paper px-8 pt-24">
       <Skeleton />
     </div>
   );
@@ -57,7 +57,7 @@ function PrayerMode() {
   // On the paper background the notice sits on the page's own colour, so
   // give it the lighter bg for its card to show.
   const frame = (notice: ReactNode) => (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col gap-2 bg-paper px-6 pt-24 [&>[role]]:bg-bg">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col gap-2 grain bg-paper px-6 pt-24 [&>[role]]:bg-bg">
       {notice}
       <LinkButton href={routes.prayers} variant="text">
         Back to prayers

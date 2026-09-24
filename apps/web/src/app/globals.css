@@ -83,6 +83,14 @@
   --text-display--letter-spacing: -0.025em;
   --text-display--font-weight: 600;
 
+  /* Paper tooth. The brand is printed matter — warm stock, one plum ink — and
+     a flat fill is the one thing paper never is. A single greyscale noise tile,
+     laid over the background colour by the `grain` utility, at the strength
+     where you stop reading it as texture and start reading the surface as
+     something. Dark mode carries its own, weaker: the same speck reads louder
+     on a near-black screen. */
+  --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.055'/></svg>");
+
   --radius-input: 12px;
   --radius-btn: 14px;
   --radius-card: 16px;
@@ -184,6 +192,7 @@
     --color-edge: #6a6055;
     --color-faint: #3a342d;
     --color-photo: #2a251f;
+  --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.04'/></svg>");
     --color-plum: #e0b4cd;
     --color-plum-dark: #efd2e2;
     --color-plum-tint: #3c2634;
@@ -299,6 +308,11 @@ button {
     filter: brightness(0.86);
   }
 }
+@utility grain {
+  background-image: var(--grain);
+  background-size: 120px 120px;
+}
+
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }

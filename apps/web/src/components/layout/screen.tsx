@@ -31,6 +31,10 @@ export function Screen({
         "mx-auto flex min-h-[100dvh] w-full flex-col",
         size === "app" ? "max-w-[520px] md:max-w-[680px] lg:max-w-[760px]" : "max-w-[520px]",
         tone === "paper" ? "bg-paper" : "bg-bg",
+        // On the same element the grain paints over the fill, so the column
+        // keeps one background and gains a surface. It scrolls with the page,
+        // because paper does.
+        "grain",
         className,
       )}
     >

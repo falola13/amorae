@@ -9,8 +9,28 @@ import { routes } from "@/lib/routes";
 import type { PrayerWeek } from "@/lib/api/types";
 import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
-import { EmptyState, LinkButton, Micro, Para, Skeleton, Title, cx } from "@/components/ui/kit";
+import {
+  EmptyState,
+  LinkButton,
+  Micro,
+  Ornament,
+  Para,
+  Skeleton,
+  Title,
+  cx,
+} from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
+
+/**
+ * What the bottom of the record is allowed to say: how many weeks there have
+ * been, and when the first one was. Both are facts the couple would want, and
+ * neither is a slogan.
+ */
+function sinceLine(count: number, first?: string) {
+  const weeks = count === 1 ? "One week" : `${count} weeks`;
+  if (!first) return `${weeks} together.`;
+  return `${weeks} together, since ${longDate(first)} ${first.slice(0, 4)}.`;
+}
 
 function Entry({
   w,
@@ -112,6 +132,7 @@ export default function History() {
                     ))}
                   </div>
                 ))}
+                <Ornament caption={sinceLine(all.length, all[all.length - 1]?.week_start)} />
               </div>
             </>
           );

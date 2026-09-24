@@ -9,4 +9,5 @@ export * from "./fields";
 export * from "./rows";
 export * from "./chrome";
 export * from "./states";
+export * from "./ornament";
 export { cx } from "./cx";

@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { Button } from "./buttons";
 import { Para } from "./typography";
+import { cx } from "./cx";
 
 export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
@@ -19,48 +20,80 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
+/**
+ * The shape of what is not here yet.
+ *
+ * These were four sets of grey rectangles — abstract enough that the same
+ * drawing did for photographs, goals and weeks alike, which is to say it said
+ * nothing about any of them. Each one now borrows from the thing it stands in
+ * for: corner mounts for an album, ruled lines for something written, a
+ * measure for a goal, a timeline for a record kept week by week. Still quiet,
+ * still `bg-faint`, but recognisably about the screen it appears on.
+ */
 export function Ghost({ kind = "lines" }: { kind?: "lines" | "frames" | "bars" | "dots" }) {
   if (kind === "frames") {
+    // Corner mounts, the paper triangles that held a photograph into an album.
+    // The frame they imply is empty, which is the whole point of the drawing.
     return (
-      <div aria-hidden="true" className="flex gap-2.5 pb-3.5">
-        <span className="h-[72px] w-24 rounded-input border-[1.5px] border-dashed border-edge opacity-70" />
-        <span className="h-[72px] w-[72px] rounded-input bg-faint opacity-60" />
-        <span className="h-[72px] w-12 rounded-input bg-faint opacity-30" />
+      <div aria-hidden="true" className="flex items-end gap-3.5 pb-3.5">
+        {/* The mount is the subject — it is the one that says "a photograph
+            belongs here" — so it is the largest thing and the only one drawn
+            in line rather than fill. One tile behind it, for depth; the second
+            one that used to sit here only crowded it. */}
+        <span className="relative block h-[96px] w-[118px]">
+          {[
+            "left-0 top-0 border-l-2 border-t-2",
+            "right-0 top-0 border-r-2 border-t-2",
+            "bottom-0 left-0 border-b-2 border-l-2",
+            "bottom-0 right-0 border-b-2 border-r-2",
+          ].map((pos) => (
+            <span key={pos} className={cx("absolute h-4 w-4 border-edge", pos)} />
+          ))}
+        </span>
+        <span className="h-[58px] w-[52px] rounded-input bg-faint opacity-45" />
       </div>
     );
   }
   if (kind === "bars") {
+    // A measure with nothing on it yet: the track a goal will fill.
     return (
       <div aria-hidden="true" className="flex flex-col gap-4 pb-3.5">
         {[200, 150, 100].map((w, i) => (
-          <div
-            key={w}
-            className="h-1.5 rounded-full bg-faint"
-            style={{ width: w, opacity: 1 - i * 0.35 }}
-          />
+          <div key={w} className="flex items-center gap-3" style={{ opacity: 1 - i * 0.35 }}>
+            <span className="h-1.5 rounded-full bg-faint" style={{ width: w }} />
+            <span className="h-1.5 w-1.5 rounded-full bg-faint" />
+          </div>
         ))}
       </div>
     );
   }
   if (kind === "dots") {
+    // The timeline History already draws, waiting for its first entry.
     return (
-      <div aria-hidden="true" className="flex flex-col gap-[18px] pb-3.5">
+      <div aria-hidden="true" className="relative flex flex-col gap-[18px] pb-3.5 pl-1">
+        <span className="absolute bottom-3.5 left-[4.5px] top-1.5 w-px bg-faint" />
         {[150, 120, 96].map((w, i) => (
-          <div key={w} className="flex items-center gap-4" style={{ opacity: 1 - i * 0.35 }}>
-            <span className="box-border h-[9px] w-[9px] rounded-full border-[1.5px] border-edge" />
+          <div
+            key={w}
+            className="relative flex items-center gap-4"
+            style={{ opacity: 1 - i * 0.35 }}
+          >
+            <span className="box-border h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-edge bg-bg" />
             <span className="h-2.5 rounded-full bg-faint" style={{ width: w }} />
           </div>
         ))}
       </div>
     );
   }
+  // Ruled lines, for the screens that hold something written.
   return (
-    <div aria-hidden="true" className="flex flex-col gap-4 pb-3.5">
-      {[150, 120, 96].map((w, i) => (
-        <div key={w} className="flex items-center gap-4" style={{ opacity: 1 - i * 0.35 }}>
-          <span className="h-7 w-7 rounded-lg bg-faint" />
-          <span className="h-2.5 rounded-full bg-faint" style={{ width: w }} />
-        </div>
+    <div aria-hidden="true" className="flex flex-col gap-3.5 pb-3.5">
+      {[0, 1, 2, 3].map((i) => (
+        <span
+          key={i}
+          className="h-px bg-faint"
+          style={{ width: [210, 168, 190, 104][i], opacity: 1 - i * 0.2 }}
+        />
       ))}
     </div>
   );

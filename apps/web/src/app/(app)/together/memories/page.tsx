@@ -13,19 +13,44 @@ import {
   Button,
   EmptyState,
   Micro,
+  Ornament,
   Skeleton,
   Title,
   TopBar,
 } from "@/components/ui/kit";
 
 /**
- * A memory's picture, or the space where one would be.
+ * A memory's picture, at the shape it was taken in.
  *
- * The placeholder is still here because a memory saved without a photo is the
- * common case and an archive of bare text needs some rhythm. What changed is
- * that a memory with a photo now shows the photo.
+ * An earlier pass cropped every photo to a height chosen by its position, to
+ * give the page an album's rhythm. That is the wrong way round: it crops a
+ * couple's own photographs — faces included — to suit a layout. Letting each
+ * one keep its aspect gives the same varied rhythm, except the variation is
+ * theirs rather than imposed. The cap is only so a panorama cannot take over
+ * the screen.
+ *
+ * The placeholder is now only the degraded case — a memory that says it has a
+ * photo whose URL we could not build, which happens when Cloudinary is not
+ * configured. It deliberately ignores the album height: there is nothing to
+ * look at, and a tall empty block is a worse answer than a short one.
  */
-function Photo({ h, label, src }: { h: number; label: string; src?: string }) {
+/**
+ * A month, as a running head rather than a floating label.
+ *
+ * The rule is what makes it a heading: a label alone in space is read as one
+ * more line of text, and an archive that runs for years needs the eye to catch
+ * where one month stops. Print has done it this way for five hundred years.
+ */
+function RunningHead({ children }: { children: string }) {
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <Micro>{children}</Micro>
+      <span className="h-px grow bg-line" />
+    </div>
+  );
+}
+
+function Photo({ label, src }: { label: string; src?: string }) {
   if (src) {
     return (
       // Cloudinary already delivers this with f_auto,q_auto from its own CDN.
@@ -36,8 +61,7 @@ function Photo({ h, label, src }: { h: number; label: string; src?: string }) {
         src={src}
         alt={label}
         loading="lazy"
-        className="w-full rounded-btn bg-photo object-cover"
-        style={{ height: h }}
+        className="max-h-[440px] w-full rounded-btn bg-photo object-cover"
       />
     );
   }
@@ -45,13 +69,22 @@ function Photo({ h, label, src }: { h: number; label: string; src?: string }) {
     <div
       role="img"
       aria-label={label}
-      className="flex items-center justify-center gap-2 rounded-btn bg-photo text-[13px] font-semibold text-stone"
-      style={{ height: h }}
+      className="flex h-[132px] items-center justify-center gap-2 rounded-btn bg-photo text-[13px] font-semibold text-stone"
     >
       <Icon name="image" size={18} />
       Photo
     </div>
   );
+}
+
+/**
+ * The line under the end-mark. It states a fact — how much is kept, and how far
+ * back it goes — because the bottom of an archive is worth a sentence and is
+ * not worth a slogan.
+ */
+function keptLine(count: number, oldest: string) {
+  const moments = count === 1 ? "One moment" : `${count} moments`;
+  return `${moments} kept, back to ${monthName(oldest)} ${oldest.slice(0, 4)}.`;
 }
 
 export default function Memories() {
@@ -97,11 +130,9 @@ export default function Memories() {
                   const showMonth = month !== prev;
                   return (
                     <div key={m.id} className="flex flex-col gap-3.5">
-                      {showMonth ? <Micro>{month}</Micro> : null}
+                      {showMonth ? <RunningHead>{month}</RunningHead> : null}
                       <article className="flex flex-col gap-1">
-                        {m.has_photo ? (
-                          <Photo h={m.note ? 190 : 120} label={m.title} src={m.photo_url} />
-                        ) : null}
+                        {m.has_photo ? <Photo label={m.title} src={m.photo_url} /> : null}
                         <div className="mt-2 text-bodylg font-semibold tracking-[-0.01em]">
                           {m.title}
                         </div>
@@ -121,6 +152,7 @@ export default function Memories() {
                     </div>
                   );
                 })}
+                <Ornament caption={keptLine(sorted.length, sorted[sorted.length - 1].date)} />
               </div>
             );
           }}
