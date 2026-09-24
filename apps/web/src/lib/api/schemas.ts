@@ -108,6 +108,9 @@ export const eventSchema = z.object({
   location: z.string().trim().max(120).optional(),
   reminder: z.string().trim().max(40).optional(),
   notes: z.string().trim().max(1000).optional(),
+  // The things to do between now and then. Sent whole: the order is the
+  // order, and an item left out is an item removed.
+  checklist: z.array(z.string()).max(20).optional(),
 });
 
 export const goalSchema = z.object({

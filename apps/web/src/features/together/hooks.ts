@@ -25,6 +25,7 @@ export const useMilestones = () => useQuery({ queryKey: keys.milestones, queryFn
 // resuming after a restart are handled centrally (lib/query).
 export const useSaveEvent = () => useWrite(w.saveEvent);
 export const useCompleteEvent = () => useWrite(w.completeEvent);
+export const useDeleteEvent = () => useWrite(w.deleteEvent);
 export const useChecklist = () => useWrite(w.checklist);
 export const useCreateGoal = () => useWrite(w.createGoal);
 export const useAddProgress = () => useWrite(w.addProgress);

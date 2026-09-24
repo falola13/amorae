@@ -990,7 +990,7 @@ couple's event returns 404 (DEC-19).
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner create a shared event with a title, date, optional start/end
 time, location, reminder, notes and checklist.
@@ -1005,7 +1005,7 @@ time, location, reminder, notes and checklist.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall list a couple's events to both partners identically.
 
@@ -1018,7 +1018,7 @@ The system shall list a couple's events to both partners identically.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner edit any field of a shared event.
 
@@ -1033,7 +1033,7 @@ The system shall let either partner edit any field of a shared event.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner mark a shared event complete, or reopen it.
 
@@ -1046,7 +1046,7 @@ The system shall let either partner mark a shared event complete, or reopen it.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | UI only | Test |
+| Should | MVP | Implemented | Test |
 
 The system shall let either partner toggle an individual checklist item on an event.
 
@@ -1060,7 +1060,7 @@ The system shall let either partner toggle an individual checklist item on an ev
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Not started | Test |
+| Should | MVP | Implemented | Test |
 
 The system shall let either partner permanently delete a shared event.
 
@@ -1070,10 +1070,8 @@ The system shall let either partner permanently delete a shared event.
   it, then the API shall remove it and it shall no longer appear in the events list for either
   partner.
 
-*Contract note:* the v2.0 spec required full create/read/update/delete for events, but the current
-contract ([`../API.md`](../API.md)) only exposes create, read, update and completion
-toggling — no delete endpoint exists yet in either. Recorded as a gap against the old spec rather
-than silently dropped.
+*Contract note:* closed. `DELETE /v1/events/:id` exists, and the event screen asks before using
+it — an event disappears for both partners, so it is not a one-tap action.
 
 ---
 
@@ -2170,12 +2168,12 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-PRAY-008 | G-02 | `GET /v1/prayers/weeks/:id` | UI only | Screen built; no endpoint to test against |
 | FR-PRAY-009 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-PRAY-010 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
-| FR-EVT-001 | G-03 | `POST /v1/events` | UI only | Screen built; no endpoint to test against |
-| FR-EVT-002 | G-03 | `GET /v1/events` | UI only | Screen built; no endpoint to test against |
-| FR-EVT-003 | G-03 | `PATCH /v1/events/:id` | UI only | Screen built; no endpoint to test against |
-| FR-EVT-004 | G-03 | `POST`, `DELETE /v1/events/:id/complete` | UI only | Screen built; no endpoint to test against |
-| FR-EVT-005 | G-03 | `PATCH /v1/events/:id/checklist/:item` | UI only | Screen built; no endpoint to test against |
-| FR-EVT-006 | G-03 | TBD | Not started | None yet |
+| FR-EVT-001 | G-03 | `POST /v1/events` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
+| FR-EVT-002 | G-03 | `GET /v1/events` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
+| FR-EVT-003 | G-03 | `PATCH /v1/events/:id` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
+| FR-EVT-004 | G-03 | `POST`, `DELETE /v1/events/:id/complete` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
+| FR-EVT-005 | G-03 | `PATCH /v1/events/:id/checklist/:item` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
+| FR-EVT-006 | G-03 | `DELETE /v1/events/:id` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-CAL-001 | G-03 | `GET /v1/events`, `GET /v1/prayers/current` | UI only | Manual demo 2026-09-22 |
 | FR-CAL-002 | G-03 | — (client navigation) | UI only | Manual demo 2026-09-22 |
 | FR-GOAL-001 | G-03 | `POST /v1/goals` | UI only | Screen built; no endpoint to test against |

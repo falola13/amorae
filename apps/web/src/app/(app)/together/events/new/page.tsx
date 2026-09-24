@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
 import { BareInput, BareTextarea, ComposeBar, Skeleton } from "@/components/ui/kit";
@@ -48,6 +48,12 @@ function EventForm() {
 function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
   const router = useRouter();
   const save = useSaveEvent();
+  // One per line, rather than a row of inputs with an add button: a list of
+  // three short things is faster to type than it is to manage. Ticking them
+  // off happens on the event itself, not here.
+  const [checklist, setChecklist] = useState(
+    event?.checklist.map((item) => item.text).join("\n") ?? "",
+  );
   const {
     register,
     handleSubmit,
@@ -79,6 +85,7 @@ function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
   const onSubmit = (v: EventInput) => {
     const input: EventInput = {
       ...v,
+      checklist: checklist.split("\n"),
       start_time: v.start_time || undefined,
       end_time: v.end_time || undefined,
       location: v.location || undefined,
@@ -190,6 +197,19 @@ function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
               />
             )}
           />
+        </div>
+        <div className="mt-5">
+          <BareTextarea
+            label="Checklist"
+            rows={3}
+            placeholder={"Book the table\nAsk about parking"}
+            className="min-h-[84px] text-bodylg"
+            value={checklist}
+            onChange={(e) => setChecklist(e.target.value)}
+          />
+          <div className="pt-1.5 text-[13px] text-stone">
+            One per line. You can tick these off on the day.
+          </div>
         </div>
         <div className="mt-5">
           <BareTextarea

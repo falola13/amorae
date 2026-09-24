@@ -18,6 +18,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/config"
 	"github.com/falola13/amorae/apps/api/internal/modules/auth"
 	"github.com/falola13/amorae/apps/api/internal/modules/couples"
+	"github.com/falola13/amorae/apps/api/internal/modules/events"
 	"github.com/falola13/amorae/apps/api/internal/modules/export"
 	"github.com/falola13/amorae/apps/api/internal/modules/health"
 	"github.com/falola13/amorae/apps/api/internal/modules/notifications"
@@ -94,8 +95,13 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	notificationsRepo := notifications.NewPostgresRepository(db)
 	notificationsSvc := notifications.NewService(notificationsRepo, now)
 
+	togetherCouples := prayersCouples{couples: couplesSvc}
+
 	prayersRepo := prayers.NewPostgresRepository(db)
-	prayersSvc := prayers.NewService(prayersRepo, prayersCouples{couples: couplesSvc}, now)
+	prayersSvc := prayers.NewService(prayersRepo, togetherCouples, now)
+
+	eventsRepo := events.NewPostgresRepository(db)
+	eventsSvc := events.NewService(eventsRepo, togetherCouples, now)
 
 	// Leaving a couple freezes it rather than deleting it; this is what
 	// finally deletes it, once both partners have had the retention window
@@ -125,6 +131,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	exportHandler := export.NewHandler(userSvc, couplesSvc, consentRepo, now)
 	prayersHandler := prayers.NewHandler(prayersSvc)
 	notificationsHandler := notifications.NewHandler(notificationsSvc)
+	eventsHandler := events.NewHandler(eventsSvc)
 
 	// --- HTTP ---
 	mux := http.NewServeMux()
@@ -143,6 +150,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	exportHandler.RegisterRoutes(v1)
 	prayersHandler.RegisterRoutes(v1)
 	notificationsHandler.RegisterRoutes(v1)
+	eventsHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
 	// logs and responds with the request id. ClientIP resolves the caller

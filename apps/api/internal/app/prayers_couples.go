@@ -50,3 +50,14 @@ func (a prayersCouples) ForPrayers(ctx context.Context, userID uuid.UUID) (praye
 		Members:  members,
 	}, nil
 }
+
+// CoupleFor is the smaller question the Together modules ask: which couple,
+// and nothing else. Same adapter, because the answer comes from the same
+// place and neither module should learn what a couples.Mine is.
+func (a prayersCouples) CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	mine, err := a.couples.GetMine(ctx, userID)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	return mine.Couple.ID, nil
+}

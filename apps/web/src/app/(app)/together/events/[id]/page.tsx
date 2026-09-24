@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCompleteEvent, useEvent, useChecklist } from "@/features/together/hooks";
+import { useState } from "react";
+import {
+  useCompleteEvent,
+  useDeleteEvent,
+  useEvent,
+  useChecklist,
+} from "@/features/together/hooks";
 import { time12, weekdayDate } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { Icon, type IconName } from "@/components/icons";
@@ -15,6 +21,7 @@ import {
   Micro,
   Para,
   Section,
+  Sheet,
   Skeleton,
   Title,
   TopBar,
@@ -53,6 +60,8 @@ export default function EventDetail() {
   const ev = useEvent(id);
   const toggle = useChecklist();
   const complete = useCompleteEvent();
+  const remove = useDeleteEvent();
+  const [confirming, setConfirming] = useState(false);
   const edit = ev.data ? (
     <Link
       href={routes.eventNew({ edit: ev.data.id })}
@@ -148,12 +157,39 @@ export default function EventDetail() {
                 <Button variant="text" onClick={() => complete.mutate({ id: e.id, done: false })}>
                   Not done yet
                 </Button>
-              ) : (
-                <Para size="support" className="hidden">
-                  &nbsp;
-                </Para>
-              )}
+              ) : null}
+              <Button variant="text" className="text-red" onClick={() => setConfirming(true)}>
+                Delete this event
+              </Button>
             </BottomActions>
+            {/* It goes for both of them, so it asks first. There is no undo:
+                an event is small enough that re-adding it beats keeping a bin. */}
+            <Sheet
+              open={confirming}
+              onClose={() => setConfirming(false)}
+              title="Delete this event?"
+              labelledBy="del-event-h"
+            >
+              <Para>
+                It disappears for both of you, along with anything on its checklist. You can always
+                plan it again.
+              </Para>
+              <div className="flex flex-col gap-1">
+                <Button
+                  variant="secondary"
+                  className="border-red text-red"
+                  loading={remove.isPending}
+                  onClick={() =>
+                    remove.mutate(e.id, { onSuccess: () => router.replace(routes.events) })
+                  }
+                >
+                  Delete it
+                </Button>
+                <Button variant="text" onClick={() => setConfirming(false)}>
+                  Keep it
+                </Button>
+              </div>
+            </Sheet>
           </>
         )}
       </QueryState>

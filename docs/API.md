@@ -340,7 +340,8 @@ those two names meet.
 
 | Endpoint | Notes |
 | --- | --- |
-| `GET`, `POST /v1/events` · `GET`, `PATCH /v1/events/:id` | `Event` belongs to the couple |
+| `GET`, `POST /v1/events` · `GET`, `PATCH /v1/events/:id` | `Event` belongs to the couple; both partners are implicit participants (DEC-16) and either may edit. A PATCH field that is absent is left alone and `""` clears it; `checklist` is sent whole, so the order is the order and an item left out is removed. Another couple's event is 404 (DEC-19) |
+| `DELETE /v1/events/:id` | 204. Removes it for both partners, checklist included |
 | `POST` / `DELETE /v1/events/:id/complete` | |
 | `PATCH /v1/events/:id/checklist/:item` `{ done }` | |
 | `GET`, `POST /v1/goals` · `GET /v1/goals/:id` | `unit` is `naira` or `count` |

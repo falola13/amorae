@@ -22,6 +22,7 @@ export const togetherApi = {
       ? http.post<Event>(apiPath`/events/${id}/complete`)
       : http.delete<Event>(apiPath`/events/${id}/complete`)
     ).then((r) => r.data),
+  deleteEvent: (id: string) => http.delete(apiPath`/events/${id}`).then(() => undefined),
   checklist: (id: string, item: string, done: boolean) =>
     http.patch<Event>(apiPath`/events/${id}/checklist/${item}`, { done }).then((r) => r.data),
 

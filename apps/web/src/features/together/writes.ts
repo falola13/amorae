@@ -17,6 +17,12 @@ export const togetherWrites = {
     // Updating is idempotent, creating is not, and this write does both.
     onlineOnly: true,
   }),
+  deleteEvent: defineWrite({
+    mutationKey: ["events", "delete"],
+    mutationFn: (id: string) => api.deleteEvent(id),
+    invalidates: [keys.events],
+    idempotent: "deleting something already gone leaves the same nothing behind.",
+  }),
   completeEvent: defineWrite({
     mutationKey: ["events", "complete"],
     mutationFn: ({ id, done }: { id: string; done: boolean }) => api.completeEvent(id, done),
