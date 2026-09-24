@@ -93,10 +93,16 @@ func (r *PostgresRepository) Start(ctx context.Context, coupleID uuid.UUID, t Te
 	}
 
 	err = r.db.InTx(ctx, func(ctx context.Context) error {
+		// started_on is the couple's local day, read from the couple row
+		// rather than taken from the UTC instant: a challenge begun at
+		// half past midnight in Lagos began today, not yesterday, and the
+		// screen counts its days from this.
 		if _, err := r.db.Q(ctx).Exec(ctx, `
 			INSERT INTO challenges (id, couple_id, template, title, started_on, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $6)
-		`, id, coupleID, t.Key, t.Title, on, on); err != nil {
+			SELECT $1, c.id, $3, $4, ($5 AT TIME ZONE c.timezone)::date, $5, $5
+			FROM couples c
+			WHERE c.id = $2
+		`, id, coupleID, t.Key, t.Title, on); err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 				return ErrAlreadyRunning

@@ -89,19 +89,22 @@ export default function Calendar() {
                     sub: yearsBy(m.date, d) || m.sub || "",
                     href: routes.milestones,
                   });
-            // The Sunday that starts a prayer week is a calendar item too.
-            for (const d of days)
-              if (parse(d).getDay() === 0)
-                push(d, {
-                  at: "",
-                  time: "All day",
-                  title: "Weekly prayer",
-                  sub:
-                    week.data && d === week.data.week_start
-                      ? `A prayer week begins. ${week.data.setter_id === couple.data?.me.id ? "It’s your week." : `${couple.data?.partner?.display_name ?? "Your partner"} sets it.`}`
-                      : "A new prayer week begins.",
-                  href: routes.prayers,
-                });
+            // The Sunday the current prayer week starts on is a calendar item
+            // too — that Sunday, and no other. It used to land on every
+            // Sunday of every week you paged to, so a week in 2029 promised
+            // "a new prayer week begins" and the calendar could never be
+            // empty, which made its own empty state unreachable. A week that
+            // has not begun is not a plan (FR-CAL-001).
+            if (week.data)
+              for (const d of days)
+                if (d === week.data.week_start)
+                  push(d, {
+                    at: "",
+                    time: "All day",
+                    title: "Weekly prayer",
+                    sub: `A prayer week begins. ${week.data.setter_id === couple.data?.me.id ? "It’s your week." : `${couple.data?.partner?.display_name ?? "Your partner"} sets it.`}`,
+                    href: routes.prayers,
+                  });
             for (const items of byDay.values()) items.sort((a, b) => a.at.localeCompare(b.at));
             const shown = days.filter((d) =>
               selected ? d === selected : (byDay.get(d)?.length ?? 0) > 0 && d >= todayIso,

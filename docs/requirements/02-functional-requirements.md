@@ -1117,7 +1117,12 @@ displayed day (`occursOn`), not per date ("when is this next"): "next" is relati
 a calendar you page backwards and forwards through needs an answer that does not move when you
 do. The twenty-ninth of February falls on the twenty-eighth in the years without one, the same
 rule the reminder uses, so the day the calendar shows and the day the notification arrives cannot
-disagree. Dates kept without the yearly flag stay off it: their owner said they were part of the
+disagree.
+
+The prayer week appears on the Sunday its own week starts on, and no other. It used to land on
+every Sunday of every week paged to, so a week in 2029 promised "a new prayer week begins" — and
+because that made every week non-empty, the screen's own "Nothing planned this week yet" could
+never appear. A week that has not begun is not a plan. Dates kept without the yearly flag stay off it: their owner said they were part of the
 story, not part of the week.
 
 #### FR-CAL-002 Open entry detail

@@ -13,11 +13,12 @@
     "dev:api": "cd apps/api && go run ./cmd/api",
     "dev:web": "npm --prefix apps/web run dev",
     "test:api": "cd apps/api && go test ./...",
+    "test:web": "cd apps/web && npm test",
     "vet:api": "cd apps/api && go vet ./...",
     "lint:web": "npm --prefix apps/web run lint",
     "typecheck:web": "npm --prefix apps/web run typecheck",
     "build:web": "npm --prefix apps/web run build",
-    "check": "npm run vet:api && npm run test:api && npm run lint:web && npm run typecheck:web && npm run build:web",
+    "check": "npm run vet:api && npm run test:api && npm run lint:web && npm run typecheck:web && npm run test:web && npm run build:web",
     "format:web": "npm --prefix apps/web run format",
     "format:check:web": "npm --prefix apps/web run format:check"
   }

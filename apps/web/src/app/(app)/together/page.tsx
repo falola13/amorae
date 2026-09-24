@@ -13,6 +13,7 @@ import {
 } from "@/features/together/hooks";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
 import { iso, longDate, relativeDay, time12 } from "@/lib/dates";
+import { isApiError } from "@/lib/api/errors";
 import { routes } from "@/lib/routes";
 import { Icon } from "@/components/icons";
 import { today } from "@/lib/today";
@@ -25,6 +26,10 @@ export default function Together() {
   const events = useEvents();
   const goals = useGoals();
   const challenge = useChallenge();
+  // A couple who has never started one has no challenge to fetch, so the 404
+  // is the answer rather than a failure (the challenges screen reads it the
+  // same way).
+  const noChallenge = isApiError(challenge.error) && challenge.error.code === "challenge_not_found";
   const journal = useJournal();
   const memories = useMemories();
   const milestones = useMilestones();
@@ -82,22 +87,38 @@ export default function Together() {
           </QueryState>
         </Section>
         <Section label="Grow" className="mt-[22px]">
-          <QueryState queries={[goals, challenge]} loading={<Skeleton lines={2} />}>
-            {(goalsData, challengeData) => {
+          <QueryState queries={[goals]} loading={<Skeleton lines={1} />}>
+            {(goalsData) => {
               const active = goalsData.filter((g) => !g.done).length;
-              const day = challengeData.days.find((d) => !d.done && !d.skipped);
               return (
-                <>
-                  <Row
-                    icon="target"
-                    title="Goals"
-                    sub={
-                      active
-                        ? `${active} we’re working on`
-                        : "What would you like to build together?"
-                    }
-                    href={routes.goals}
-                  />
+                <Row
+                  icon="target"
+                  title="Goals"
+                  sub={
+                    active ? `${active} we’re working on` : "What would you like to build together?"
+                  }
+                  href={routes.goals}
+                />
+              );
+            }}
+          </QueryState>
+          {/* Having no challenge is an answer, not a failure — the same
+              reading the challenges screen takes of the same 404. Sharing one
+              QueryState with Goals put "This isn't here anymore" over both
+              rows for every couple who had simply never started one. */}
+          {noChallenge ? (
+            <Row
+              icon="flag"
+              title="Challenges"
+              sub="Something short, together"
+              href={routes.challenges}
+              last
+            />
+          ) : (
+            <QueryState queries={[challenge]} loading={<Skeleton lines={1} />}>
+              {(challengeData) => {
+                const day = challengeData.days.find((d) => !d.done && !d.skipped);
+                return (
                   <Row
                     icon="flag"
                     title="Challenges"
@@ -109,10 +130,10 @@ export default function Together() {
                     href={routes.challenges}
                     last
                   />
-                </>
-              );
-            }}
-          </QueryState>
+                );
+              }}
+            </QueryState>
+          )}
         </Section>
         <Section label="Connect" className="mt-[22px]">
           <QueryState queries={[journal, appr]} loading={<Skeleton lines={2} />}>
