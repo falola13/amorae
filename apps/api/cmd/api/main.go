@@ -26,6 +26,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/app"
 	"github.com/falola13/amorae/apps/api/internal/config"
 	"github.com/falola13/amorae/apps/api/internal/platform/logger"
+	"github.com/falola13/amorae/apps/api/migrations"
 )
 
 func main() {
@@ -54,6 +55,21 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Before anything is served, not after. A deploy where the code arrives
+	// and the schema does not is a deploy that answers 500 to real people
+	// (2026-09-24), so if this cannot be done the process does not start —
+	// an instance that refuses to come up is a visible failure, and the one
+	// still running keeps serving.
+	if cfg.MigrateOnStart {
+		applied, err := migrations.Up(ctx, cfg.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("applying migrations: %w", err)
+		}
+		if applied > 0 {
+			log.Info("migrations applied", "count", applied)
+		}
+	}
 
 	a, err := app.New(ctx, cfg, log)
 	if err != nil {

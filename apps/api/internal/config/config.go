@@ -52,6 +52,20 @@ type Config struct {
 	CloudinaryAPIKey    string
 	CloudinaryAPISecret string
 
+	// MigrateOnStart makes the API apply pending migrations before it serves
+	// anything. Off by default, because the right shape is a one-shot job
+	// that runs before the new version goes live, and docker-compose has
+	// exactly that.
+	//
+	// It exists for deployments with nowhere to put one. On Render's free
+	// tier a push deploys the code and nothing runs migrations, so the app
+	// goes live asking for a column that is not there — which is not a
+	// hypothetical, it is what happened on 2026-09-24. Set this only where a
+	// single instance runs; goose takes a session advisory lock so more than
+	// one would serialise rather than corrupt anything, but a deploy that
+	// waits on another instance's migration is not what anybody planned.
+	MigrateOnStart bool
+
 	// TickSecret, when set, exposes POST /internal/tick — one pass of the
 	// notification worker, on request. It is for deployments with nowhere to
 	// put a process that runs forever: something external and free calls it
@@ -214,6 +228,7 @@ func Load() (Config, error) {
 
 	return Config{
 		AppEnv:              appEnv,
+		MigrateOnStart:      getEnv("MIGRATE_ON_START", "") == "true",
 		TickSecret:          tickSecret,
 		CloudinaryCloudName: cloudName,
 		CloudinaryAPIKey:    cloudKey,

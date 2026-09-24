@@ -13,7 +13,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver goose needs
 	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
-	"github.com/pressly/goose/v3/lock"
 
 	"github.com/falola13/amorae/apps/api/migrations"
 )
@@ -46,17 +45,12 @@ func run() error {
 	}
 	defer db.Close()
 
-	// A session-level Postgres advisory lock means two `migrate` runs
-	// racing against the same database — e.g. two replicas starting at
-	// once — serialize instead of corrupting goose's version tracking.
-	locker, err := lock.NewPostgresSessionLocker()
+	// The provider, its advisory lock and the embedded files all live with
+	// the migrations now, because the API can run them too (MIGRATE_ON_START)
+	// and there should be one way of doing this, not two.
+	provider, err := migrations.Provider(db)
 	if err != nil {
-		return fmt.Errorf("creating session locker: %w", err)
-	}
-
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS, goose.WithSessionLocker(locker))
-	if err != nil {
-		return fmt.Errorf("creating migration provider: %w", err)
+		return err
 	}
 
 	ctx := context.Background()

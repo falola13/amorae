@@ -126,7 +126,20 @@ request, so nothing here has to stay awake.
    ```
 
    Repeat this on any deploy that adds a migration, *before* the new API goes
-   live.
+   live — or, better, do not rely on remembering.
+
+   **Set `MIGRATE_ON_START=true` on the API.** Render deploys on push and runs
+   nothing else, so the code arrives and the schema does not: the app goes
+   live asking for a column that is not there and answers 500 until somebody
+   notices. With the flag, the API applies what is pending before it serves,
+   and refuses to start if it cannot — an instance that will not come up is a
+   visible failure, and the one already running keeps serving.
+
+   compose keeps migrations as their own container because running them
+   in-process races when the API is scaled out. goose takes a session
+   advisory lock, so more than one instance would serialise rather than
+   corrupt anything — but a deploy that waits on another instance's migration
+   is not what anybody planned. Set this only where one instance runs.
 
 3. **The API.** Deploy `apps/api/Dockerfile`, command `/app/api`, root
    directory `apps/api`. It needs every secret in the table below,
