@@ -115,3 +115,29 @@ func TestLoad_MetricsDefaultsToLoopback(t *testing.T) {
 		t.Errorf("MetricsAddr = %q, want loopback by default", cfg.MetricsAddr)
 	}
 }
+
+func TestValidVAPIDSubject(t *testing.T) {
+	good := []string{
+		"mailto:me@example.com",
+		"https://amorae.example/contact",
+	}
+	for _, s := range good {
+		if !validVAPIDSubject(s) {
+			t.Errorf("validVAPIDSubject(%q) = false, want true", s)
+		}
+	}
+
+	bad := []string{
+		"",
+		"me@example.com",                // no scheme
+		"mailto: <me@example.com>",      // the shape people actually type
+		"mailto:me@example.com ",        // trailing space, invisible in an .env
+		"http://amorae.example/contact", // must be https
+		"mailto:",
+	}
+	for _, s := range bad {
+		if validVAPIDSubject(s) {
+			t.Errorf("validVAPIDSubject(%q) = true, want false", s)
+		}
+	}
+}

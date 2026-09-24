@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -96,6 +97,13 @@ func Load() (Config, error) {
 		errs = append(errs, errors.New("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY: set both or neither"))
 	case vapidPrivate != "" && vapidSubject == "":
 		errs = append(errs, errors.New("VAPID_SUBJECT: required when VAPID keys are set (a mailto: or https: URL)"))
+	case vapidPrivate != "" && !validVAPIDSubject(vapidSubject):
+		// It goes into the signed JWT verbatim, and a push service that
+		// dislikes it answers 400 on the first real send — long after this
+		// looked configured. "mailto: <me@example.com>" is the shape that
+		// gets typed; "mailto:me@example.com" is the one that works.
+		errs = append(errs, fmt.Errorf(
+			"VAPID_SUBJECT: must be a bare mailto: or https: URI with no spaces or angle brackets, got %q", vapidSubject))
 	}
 
 	databaseURL := getEnv("DATABASE_URL", "")
@@ -230,4 +238,17 @@ func oneOf(v string, options ...string) bool {
 		}
 	}
 	return false
+}
+
+// validVAPIDSubject checks the shape RFC 8292 asks for: a URI a push service
+// can contact about our sends. Only the shape — whether anyone answers it is
+// not something this can know.
+func validVAPIDSubject(subject string) bool {
+	if strings.ContainsAny(subject, " 	<>") {
+		return false
+	}
+	if rest, ok := strings.CutPrefix(subject, "mailto:"); ok {
+		return strings.Contains(rest, "@") && len(rest) > 2
+	}
+	return strings.HasPrefix(subject, "https://") && len(subject) > len("https://")
 }
