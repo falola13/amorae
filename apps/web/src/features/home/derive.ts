@@ -1,11 +1,11 @@
 import { sumOf } from "@/features/together/goals";
 import type { Event, Goal, NotificationPrefs, PrayerWeek } from "@/lib/api/types";
-import { time12 } from "@/lib/dates";
+import { stillAhead, time12 } from "@/lib/dates";
 
-/** Events not yet done, today or later, earliest first. */
-export const upcomingEvents = (events: Event[], todayIso: string): Event[] =>
+/** Events not yet done and not yet over, earliest first. */
+export const upcomingEvents = (events: Event[], now: Date): Event[] =>
   events
-    .filter((e) => !e.done && e.date >= todayIso)
+    .filter((e) => !e.done && stillAhead(e.date, e.start_time, now))
     .sort((a, b) => (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")));
 
 /**

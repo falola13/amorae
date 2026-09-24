@@ -12,7 +12,7 @@ import { REMINDER_OPTIONS } from "@/features/together/events";
 import { useEvent, useSaveEvent } from "@/features/together/hooks";
 import { eventSchema, type EventInput } from "@/lib/api/schemas";
 import type { Event } from "@/lib/api/types";
-import { iso, longDate, time12 } from "@/lib/dates";
+import { iso } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
 
@@ -137,7 +137,6 @@ function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
                 value={field.value}
                 type="date"
                 onChange={field.onChange}
-                empty={longDate(field.value)}
               />
             )}
           />
@@ -151,7 +150,7 @@ function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
                 value={field.value ?? ""}
                 type="time"
                 onChange={field.onChange}
-                empty={field.value ? time12(field.value) : "Add a time"}
+                placeholder="Add a time"
               />
             )}
           />
@@ -165,7 +164,7 @@ function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
                 value={field.value ?? ""}
                 type="time"
                 onChange={field.onChange}
-                empty={field.value ? time12(field.value) : "Add a time"}
+                placeholder="Add a time"
               />
             )}
           />

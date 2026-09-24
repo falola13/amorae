@@ -1,7 +1,7 @@
 "use client";
 
 import { useEvents } from "@/features/together/hooks";
-import { iso, relativeDay, time12 } from "@/lib/dates";
+import { iso, relativeDay, stillAhead, time12 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { DateRow } from "@/components/ui/date-row";
 import { today } from "@/lib/today";
@@ -43,14 +43,21 @@ export default function Events() {
                 />
               );
             }
+            // "Coming up" means still to come, not "today or later": an
+            // event at 3:15am is over by breakfast, and leaving it under
+            // Coming up all day is the app telling you something it can see
+            // is untrue.
+            const now = today();
             const up = eventsData
-              .filter((e) => !e.done && e.date >= todayIso)
+              .filter((e) => !e.done && stillAhead(e.date, e.start_time, now))
               .sort((a, b) =>
                 (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")),
               );
             const past = eventsData
-              .filter((e) => e.done || e.date < todayIso)
-              .sort((a, b) => b.date.localeCompare(a.date));
+              .filter((e) => e.done || !stillAhead(e.date, e.start_time, now))
+              .sort((a, b) =>
+                (b.date + (b.start_time ?? "")).localeCompare(a.date + (a.start_time ?? "")),
+              );
             return (
               <>
                 {up.length ? (
@@ -73,10 +80,20 @@ export default function Events() {
                         key={e.id}
                         date={e.date}
                         title={e.title}
-                        sub="Done together"
+                        // "Done together" used to be said of everything down
+                        // here, because everything down here used to have
+                        // been ticked. Now that an event also arrives by
+                        // simply happening, saying it of one nobody marked is
+                        // the app telling them they did something they may
+                        // not have.
+                        sub={
+                          e.done
+                            ? "Done together"
+                            : `${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}`
+                        }
                         past
                         href={routes.event(e.id)}
-                        action="Save a moment from it"
+                        action={e.done ? "Save a moment from it" : undefined}
                       />
                     ))}
                   </Section>

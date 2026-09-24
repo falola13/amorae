@@ -12,6 +12,7 @@
     "migrate:status": "cd apps/api && go run ./cmd/migrate status",
     "dev:api": "cd apps/api && go run ./cmd/api",
     "dev:web": "npm --prefix apps/web run dev",
+    "dev:worker": "cd apps/api && go run ./cmd/worker",
     "test:api": "cd apps/api && go test ./...",
     "test:web": "cd apps/web && npm test",
     "vet:api": "cd apps/api && go vet ./...",

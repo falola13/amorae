@@ -68,10 +68,32 @@ Root `package.json` scripts work the same on Windows, macOS and Linux:
 | `npm run up` / `down` | Full stack in Docker |
 | `npm run db` | Start only Postgres |
 | `npm run migrate` / `migrate:down` / `migrate:status` | goose, over the embedded migrations |
-| `npm run dev:api` / `dev:web` | Run an app natively |
+| `npm run dev:api` / `dev:web` / `dev:worker` | Run an app natively |
 | `npm run test:api` | Go tests. Repository tests run only when `AMORAE_TEST_DATABASE_URL` is set |
 | `npm run check` | vet + test + lint + typecheck + build: what CI runs, minus Docker |
 | `npm run lock:web` | Regenerate `apps/web/package-lock.json` **on Linux**, in Docker |
+
+### Why no notification arrived
+
+Three things have to be true, and locally none of them is by default.
+
+1. **Something has to be polling.** `dev:api` and `dev:web` do not start the
+   worker; run `npm run dev:worker` beside them, or `npm run up`, which does.
+   Nothing is queued in advance — the worker decides what is due on each tick,
+   so with no worker running there is nothing to arrive late, there is nothing
+   at all.
+2. **A browser has to have subscribed.** The service worker is registered in
+   production builds only; in development it is actively unregistered, because
+   a live worker serves stale files over hot reload. No service worker means
+   no push subscription, so `npm run dev:web` can never receive one however
+   the switches are set. Use `npm run up`, or `npm --prefix apps/web run build
+   && npm --prefix apps/web start`.
+3. **VAPID keys have to be set.** Without them the worker still decides
+   everything and logs what it would have sent — useful, and silent on the
+   device.
+
+None of this is about localhost. localhost is a secure origin, so service
+workers and push work there exactly as they do over HTTPS.
 
 Use `npm run lock:web` rather than `npm install` in `apps/web` when a
 dependency changes. npm's lockfile is supposed to be cross-platform and for

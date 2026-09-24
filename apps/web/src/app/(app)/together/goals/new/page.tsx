@@ -8,7 +8,7 @@ import { BareTextarea, ComposeBar } from "@/components/ui/kit";
 import { PickRow } from "@/components/ui/pick-row";
 import { useCreateGoal } from "@/features/together/hooks";
 import { goalSchema, type GoalInput } from "@/lib/api/schemas";
-import { addDays, iso, longDate, naira } from "@/lib/dates";
+import { addDays, iso, naira } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
 
@@ -86,13 +86,7 @@ export default function NewGoalPage() {
                 type="text"
                 onChange={(v) => field.onChange(Number(v.replace(/[^\d]/g, "")) || 0)}
                 placeholder={unit === "naira" ? "₦500,000" : "A number"}
-                empty={
-                  field.value
-                    ? unit === "naira"
-                      ? naira(field.value)
-                      : String(field.value)
-                    : undefined
-                }
+                display={field.value && unit === "naira" ? naira(field.value) : undefined}
               />
             )}
           />
@@ -135,7 +129,6 @@ export default function NewGoalPage() {
                 value={field.value}
                 type="date"
                 onChange={field.onChange}
-                empty={longDate(field.value)}
               />
             )}
           />
@@ -149,7 +142,6 @@ export default function NewGoalPage() {
                 value={field.value}
                 type="date"
                 onChange={field.onChange}
-                empty={longDate(field.value)}
                 last
               />
             )}

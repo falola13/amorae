@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { useCouple } from "@/features/couple/hooks";
 import { usePrefs, useSavePrefs } from "@/features/settings/hooks";
-import { time12 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { usePush } from "@/lib/pwa/push";
 import type { NotificationPrefs } from "@/lib/api/types";
@@ -18,8 +17,8 @@ import {
   SwitchRow,
   Title,
   TopBar,
-  cx,
 } from "@/components/ui/kit";
+import { PickRow } from "@/components/ui/pick-row";
 import { QueryState, inPage } from "@/components/ui/query-state";
 
 type BoolKey = {
@@ -109,25 +108,20 @@ export default function NotificationSettings() {
             <Section label="Faith" className="mt-[22px]">
               {row(p, "new_week", "New prayer week")}
               {row(p, "prayer_reminder", "Prayer reminder")}
-              <label
-                className={cx(
-                  "relative flex h-[54px] items-center justify-between pl-4 text-[16px] font-medium",
-                  !p.prayer_reminder && "opacity-50",
-                )}
-              >
-                Reminder time
-                <span className="tabular flex items-center gap-1.5 font-semibold text-plum">
-                  {time12(p.reminder_time)}, every day
-                </span>
-                <input
-                  type="time"
-                  value={p.reminder_time}
-                  disabled={!p.prayer_reminder}
-                  onChange={(e) => save.mutate({ reminder_time: e.target.value })}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  aria-label="Reminder time"
-                />
-              </label>
+              {/* This row had its own hand-rolled invisible input and never
+                  got the fix the compose rows did, so it opened once and then
+                  never again — the reminder time was, in practice, unchangeable
+                  after the first go. It is a PickRow like every other time
+                  field now. */}
+              <PickRow
+                icon="clock"
+                label="Reminder time"
+                value={p.reminder_time}
+                type="time"
+                disabled={!p.prayer_reminder}
+                onChange={(v: string) => v && save.mutate({ reminder_time: v })}
+                last
+              />
             </Section>
             <Section label="Plans" className="mt-[22px]">
               {row(p, "event_reminders", "Event reminders")}

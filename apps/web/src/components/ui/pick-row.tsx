@@ -3,70 +3,97 @@
 import { useId, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { cx } from "@/components/ui/kit";
+import { longDate, time12 } from "@/lib/dates";
 
 /**
- * Opens the native picker on every click, not just the first.
+ * A row on a compose or detail screen holding one small value: a date, a
+ * time, a choice from a list, or a short piece of text.
  *
- * The input is invisible and fills the row, so a tap anywhere lands on it.
- * The browser opens the picker when that first click focuses the input — and
- * then never again, because the input is already focused and a click on a
- * date field's text area does not reopen it. Asking for it explicitly is the
- * only thing that behaves the same way twice.
+ * The control is always a real native one — <input type="date">, <input
+ * type="time">, <select> — because that is what gives each platform the
+ * picker its own users already know: the wheel on iOS, the dialog on Android,
+ * the dropdown on desktop. Nothing here reimplements a calendar, so there is
+ * nothing to keep working as those four change, and the keyboard and
+ * screen-reader behaviour is already right.
  *
- * showPicker needs a real user gesture, which a click handler is, and throws
- * for an input type that has nothing to show — so it is guarded and the throw
- * is swallowed rather than becoming a broken row.
+ * It sits invisibly over the row so the value can be shown in the app's own
+ * words — "24 September", not 09/24/2026, and "Add a time" rather than the
+ * browser's "--:--". Rendering the native field visibly instead was tried and
+ * reverted: it is more robust and looks considerably cheaper, and it puts the
+ * month before the day for a product used in Lagos.
+ *
+ * What the invisible field cost before, and what is fixed here:
+ *
+ *   - It looked like text. Nothing said a row could be tapped, so it read as
+ *     dead. Every row now carries a chevron and lights its icon on focus.
+ *   - Keyboard users had no idea where they were: the ring belonged to an
+ *     invisible box. The row shows it now, through focus-within.
+ *   - On desktop, focus alone does not open a date dropdown, so the picker
+ *     had to be asked for. openPicker does that on every click rather than
+ *     only the first — a second click on an already-focused field opens
+ *     nothing by itself, which is exactly "it opens once and then won't".
+ *
+ * On iOS and Android none of that last part applies: focusing a date or time
+ * field opens the native picker by itself, which is why the field stays
+ * native rather than becoming a sheet of our own.
  */
 function openPicker(event: MouseEvent<HTMLInputElement>) {
   const input = event.currentTarget;
-  if (input.type !== "date" && input.type !== "time") return;
+  if (input.disabled || (input.type !== "date" && input.type !== "time")) return;
   try {
     input.showPicker();
   } catch {
-    /* Older browser, or it declined: the click still focuses the field, which
-       is what happened before this existed. */
+    /* Older browser, or it declined because this was not a real gesture. The
+       click still focuses the field, which is what phones act on anyway. */
   }
 }
 
-/**
- * A row on a compose screen that opens a native picker (date, time), offers a
- * fixed set of choices, or holds a short value.
- *
- * With `options` the overlay is a native <select>, so the choice arrives as a
- * wheel on a phone and a menu on a desktop rather than a text field nobody can
- * see. A value that is not in the list is kept and offered as its own option:
- * an event written before the list existed must not silently become whatever
- * happens to be first.
- *
- * A text row holds a draft while it is being typed into and reports it when
- * the person finishes — on blur, or on Enter. A date, a time and a choice are
- * single decisions and report straight away. The difference matters where the
- * row saves rather than filling in a form: a per-keystroke onChange there is a
- * request per letter, and each one comes back and fights what is being typed.
- */
+/** What the app shows for a value, in its own words rather than the browser's. */
+function shown(
+  value: string,
+  type: PickType | undefined,
+  options: Options | undefined,
+  placeholder: string | undefined,
+) {
+  if (options) return options.find((o) => o.value === value)?.label ?? value ?? placeholder ?? "";
+  if (!value) return placeholder ?? "";
+  if (type === "date") return longDate(value);
+  if (type === "time") return time12(value);
+  return value;
+}
+
+type PickType = "date" | "time" | "text";
+type Options = readonly { value: string; label: string }[];
+
 export function PickRow({
   icon,
   label,
   value,
-  empty,
+  display,
   type,
   options,
   onChange,
   placeholder,
+  disabled,
   last,
 }: {
   icon: IconName;
   label: string;
   value: string;
-  empty?: string;
-  type?: "date" | "time" | "text";
-  options?: readonly { value: string; label: string }[];
+  /**
+   * What to show instead of the value itself, when the value is not what a
+   * person should read — a target of 500000 shown as ₦500,000. Dates and
+   * times never need it: this row formats those.
+   */
+  display?: string;
+  type?: PickType;
+  options?: Options;
   onChange?: (v: string) => void;
   placeholder?: string;
+  disabled?: boolean;
   last?: boolean;
 }) {
   const id = useId();
-  const chosen = options?.find((o) => o.value === value);
   // Null while nobody is typing, so the row follows `value`; a string once
   // they are, so their own keystrokes are what they see.
   const [draft, setDraft] = useState<string | null>(null);
@@ -75,33 +102,47 @@ export function PickRow({
     if (draft !== null && draft !== value) onChange?.(draft);
     setDraft(null);
   };
-  const shown = options
-    ? (chosen?.label ?? value ?? placeholder ?? "")
-    : text && type !== "date" && type !== "time"
-      ? text
-      : empty || placeholder || "";
+  const native = "absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default";
+  const isPicker = type === "date" || type === "time";
+
   return (
     <label
       htmlFor={id}
       className={cx(
-        "relative flex h-[54px] w-full cursor-pointer items-center gap-3.5 text-[16px] font-medium text-ink",
+        "relative flex h-[54px] w-full items-center gap-3.5 text-[16px] font-medium text-ink",
+        "rounded-[10px] focus-within:outline focus-within:outline-2 focus-within:outline-plum",
         !last && "border-b border-line",
+        disabled ? "opacity-50" : "cursor-pointer",
       )}
     >
-      <Icon name={icon} size={22} className="text-stone" />
-      <span className="grow">{label}</span>
-      <span className={cx("tabular", value ? "font-semibold text-plum" : "text-stone")}>
-        {shown}
+      <Icon name={icon} size={22} className="shrink-0 text-stone" />
+      <span className="grow truncate">{label}</span>
+      <span
+        className={cx(
+          "tabular truncate",
+          (options ? value : text) ? "font-semibold text-plum" : "text-stone",
+        )}
+      >
+        {display ||
+          (options
+            ? shown(value, type, options, placeholder)
+            : shown(text, type, undefined, placeholder))}
       </span>
+
       {options && onChange ? (
         <select
           id={id}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          className={native}
           aria-label={label}
         >
-          {chosen || !value ? null : <option value={value}>{value}</option>}
+          {/* A value we were given but do not offer is kept, so choosing
+              nothing changes nothing. */}
+          {options.some((o) => o.value === value) || !value ? null : (
+            <option value={value}>{value}</option>
+          )}
           {options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -112,26 +153,29 @@ export function PickRow({
         <input
           id={id}
           type={type ?? "text"}
-          value={type === "date" || type === "time" ? value : text}
+          value={isPicker ? value : text}
           placeholder={placeholder}
-          onChange={(e) =>
-            type === "date" || type === "time" ? onChange(e.target.value) : setDraft(e.target.value)
-          }
-          onBlur={commit}
+          disabled={disabled}
+          onChange={(e) => (isPicker ? onChange(e.target.value) : setDraft(e.target.value))}
+          onBlur={isPicker ? undefined : commit}
           onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === "Enter") {
+            if (!isPicker && e.key === "Enter") {
               e.preventDefault();
               e.currentTarget.blur();
             }
           }}
           onClick={openPicker}
-          className={cx(
-            "absolute inset-0 h-full w-full cursor-pointer opacity-0",
-            type === "text" && "opacity-0",
-          )}
+          className={native}
           aria-label={label}
         />
       ) : null}
+
+      <Icon
+        name="right"
+        size={16}
+        className={cx("shrink-0 text-stone", !onChange && "invisible")}
+        aria-hidden="true"
+      />
     </label>
   );
 }

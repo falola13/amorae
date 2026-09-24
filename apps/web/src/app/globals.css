@@ -250,6 +250,58 @@ button {
 @utility pt-safe {
   padding-top: calc(var(--safe-top) + 12px);
 }
+/**
+ * A native date or time input, dressed as the value on the right of a row.
+ *
+ * It stays a real <input type="date|time"> on purpose. That is the one thing
+ * that gives every platform the picker its own users already know — the wheel
+ * on iOS, the dialog on Android, the dropdown on desktop — with no JavaScript
+ * to open it, nothing to keep working as browsers change, and the keyboard and
+ * screen-reader behaviour already correct.
+ *
+ * What was wrong before was not the input but that it was invisible: a
+ * transparent field stretched over the row, which had to be prised open with
+ * showPicker() and gave the person nothing to aim at. Visible, it opens on a
+ * tap, every time, everywhere, because that is simply what a date field does.
+ */
+@utility pickfield {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-plum);
+  text-align: right;
+  /* Never let a long localised date push the label off the row. */
+  max-width: 60%;
+  /* Chrome and Safari put their own calendar or clock glyph on the end; the
+     row already has one, and two is a row that looks broken. */
+  &::-webkit-calendar-picker-indicator {
+    display: none;
+    -webkit-appearance: none;
+  }
+  /* Safari aligns the rendered value left inside the field whatever the
+     text-align says, which leaves the value floating in the middle. */
+  &::-webkit-date-and-time-value {
+    text-align: right;
+    margin: 0;
+  }
+  /* An empty field shows the browser's own hint ("dd/mm/yyyy", "--:--"). That
+     is a format hint, not a value, so it reads as one. */
+  &:not(:valid),
+  &:placeholder-shown {
+    color: var(--color-stone);
+    font-weight: 500;
+  }
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
 @utility draw-check {
   stroke-dasharray: 32;
   stroke-dashoffset: 32;

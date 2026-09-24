@@ -71,7 +71,7 @@ export function HomeScreen() {
 
   const me = coupleData.me;
   const partner = coupleData.partner?.display_name ?? "your partner";
-  const upcoming = upcomingEvents(events.data ?? [], todayIso);
+  const upcoming = upcomingEvents(events.data ?? [], today());
   const todays = todayEvent(upcoming, todayIso);
   const nextEvent = nextUpcomingEvent(upcoming, todayIso);
   const goal = activeGoal(goals.data ?? []);

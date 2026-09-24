@@ -14,7 +14,7 @@ import { REMINDER_OPTIONS } from "@/features/together/events";
 import { PickRow } from "@/components/ui/pick-row";
 import type { Event } from "@/lib/api/types";
 import type { EventInput } from "@/lib/api/schemas";
-import { time12, weekdayDate } from "@/lib/dates";
+import { weekdayDate } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { Main } from "@/components/layout/screen";
 import { QueryState, inPage } from "@/components/ui/query-state";
@@ -56,7 +56,7 @@ function When({ event }: { event: Event }) {
         value={event.start_time ?? ""}
         type="time"
         onChange={set("start_time")}
-        empty={event.start_time ? time12(event.start_time) : "Add a time"}
+        placeholder="Add a time"
       />
       <PickRow
         icon="clock"
@@ -64,7 +64,7 @@ function When({ event }: { event: Event }) {
         value={event.end_time ?? ""}
         type="time"
         onChange={set("end_time")}
-        empty={event.end_time ? time12(event.end_time) : "Add a time"}
+        placeholder="Add a time"
       />
       <PickRow
         icon="pin"

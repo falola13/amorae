@@ -70,6 +70,23 @@ export const partOfDay = (startTime?: string) => {
   return "Tonight";
 };
 
+/**
+ * Whether something on this day, at this time, is still ahead of us.
+ *
+ * A date alone is not enough, and that was the bug: an event at 3:15am stayed
+ * under "Coming up" for the rest of the day, because the whole day was still
+ * today. With no time it is a whole-day thing, so it counts as ahead until
+ * the day itself is over.
+ */
+export const stillAhead = (date: string, startTime: string | undefined, now: Date) => {
+  const todayIso = iso(now);
+  if (date !== todayIso) return date > todayIso;
+  if (!startTime) return true;
+  const [h, m] = startTime.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return true;
+  return h * 60 + m > now.getHours() * 60 + now.getMinutes();
+};
+
 export const greeting = (d = new Date()) => {
   const h = d.getHours();
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";

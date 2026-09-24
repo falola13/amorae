@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { useAddMilestone } from "@/features/together/hooks";
 import { milestoneSchema } from "@/lib/api/schemas";
-import { iso, longDate } from "@/lib/dates";
+import { iso } from "@/lib/dates";
 import { today } from "@/lib/today";
 import { BareInput, Button, Sheet, SwitchRow } from "@/components/ui/kit";
 import { PickRow } from "@/components/ui/pick-row";
@@ -61,7 +61,6 @@ export function MilestoneComposer({ open, onClose }: { open: boolean; onClose: (
                 value={field.value}
                 type="date"
                 onChange={field.onChange}
-                empty={longDate(field.value)}
                 last
               />
             </div>
