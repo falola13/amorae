@@ -51,10 +51,12 @@ export default function NotificationPermissionPage() {
         </div>
         <div className="flex flex-col border-t border-line">
           <Preview when="On Sundays" text="Your new prayer week is ready." />
-          {/* What actually arrives, word for word. A notification never
-              names the thing you planned — that is yours, and this lands on
-              a lock screen (FR-NOTF-005). */}
-          <Preview when="Before something you’ve planned" text="Coming up — today at 7:00 pm." />
+          {/* What actually arrives: the plan's own name and when it is, and
+              nothing else about it (FR-NOTF-005.AC2). */}
+          <Preview
+            when="Before something you’ve planned"
+            text="Dinner at Terra — today at 7:00 pm."
+          />
           <Preview
             when="When your partner shares something"
             text="Adeola added something to your shared journal."

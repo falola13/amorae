@@ -109,7 +109,7 @@ func (r *PostgresRepository) candidates(ctx context.Context, query string, args 
 // one conversion too many to reason about.
 func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT u.id, e.id, c.timezone, e.date,
+		SELECT u.id, e.id, e.title, c.timezone, e.date,
 		       COALESCE(to_char(e.start_time, 'HH24:MI'), ''),
 		       e.reminder,
 		       COALESCE(p.event_reminders, true)
@@ -132,7 +132,7 @@ func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Tim
 	var out []EventCandidate
 	for rows.Next() {
 		var c EventCandidate
-		if err := rows.Scan(&c.UserID, &c.EventID, &c.Timezone, &c.Date,
+		if err := rows.Scan(&c.UserID, &c.EventID, &c.Title, &c.Timezone, &c.Date,
 			&c.StartTime, &c.Reminder, &c.Prefs.EventReminders); err != nil {
 			return nil, fmt.Errorf("scanning event to remind about: %w", err)
 		}

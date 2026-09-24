@@ -1596,6 +1596,16 @@ appreciation content on a lock screen.
 - **FR-NOTF-005.AC1** Given any notification category, when it is composed, then its title and
   body shall describe the type of activity (for example "Adeola sent you an appreciation note")
   without quoting or previewing the private content itself.
+- **FR-NOTF-005.AC2** Given an event reminder, when it is composed, then it may name the event
+  and say when it is, and shall carry nothing else about it — not its location, its notes or its
+  checklist.
+
+*Scope note:* AC2 is a deliberate exception, and the line it draws is between private writing and
+a shared plan. A prayer, a journal entry and an appreciation note are things one person wrote;
+quoting them on a lock screen exposes the person who wrote them. An event is a calendar entry the
+two of them made together, and a reminder that will not say what it is for is one you have to
+unlock your phone to understand — which defeats the reminder. Everything else the event holds
+stays inside the app.
 
 #### FR-NOTF-006 Quiet by default
 
@@ -1643,7 +1653,8 @@ worker may have been down, and a nudge about something that began ninety minutes
 The send is keyed on the event *and the moment*, so moving an event you have already been
 reminded about earns a second reminder for the new time, and re-running the worker never earns
 two for the same one. This is why the worker ticks every five minutes rather than hourly — "ten
-minutes before" on an hourly tick can arrive after the thing it was warning about.
+minutes before" on an hourly tick can arrive after the thing it was warning about. The reminder
+names the event and says when it is, and nothing else about it (FR-NOTF-005.AC2).
 
 Appreciation, journal, goals, challenges and important dates wait on those modules.
 

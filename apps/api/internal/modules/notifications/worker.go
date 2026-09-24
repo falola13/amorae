@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -114,10 +115,14 @@ const eventReminderGrace = time.Hour
 
 // ForEventReminder is the nudge before something the two of them planned.
 //
-// The body says when, never what. An event title is theirs, and this lands on
-// a lock screen, which is the one place in Amorae that is not private
-// (FR-NOTF-005) — so "Coming up · Today at 8:30 am", and the event itself is
-// one tap away.
+// It names the event: "Breakfast out · Today at 8:30 am". FR-NOTF-005 keeps
+// private writing off the lock screen — prayers, journal, appreciation — and
+// a plan is not that. It is a calendar entry the two of them made together,
+// and a reminder that will not say what it is about is a reminder you have to
+// unlock your phone to understand, which is no reminder at all.
+//
+// Everything else the event holds stays inside: no location, no notes, no
+// checklist.
 func ForEventReminder(c EventCandidate, now time.Time) (Notification, bool) {
 	if !c.Prefs.EventReminders {
 		return Notification{}, false
@@ -138,6 +143,13 @@ func ForEventReminder(c EventCandidate, now time.Time) (Notification, bool) {
 	day := time.Date(c.Date.Year(), c.Date.Month(), c.Date.Day(), 0, 0, 0, 0, zone)
 	body := whenItIs(day, c.StartTime, at, zone)
 
+	// An untitled event cannot happen through the app, but a notification
+	// with an empty headline can, so it has something to fall back on.
+	title := strings.TrimSpace(c.Title)
+	if title == "" {
+		title = "Coming up"
+	}
+
 	return Notification{
 		UserID: c.UserID,
 		Kind:   KindEventReminder,
@@ -146,7 +158,7 @@ func ForEventReminder(c EventCandidate, now time.Time) (Notification, bool) {
 		// sent for the old one should not stop that.
 		Key: c.EventID.String() + "@" + at.UTC().Format(time.RFC3339),
 		Message: push.Message{
-			Title: "Coming up",
+			Title: title,
 			Body:  body,
 			Path:  "/together/events/" + c.EventID.String(),
 			Tag:   KindEventReminder,
@@ -183,6 +195,7 @@ const statusDraft weekStatus = "draft"
 type EventCandidate struct {
 	UserID  uuid.UUID
 	EventID uuid.UUID
+	Title   string
 	// The couple's zone, not the person's: it is the zone the event's date
 	// and time were written in.
 	Timezone string

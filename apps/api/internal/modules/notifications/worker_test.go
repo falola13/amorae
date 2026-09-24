@@ -424,7 +424,7 @@ func TestForEventReminder(t *testing.T) {
 	}
 	id := uuid.New()
 	base := EventCandidate{
-		UserID: uuid.New(), EventID: id,
+		UserID: uuid.New(), EventID: id, Title: "Dinner at Terra",
 		Timezone: "Africa/Lagos",
 		Date:     time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
 		// 19:30 Lagos is 18:30 UTC, so "1 hour before" is 17:30 UTC.
@@ -441,15 +441,33 @@ func TestForEventReminder(t *testing.T) {
 		if n.Message.Path != "/together/events/"+id.String() {
 			t.Errorf("path = %q, should open the event", n.Message.Path)
 		}
-		// FR-NOTF-005: a lock screen never carries what they wrote.
-		if strings.Contains(n.Message.Body+n.Message.Title, "Dinner") {
-			t.Errorf("the event's own words reached the lock screen: %q", n.Message.Body)
+		// A plan is not private writing: the reminder says what it is for,
+		// or there is no point waking somebody for it.
+		if n.Message.Title != "Dinner at Terra" {
+			t.Errorf("title = %q, should name the event", n.Message.Title)
 		}
 		if !strings.Contains(n.Message.Body, "7:30 pm") {
 			t.Errorf("body = %q, should say when it is", n.Message.Body)
 		}
 		if !strings.Contains(n.Message.Body, "Today") {
 			t.Errorf("body = %q, should place the day", n.Message.Body)
+		}
+	})
+
+	t.Run("an event with no title still has a headline", func(t *testing.T) {
+		c := base
+		c.Title = "   "
+		n, ok := ForEventReminder(c, due)
+		if !ok || n.Message.Title == "" {
+			t.Errorf("title = %q, want something to show", n.Message.Title)
+		}
+	})
+
+	t.Run("nothing else about the event goes out", func(t *testing.T) {
+		// Where it is and what is on its checklist stay inside the app.
+		n, _ := ForEventReminder(base, due)
+		if strings.Contains(n.Message.Body, "Terra") {
+			t.Errorf("body = %q, should be the when and nothing more", n.Message.Body)
 		}
 	})
 
