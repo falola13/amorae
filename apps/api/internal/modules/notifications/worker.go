@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -604,11 +605,17 @@ func (w *Worker) deliver(ctx context.Context, n Notification, now time.Time) (bo
 		err := w.sender.Send(ctx, push.Device{Endpoint: d.Endpoint, P256dh: d.P256dh, Auth: d.Auth}, n.Message)
 		switch {
 		case errors.Is(err, push.ErrGone):
+			w.log.Info("a subscription is gone; removing it", "service", pushService(d.Endpoint))
 			if err := w.repo.Unsubscribe(ctx, d.Endpoint); err != nil {
 				w.log.Warn("could not remove a dead subscription", "error", err)
 			}
 		case err != nil:
-			w.log.Warn("a device did not take the notification", "error", err)
+			// Which push service refused matters more than the error alone:
+			// one device failing while another succeeds is the shape of a
+			// platform problem, and without this the log cannot tell you
+			// which platform.
+			w.log.Warn("a device did not take the notification",
+				"service", pushService(d.Endpoint), "kind", n.Kind, "error", err)
 		default:
 			delivered = true
 			if err := w.repo.MarkSent(ctx, d.Endpoint, now); err != nil {
@@ -623,6 +630,27 @@ func (w *Worker) deliver(ctx context.Context, n Notification, now time.Time) (bo
 		return false, w.release(ctx, n, nil)
 	}
 	return true, nil
+}
+
+// pushService names the service behind an endpoint — apple, fcm, mozilla —
+// without putting the endpoint itself in a log. The rest of the URL is the
+// address of one person's browser and belongs in the database, not in
+// something we read over somebody's shoulder.
+func pushService(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return "unknown"
+	}
+	switch host := u.Host; {
+	case strings.Contains(host, "apple"):
+		return "apple"
+	case strings.Contains(host, "googleapis"), strings.Contains(host, "google"):
+		return "fcm"
+	case strings.Contains(host, "mozilla"):
+		return "mozilla"
+	default:
+		return host
+	}
 }
 
 func (w *Worker) release(ctx context.Context, n Notification, cause error) error {

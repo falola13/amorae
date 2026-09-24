@@ -915,3 +915,24 @@ func TestForChallenge(t *testing.T) {
 		}
 	})
 }
+
+func TestPushService_NamesThePlatformNotThePerson(t *testing.T) {
+	// The rest of a push endpoint is the address of one person's browser. It
+	// belongs in the database, not in a log somebody reads over your shoulder.
+	tests := map[string]string{
+		"https://web.push.apple.com/QF-MeF-lG8sQteU-secret-part": "apple",
+		"https://fcm.googleapis.com/fcm/send/cDx-secret-part":    "fcm",
+		"https://updates.push.services.mozilla.com/wpush/v2/abc": "mozilla",
+		"https://push.example.test/whatever":                     "push.example.test",
+		"not a url at all":                                       "unknown",
+	}
+	for endpoint, want := range tests {
+		got := pushService(endpoint)
+		if got != want {
+			t.Errorf("pushService(%q) = %q, want %q", endpoint, got, want)
+		}
+		if strings.Contains(got, "secret-part") {
+			t.Errorf("the endpoint itself leaked into the label: %q", got)
+		}
+	}
+}
