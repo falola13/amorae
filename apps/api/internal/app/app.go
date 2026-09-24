@@ -35,6 +35,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/mailer"
 	"github.com/falola13/amorae/apps/api/internal/platform/metrics"
 	"github.com/falola13/amorae/apps/api/internal/platform/middleware"
+	"github.com/falola13/amorae/apps/api/internal/platform/photos"
 	"github.com/falola13/amorae/apps/api/internal/platform/push"
 	"github.com/falola13/amorae/apps/api/internal/platform/ratelimit"
 	"github.com/falola13/amorae/apps/api/internal/platform/server"
@@ -120,7 +121,15 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	milestonesSvc := milestones.NewService(milestonesRepo, togetherCouples, now)
 
 	memoriesRepo := memories.NewPostgresRepository(db)
-	memoriesSvc := memories.NewService(memoriesRepo, togetherCouples, now)
+	// nil when Cloudinary is not configured: the photo endpoints then say so
+	// and everything else about a memory works (FR-MEM-003, Q-06).
+	var pictures memories.Photos
+	if store := photos.New(cfg.CloudinaryCloudName, cfg.CloudinaryAPIKey, cfg.CloudinaryAPISecret); store != nil {
+		pictures = store
+	} else {
+		log.Info("no Cloudinary credentials: memories will have no photos")
+	}
+	memoriesSvc := memories.NewService(memoriesRepo, togetherCouples, pictures, now)
 
 	journalRepo := journal.NewPostgresRepository(db)
 	journalSvc := journal.NewService(journalRepo, togetherCouples, now)

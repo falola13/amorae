@@ -173,6 +173,15 @@ export interface Memory {
   location?: string;
   note?: string;
   has_photo: boolean;
+  /** Signed, unguessable, generated per request. Absent when there is none. */
+  photo_url?: string;
+}
+
+/** Permission to upload one file, to one name the server chose. */
+export interface PhotoTicket {
+  upload_url: string;
+  /** Send exactly these, plus the file. Rebuilding the list breaks the signature. */
+  fields: Record<string, string>;
 }
 
 export interface Milestone {

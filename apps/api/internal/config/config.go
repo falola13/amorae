@@ -44,6 +44,14 @@ type Config struct {
 	// push service can use if something goes wrong. Required by RFC 8292.
 	VAPIDSubject string
 
+	// Cloudinary holds the photos attached to memories (FR-MEM-003, Q-06).
+	// All three or none: without them the photo endpoints answer "not
+	// available" and the rest of the app is unaffected, exactly as it is
+	// without VAPID keys.
+	CloudinaryCloudName string
+	CloudinaryAPIKey    string
+	CloudinaryAPISecret string
+
 	// TickSecret, when set, exposes POST /internal/tick — one pass of the
 	// notification worker, on request. It is for deployments with nowhere to
 	// put a process that runs forever: something external and free calls it
@@ -174,6 +182,20 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("BFF_SECRET: must be at least %d characters when set", minBFFSecretLen))
 	}
 
+	cloudName := getEnv("CLOUDINARY_CLOUD_NAME", "")
+	cloudKey := getEnv("CLOUDINARY_API_KEY", "")
+	cloudSecret := getEnv("CLOUDINARY_API_SECRET", "")
+	set := 0
+	for _, v := range []string{cloudName, cloudKey, cloudSecret} {
+		if v != "" {
+			set++
+		}
+	}
+	if set != 0 && set != 3 {
+		errs = append(errs, errors.New(
+			"CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET: set all three or none"))
+	}
+
 	// The same floor as the BFF secret, for the same reason: it is the only
 	// thing between the internet and an endpoint that does work.
 	tickSecret := getEnv("TICK_SECRET", "")
@@ -191,27 +213,30 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		AppEnv:          appEnv,
-		TickSecret:      tickSecret,
-		HTTPAddr:        httpAddr(),
-		DatabaseURL:     databaseURL,
-		DBMaxConns:      dbMaxConns,
-		LogLevel:        logLevel,
-		LogFormat:       logFormat,
-		SessionTTL:      sessionTTL,
-		BCryptCost:      bcryptCost,
-		ShutdownTimeout: shutdownTimeout,
-		MetricsAddr:     getEnv("METRICS_ADDR", "127.0.0.1:9090"),
-		BFFSecret:       bffSecret,
-		RESEND_API_KEY:  resendAPIKey,
-		DefaultFrom:     mailFrom,
-		AppURL:          appURL,
-		TermsVersion:    getEnv("TERMS_VERSION", "2026-01"),
-		PrivacyVersion:  getEnv("PRIVACY_VERSION", "2026-01"),
-		FaithVersion:    getEnv("FAITH_VERSION", "2026-01"),
-		VAPIDPublicKey:  vapidPublic,
-		VAPIDPrivateKey: vapidPrivate,
-		VAPIDSubject:    vapidSubject,
+		AppEnv:              appEnv,
+		TickSecret:          tickSecret,
+		CloudinaryCloudName: cloudName,
+		CloudinaryAPIKey:    cloudKey,
+		CloudinaryAPISecret: cloudSecret,
+		HTTPAddr:            httpAddr(),
+		DatabaseURL:         databaseURL,
+		DBMaxConns:          dbMaxConns,
+		LogLevel:            logLevel,
+		LogFormat:           logFormat,
+		SessionTTL:          sessionTTL,
+		BCryptCost:          bcryptCost,
+		ShutdownTimeout:     shutdownTimeout,
+		MetricsAddr:         getEnv("METRICS_ADDR", "127.0.0.1:9090"),
+		BFFSecret:           bffSecret,
+		RESEND_API_KEY:      resendAPIKey,
+		DefaultFrom:         mailFrom,
+		AppURL:              appURL,
+		TermsVersion:        getEnv("TERMS_VERSION", "2026-01"),
+		PrivacyVersion:      getEnv("PRIVACY_VERSION", "2026-01"),
+		FaithVersion:        getEnv("FAITH_VERSION", "2026-01"),
+		VAPIDPublicKey:      vapidPublic,
+		VAPIDPrivateKey:     vapidPrivate,
+		VAPIDSubject:        vapidSubject,
 	}, nil
 }
 

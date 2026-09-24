@@ -200,6 +200,17 @@ a missing key should stop a deploy rather than surface later as silence.
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | You have these. The subject is a `mailto:` or `https:` URL |
 | `RESEND_API_KEY` / `MAIL_FROM` | Resend's free tier. `MAIL_FROM` needs a domain verified with them |
 
+And three that it *will* start without, because photos are optional:
+
+| | Where from |
+|---|---|
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Cloudinary's free tier, all three on its dashboard the moment you sign up. No card |
+
+Leave them empty and the app runs with photos simply absent — the memory composer
+offers no file picker and the photo endpoints answer `photos_unavailable`. That is
+deliberate: a feature that needs a third party should degrade, not stop the boot.
+Set them later and photos appear, with nothing else to change.
+
 **The one that will not shout at you.** `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is
 inlined into the browser bundle when the web image is *built*, not read when
 it runs — so setting it only on the running container is too late and it is
@@ -256,8 +267,10 @@ it in a hurry.
 
 Not soon, and not for two people, but so it is not a surprise:
 
-- **Photos** (FR-MEM-003) need object storage. Backblaze B2 and Cloudflare R2
-  both have free allowances two people will not exhaust for years.
+- **Photos** are on Cloudinary's free tier, which two people will not exhaust
+  for years — it is measured in monthly credits covering storage, transformation
+  and delivery together. Browsers upload straight to Cloudinary, so photos cost
+  the API host nothing and do not count against Vercel's bandwidth either.
 - **Email** beyond Resend's free allowance, which is far past what two
   accounts send.
 - **Postgres beyond a free tier**, on Option C. On A or B it is a file on your

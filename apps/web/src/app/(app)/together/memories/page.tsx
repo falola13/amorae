@@ -18,7 +18,29 @@ import {
   TopBar,
 } from "@/components/ui/kit";
 
-function Photo({ h, label }: { h: number; label: string }) {
+/**
+ * A memory's picture, or the space where one would be.
+ *
+ * The placeholder is still here because a memory saved without a photo is the
+ * common case and an archive of bare text needs some rhythm. What changed is
+ * that a memory with a photo now shows the photo.
+ */
+function Photo({ h, label, src }: { h: number; label: string; src?: string }) {
+  if (src) {
+    return (
+      // Cloudinary already delivers this with f_auto,q_auto from its own CDN.
+      // Sending it through Vercel's optimiser too would add a hop and, on
+      // Hobby, a bill, to re-do work that is already done.
+      // eslint-disable-next-line @next/next/no-img-element -- already optimised at the CDN
+      <img
+        src={src}
+        alt={label}
+        loading="lazy"
+        className="w-full rounded-btn bg-photo object-cover"
+        style={{ height: h }}
+      />
+    );
+  }
   return (
     <div
       role="img"
@@ -77,7 +99,9 @@ export default function Memories() {
                     <div key={m.id} className="flex flex-col gap-3.5">
                       {showMonth ? <Micro>{month}</Micro> : null}
                       <article className="flex flex-col gap-1">
-                        {m.has_photo ? <Photo h={m.note ? 190 : 120} label={m.title} /> : null}
+                        {m.has_photo ? (
+                          <Photo h={m.note ? 190 : 120} label={m.title} src={m.photo_url} />
+                        ) : null}
                         <div className="mt-2 text-bodylg font-semibold tracking-[-0.01em]">
                           {m.title}
                         </div>

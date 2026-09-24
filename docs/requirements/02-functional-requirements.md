@@ -1464,7 +1464,8 @@ optional note.
 and the decoder refuses fields it has not been told about — so the field is accepted and then
 thrown away. Whether a photo exists is the server's to say, and it becomes true when one is
 actually stored (FR-MEM-003), never because a request claimed it. A memory that says it has a
-picture it does not have is a broken screen.
+picture it does not have is a broken screen. It is not a column either: `has_photo` is computed
+from whether `photo_id` is set, so the two cannot drift apart.
 
 #### FR-MEM-002 View memories
 
@@ -1488,7 +1489,7 @@ them would then have to manage, and the point is an archive to read back.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Not started — Blocked by Q-06 | Test |
+| Should | MVP | Implemented | Test |
 
 The system shall let either partner attach one photo to a memory.
 
@@ -1498,11 +1499,28 @@ The system shall let either partner attach one photo to a memory.
   partner uploads it, then the system shall store it in private object storage, strip EXIF and
   GPS data, and set `has_photo` true (Q-06 recommendation).
 
-*Status note:* still blocked. Q-06 chose the shape — private bucket, short-lived signed URLs,
-images only, 10 MB, EXIF and GPS stripped — but no bucket exists and nothing can set `has_photo`.
-The composer's "Add a photo" button, which had no handler behind it and never could have worked,
-has been removed rather than left to be tapped; putting it back is a line of markup once there is
-somewhere for the file to go.
+*How it is stored:* Cloudinary, and the browser uploads **straight there** rather than through
+the API. A file relayed through our container would cost the one thing the free tier is meanest
+with — a 10 MB photo occupying a request slot for its whole upload — for no benefit, since the
+bytes end up in the same place either way. So the API only mints a signature
+(`POST /v1/memories/{id}/photo/ticket`), the browser posts the file to Cloudinary with it, and the
+memory is told about the result afterwards (`PUT /v1/memories/{id}/photo`). `has_photo` becomes
+true only at that last step, which keeps FR-MEM-001's rule intact: a memory claims a photo when
+one has actually landed, not when a client said so.
+
+The server picks the asset's name — `amorae/{couple}/memories/{memory}` — so the client never
+chooses where a file goes, and one memory can hold exactly one photo. EXIF and GPS are dropped by
+re-encoding: delivery is `f_auto,q_auto`, which re-compresses and carries no metadata across.
+
+*Deviation from Q-06 — signed URLs that do not expire.* Q-06 asked for **short-lived** signed
+URLs. Cloudinary's free plan has no expiring-token feature, so a delivery URL is signed and
+unguessable but valid indefinitely. What this costs: someone who obtains a URL keeps access to
+that one photo, and deleting the memory does not invalidate a URL already copied. What it does
+not cost: the asset is `type: authenticated`, so no photo can be reached by guessing a URL, and
+the listing endpoint only signs URLs for the couple the photos belong to. For two people sharing
+an album this is the right trade against the alternatives, which are paying for a plan tier or
+proxying every image byte through the API. Revisit if this is ever used by strangers.
+
 
 ---
 
@@ -2227,8 +2245,17 @@ verification (FR-AUTH-009), and the email-change notices (FR-ACCT-003) — goes 
 
 ### 5.5 Object storage
 
-A private, S3-compatible bucket for memory photos, with presigned uploads, a 10 MB cap, images
-only, and EXIF/GPS stripped server-side (Q-06 recommendation). Not yet built (FR-MEM-003).
+**Cloudinary**, for memory photos (FR-MEM-003). Assets are `type: authenticated` — unreachable
+without a signature — and the browser uploads directly to Cloudinary using a signature the API
+mints, so no image byte passes through our own container. Delivery is a signed URL with
+`f_auto,q_auto`, which re-encodes and so drops EXIF and GPS. A 10 MB cap and an images-only
+filter are enforced client-side before upload and by Cloudinary on receipt.
+
+Chosen over an S3-compatible bucket because it does transformation, format negotiation and CDN
+delivery in the same free tier, none of which a bare bucket gives. The seam is
+`internal/platform/photos`, one type with two methods, so a move to S3 or R2 is a rewrite of that
+file and nothing else. One Q-06 deviation, recorded under FR-MEM-003: signed URLs do not expire
+on the free plan.
 
 ### 5.6 AI provider
 
@@ -2308,7 +2335,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | Implemented | Go unit tests; API pass incl. the closed window, and the toast's Undo driven in the browser 2026-09-24 |
 | FR-MEM-001 | G-04 | `POST /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
 | FR-MEM-002 | G-04 | `GET /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
-| FR-MEM-003 | G-04 | TBD — Blocked by Q-06 | Not started | None yet |
+| FR-MEM-003 | G-04 | `POST /v1/memories/{id}/photo/ticket`, `PUT`/`DELETE /v1/memories/{id}/photo` | Implemented | Go unit tests incl. a signature pinned to Cloudinary's published vector |
 | FR-DATE-001 | G-04 | `POST /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |
 | FR-DATE-002 | G-04 | `GET /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |
 | FR-DATE-003 | G-04 | Worker (`ForImportantDates`) | Implemented | Go unit tests; worker run against the database 2026-09-24 |

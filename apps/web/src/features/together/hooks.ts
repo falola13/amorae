@@ -40,4 +40,6 @@ export const useAddJournal = () => useWrite(w.addJournal);
 export const useSendAppreciation = () => useWrite(w.sendAppreciation);
 export const useUndoAppreciation = () => useWrite(w.undoAppreciation);
 export const useAddMemory = () => useWrite(w.addMemory);
+export const useAddMemoryWithPhoto = () => useWrite(w.addMemoryWithPhoto);
+export const useRemovePhoto = () => useWrite(w.removePhoto);
 export const useAddMilestone = () => useWrite(w.addMilestone);

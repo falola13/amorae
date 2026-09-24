@@ -8,6 +8,7 @@ import type {
   Goal,
   JournalEntry,
   Memory,
+  PhotoTicket,
   Milestone,
 } from "@/lib/api/types";
 import type { EventInput, GoalInput } from "@/lib/api/schemas";
@@ -56,6 +57,12 @@ export const togetherApi = {
 
   memories: () => http.get<Memory[]>("/memories").then((r) => r.data),
   addMemory: (m: Omit<Memory, "id">) => http.post<Memory>("/memories", m).then((r) => r.data),
+  photoTicket: (id: string) =>
+    http.post<PhotoTicket>(apiPath`/memories/${id}/photo/ticket`).then((r) => r.data),
+  /** Say the upload happened. No body: the server chose the only name it could go to. */
+  attachPhoto: (id: string) => http.put<Memory>(apiPath`/memories/${id}/photo`).then((r) => r.data),
+  removePhoto: (id: string) =>
+    http.delete<Memory>(apiPath`/memories/${id}/photo`).then((r) => r.data),
 
   milestones: () => http.get<Milestone[]>("/milestones").then((r) => r.data),
   addMilestone: (m: Omit<Milestone, "id">) =>

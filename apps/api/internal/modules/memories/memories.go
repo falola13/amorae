@@ -17,7 +17,12 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-var ErrNotFound = apperr.NotFound("not_found", "That moment isn’t here.")
+var (
+	ErrNotFound = apperr.NotFound("not_found", "That moment isn’t here.")
+	// Photos need an account somewhere else, so this says so plainly rather
+	// than failing as though something broke.
+	ErrNoPhotos = apperr.Invalid("photos_unavailable", "Photos aren’t set up on this server yet.")
+)
 
 const (
 	maxTitleRunes    = 80
@@ -33,9 +38,14 @@ type Memory struct {
 	Date     time.Time
 	Location string
 	Note     string
-	// Whether a photo is attached. Never set from a request (FR-MEM-003).
-	HasPhoto bool
+	// Where the photo is, if there is one — a Cloudinary public id the server
+	// derived. Empty means no photo. There is no separate "has a photo" flag
+	// to fall out of step with it (FR-MEM-003).
+	PhotoID string
 }
+
+// HasPhoto is the question screens actually ask.
+func (m Memory) HasPhoto() bool { return m.PhotoID != "" }
 
 // Input is what either partner sends to keep one.
 type Input struct {

@@ -160,6 +160,41 @@ export const togetherWrites = {
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
+  // Keeping a moment and attaching a picture to it are one act to the person
+  // doing it, and three steps underneath: create the memory, ask for
+  // permission to upload, put the file where the permission points, then say
+  // it landed. One write so a half-finished upload cannot leave a memory that
+  // claims a photo it has not got.
+  addMemoryWithPhoto: defineWrite({
+    mutationKey: ["memories", "add-with-photo"],
+    mutationFn: async ({ memory, photo }: { memory: Omit<Memory, "id">; photo?: File | null }) => {
+      const saved = await api.addMemory(memory);
+      if (!photo) return saved;
+
+      const ticket = await api.photoTicket(saved.id);
+      const form = new FormData();
+      // Exactly what the server signed, then the file. Nothing added, nothing
+      // renamed — the signature covers this list.
+      for (const [key, value] of Object.entries(ticket.fields)) form.append(key, value);
+      form.append("file", photo);
+
+      const upload = await fetch(ticket.upload_url, { method: "POST", body: form });
+      if (!upload.ok) {
+        // The moment is saved; only the picture failed. Say which, rather
+        // than letting it read as having lost the whole thing.
+        throw new Error("The moment was saved, but the photo didn’t upload.");
+      }
+      return api.attachPhoto(saved.id);
+    },
+    invalidates: [keys.memories],
+    onlineOnly: true,
+  }),
+  removePhoto: defineWrite({
+    mutationKey: ["memories", "photo", "remove"],
+    mutationFn: (id: string) => api.removePhoto(id),
+    invalidates: [keys.memories],
+    idempotent: "removing a photo that is already gone leaves the same memory behind.",
+  }),
   addMemory: defineWrite({
     mutationKey: ["memories", "add"],
     mutationFn: (m: Omit<Memory, "id">) => api.addMemory(m),

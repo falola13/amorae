@@ -71,6 +71,11 @@ services:
       # Set only where there is nowhere to run the worker, and something
       # external calls POST /internal/tick instead. Empty means no endpoint.
       TICK_SECRET: ${TICK_SECRET:-}
+      # All three or none. Empty means memory photos are unavailable, which
+      # the app handles rather than refusing to start.
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
     ports:
       - "127.0.0.1:8088:8088"
     depends_on:

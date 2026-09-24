@@ -23,7 +23,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 // Every method takes a couple id, never a user id: another couple's memory is
 // simply not found (DEC-19).
 
-const columns = `id, couple_id, title, date, COALESCE(location, ''), COALESCE(note, ''), has_photo`
+const columns = `id, couple_id, title, date, COALESCE(location, ''), COALESCE(note, ''), COALESCE(photo_id, '')`
 
 // List is the couple's memories, newest first — the order an archive is read
 // in, and the order the screen wants before it groups them by month.
@@ -43,7 +43,7 @@ func (r *PostgresRepository) List(ctx context.Context, coupleID uuid.UUID) ([]Me
 	for rows.Next() {
 		var m Memory
 		if err := rows.Scan(&m.ID, &m.CoupleID, &m.Title, &m.Date,
-			&m.Location, &m.Note, &m.HasPhoto); err != nil {
+			&m.Location, &m.Note, &m.PhotoID); err != nil {
 			return nil, fmt.Errorf("scanning memory: %w", err)
 		}
 		out = append(out, m)
@@ -61,7 +61,7 @@ func (r *PostgresRepository) ByID(ctx context.Context, coupleID, id uuid.UUID) (
 		FROM memories
 		WHERE couple_id = $1 AND id = $2
 	`, coupleID, id).Scan(&m.ID, &m.CoupleID, &m.Title, &m.Date,
-		&m.Location, &m.Note, &m.HasPhoto)
+		&m.Location, &m.Note, &m.PhotoID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Memory{}, ErrNotFound
@@ -71,8 +71,8 @@ func (r *PostgresRepository) ByID(ctx context.Context, coupleID, id uuid.UUID) (
 	return m, nil
 }
 
-// Create keeps a moment. has_photo is left to its default: a photo becomes
-// true when one is actually stored, never because a request said so.
+// Create keeps a moment. No photo: one is attached afterwards, once it has
+// actually been stored somewhere (SetPhoto).
 func (r *PostgresRepository) Create(ctx context.Context, m Memory, at time.Time) (uuid.UUID, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -86,6 +86,22 @@ func (r *PostgresRepository) Create(ctx context.Context, m Memory, at time.Time)
 		return uuid.UUID{}, fmt.Errorf("keeping memory: %w", err)
 	}
 	return id, nil
+}
+
+// SetPhoto records where a memory's picture is, or clears it. The id is the
+// server's own (photos.PublicID), never a client's.
+func (r *PostgresRepository) SetPhoto(ctx context.Context, coupleID, id uuid.UUID, photoID string, at time.Time) error {
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		UPDATE memories SET photo_id = $3, updated_at = $4
+		WHERE couple_id = $1 AND id = $2
+	`, coupleID, id, nullIfEmpty(photoID), at)
+	if err != nil {
+		return fmt.Errorf("attaching photo: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func nullIfEmpty(s string) any {
