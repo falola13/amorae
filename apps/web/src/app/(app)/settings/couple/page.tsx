@@ -87,7 +87,7 @@ export default function CouplePage() {
               <Row
                 icon="globe"
                 title="Where your week starts"
-                sub={zoneLabel(c.timezone)}
+                sub={zoneLabel(c.timezone) || "Not set yet"}
                 onClick={edit}
                 last
               />

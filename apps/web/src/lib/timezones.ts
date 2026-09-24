@@ -15,5 +15,11 @@ export const ZONES = [
   "UTC",
 ] as const;
 
-/** "America/New York" — the IANA name, just easier to read. */
-export const zoneLabel = (zone: string) => zone.replace(/_/g, " ");
+/**
+ * "America/New York" — the IANA name, just easier to read.
+ *
+ * Takes an optional value on purpose. An older API, a field added after a
+ * client shipped, or a partial response should degrade to a blank label, not
+ * take the whole screen down with it.
+ */
+export const zoneLabel = (zone?: string | null) => (zone ? zone.replace(/_/g, " ") : "");
