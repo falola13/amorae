@@ -107,8 +107,19 @@ request, so nothing here has to stay awake.
 1. **Postgres first**, because everything else needs its URL. Create the
    database, copy the connection string.
 
-2. **Migrate.** Nothing runs migrations for you here — that is `migrate`'s own
-   container in compose, which this option does not use. From your laptop:
+2. **Migrate, and use the direct endpoint to do it.** Nothing runs migrations
+   for you here — that is `migrate`'s own container in compose, which this
+   option does not use. Neon gives you two URLs and they differ by `-pooler`
+   in the host; migrations want the direct one, and so does the API.
+
+   An application with its own connection pool does not need a pooler as
+   well. Through one, pgx's cached prepared statements collide as server
+   connections are handed between clients — `prepared statement name is
+   already in use`, intermittently, in production only. The code now drops to
+   an uncached exec mode when it detects a pooler, so the pooled URL is slow
+   rather than broken; the direct URL is still the right one.
+
+   From your laptop:
 
    ```
    cd apps/api && DATABASE_URL='postgres://…?sslmode=require' go run ./cmd/migrate up
