@@ -21,6 +21,10 @@ USER nonroot:nonroot
 
 COPY --from=builder /app/api /app/api
 COPY --from=builder /app/migrate /app/migrate
+# Built above and, until now, left behind: the worker is started from this
+# same image with `command: /app/worker`, so an image without it is an image
+# where no notification is ever sent.
+COPY --from=builder /app/worker /app/worker
 
 EXPOSE 8088
 ENV HTTP_ADDR=:8088

@@ -95,6 +95,55 @@ func (r *PostgresRepository) candidates(ctx context.Context, query string, args 
 	return out, nil
 }
 
+// DueEventReminders is every person in a live couple paired with an event of
+// theirs whose reminder might be due.
+//
+// The window is wide on purpose. Which moment a phrase like "the day before"
+// lands on is a rule, and rules live in Go (EventReminderAt) where they can
+// be read and tested — so SQL narrows to the handful of events that could
+// possibly matter and lets Go decide. Two days either side covers the longest
+// lead the composer offers and leaves room for a worker that was down.
+//
+// start_time comes back as text rather than a TIME, because what it means is
+// a wall clock in the couple's zone, and a driver's idea of a bare time is
+// one conversion too many to reason about.
+func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT u.id, e.id, c.timezone, e.date,
+		       COALESCE(to_char(e.start_time, 'HH24:MI'), ''),
+		       e.reminder,
+		       COALESCE(p.event_reminders, true)
+		FROM events e
+		JOIN couples c ON c.id = e.couple_id
+		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN notification_preferences p ON p.user_id = u.id
+		WHERE c.dissolved_at IS NULL
+		  AND NOT e.done
+		  AND COALESCE(e.reminder, '') <> ''
+		  AND e.date BETWEEN ($1 AT TIME ZONE c.timezone)::date - 2
+		                 AND ($1 AT TIME ZONE c.timezone)::date + 2
+	`, now)
+	if err != nil {
+		return nil, fmt.Errorf("finding events to remind about: %w", err)
+	}
+	defer rows.Close()
+
+	var out []EventCandidate
+	for rows.Next() {
+		var c EventCandidate
+		if err := rows.Scan(&c.UserID, &c.EventID, &c.Timezone, &c.Date,
+			&c.StartTime, &c.Reminder, &c.Prefs.EventReminders); err != nil {
+			return nil, fmt.Errorf("scanning event to remind about: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding events to remind about: %w", err)
+	}
+	return out, nil
+}
+
 // ClaimSend records that this notification is being sent, and reports whether
 // this caller is the one that got to send it.
 //

@@ -1,6 +1,6 @@
 // Command worker sends the notifications nobody asks for by opening the app:
-// that it is your week to set the prayers, and that you have some left to
-// pray today.
+// that it is your week to set the prayers, that you have some left to pray
+// today, and that something the two of you planned is about to happen.
 //
 // A second entry point in the same module rather than a separate service
 // (DEC-20, Q-16). It shares the config, the database and the modules, so a
@@ -20,6 +20,13 @@ import (
 	"syscall"
 	"time"
 
+	// The zone database, compiled in. Every week, every reminder and every
+	// event time in Amorae is a wall clock in somebody's timezone, and a
+	// binary that cannot find /usr/share/zoneinfo does not fail — it quietly
+	// becomes UTC, which is an hour of wrong for Lagos and eight for
+	// California. 450KB to never have to trust the base image.
+	_ "time/tzdata"
+
 	"github.com/joho/godotenv"
 
 	"github.com/falola13/amorae/apps/api/internal/config"
@@ -29,9 +36,14 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/push"
 )
 
-// Hourly is often enough for everything it sends: a week starts once, and a
-// reminder is a day's worth of patience either way.
-const tick = time.Hour
+// Five minutes, because an event reminder is the one thing here that is about
+// a moment. "Ten minutes before" on an hourly tick can arrive after the thing
+// it was warning about, which is worse than not sending it.
+//
+// Nothing else minds the extra passes: a week starts once and a daily
+// reminder is keyed on the day, so a tick that finds nothing new sends
+// nothing — the claim row is what makes that true, not the interval.
+const tick = 5 * time.Minute
 
 func main() {
 	if err := run(); err != nil {

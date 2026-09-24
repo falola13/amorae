@@ -340,7 +340,7 @@ those two names meet.
 
 | Endpoint | Notes |
 | --- | --- |
-| `GET`, `POST /v1/events` · `GET`, `PATCH /v1/events/:id` | `Event` belongs to the couple; both partners are implicit participants (DEC-16) and either may edit. A PATCH field that is absent is left alone and `""` clears it; `checklist` is sent whole, so the order is the order and an item left out is removed. Another couple's event is 404 (DEC-19). `reminder` is still free text on the wire, but the client offers a fixed set of phrases ("1 hour before", "the morning of"…) so the value is parseable into an offset when delivery is built; a reminder written before that set existed is kept as it was |
+| `GET`, `POST /v1/events` · `GET`, `PATCH /v1/events/:id` | `Event` belongs to the couple; both partners are implicit participants (DEC-16) and either may edit. A PATCH field that is absent is left alone and `""` clears it; `checklist` is sent whole, so the order is the order and an item left out is removed. Another couple's event is 404 (DEC-19). `reminder` is free text on the wire, but the client offers a fixed set of phrases ("1 hour before", "the morning of", "the day before"…) and the worker reads that set into a send time in the couple's timezone (FR-NOTF-007). A phrase outside it is kept as written and simply never fires |
 | `DELETE /v1/events/:id` | 204. Removes it for both partners, checklist included |
 | `POST` / `DELETE /v1/events/:id/complete` | |
 | `PATCH /v1/events/:id/checklist/:item` `{ done }` | |

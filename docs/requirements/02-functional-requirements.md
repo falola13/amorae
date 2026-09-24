@@ -1624,16 +1624,28 @@ spend it.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Partial — prayers categories only | Test |
+| Must | MVP | Partial — prayers and events | Test |
 
 The worker shall send a push notification for each enabled category, respecting each user's own
 preferences and reminder time.
 
-Built so far, all three respecting `new_week` and `prayer_reminder`: the setter is told it is
-their week while it is still empty; the other partner is told when it is published, which is the
-moment the shared thing becomes shared; and each partner is reminded once a day, in their own
-timezone, while a published week still has prayers left for them. Events, appreciation, journal,
-goals and challenges wait on those modules.
+Built so far. Three prayer categories respecting `new_week` and `prayer_reminder`: the setter is
+told it is their week while it is still empty; the other partner is told when it is published,
+which is the moment the shared thing becomes shared; and each partner is reminded once a day, in
+their own timezone, while a published week still has prayers left for them.
+
+And event reminders, respecting `event_reminders`. Both partners are nudged before something they
+planned, at the lead the event names — "30 minutes before", "the morning of", "the day before".
+The phrase is read into a moment in the couple's own timezone (`EventReminderAt`), not the
+person's, because an event happens at a place. An event with no start time falls back to the
+morning of its day rather than being dropped. A reminder more than an hour late is not sent: the
+worker may have been down, and a nudge about something that began ninety minutes ago is noise.
+The send is keyed on the event *and the moment*, so moving an event you have already been
+reminded about earns a second reminder for the new time, and re-running the worker never earns
+two for the same one. This is why the worker ticks every five minutes rather than hourly — "ten
+minutes before" on an hourly tick can arrive after the thing it was warning about.
+
+Appreciation, journal, goals, challenges and important dates wait on those modules.
 
 **Acceptance criteria**
 

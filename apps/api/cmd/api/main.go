@@ -14,6 +14,13 @@ import (
 	"syscall"
 	"time"
 
+	// The zone database, compiled in. Every week, every reminder and every
+	// event time in Amorae is a wall clock in somebody's timezone, and a
+	// binary that cannot find /usr/share/zoneinfo does not fail — it quietly
+	// becomes UTC, which is an hour of wrong for Lagos and eight for
+	// California. 450KB to never have to trust the base image.
+	_ "time/tzdata"
+
 	"github.com/joho/godotenv"
 
 	"github.com/falola13/amorae/apps/api/internal/app"

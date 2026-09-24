@@ -10,6 +10,7 @@ package notifications
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -160,9 +161,95 @@ func ReminderPassed(at string, zone *time.Location, now time.Time) (localDate st
 	return local.Format(time.DateOnly), !local.Before(due), nil
 }
 
+// reminderMorning is the hour a reminder anchored to a day rather than to a
+// time goes out — "the morning of", "the day before", and anything measured
+// from the start of an event that has no start.
+//
+// Eight is early enough to be worth knowing and late enough not to wake
+// anybody. It is deliberately not the person's own prayer reminder time,
+// which is an evening by default and means a different thing.
+const reminderMorning = 8
+
+// eventReminderLead reads the phrases the event composer offers, plus the
+// ones people wrote by hand before it offered anything ("an hour before").
+var eventReminderLead = regexp.MustCompile(`^(\d{1,3}|a|an|the) (minute|hour|day)s? before$`)
+
+// EventReminderAt is the moment an event's reminder is due, read in the zone
+// the event's date and time are written in — the couple's (DEC-27), because
+// an event happens at a place, not in whichever timezone each partner is
+// standing in.
+//
+// It reports false when there is no reminder to send, or when the phrase is
+// not one it can read. A phrase nobody can turn into a moment cannot be
+// delivered, and guessing at one would be inventing a time to buzz somebody.
+//
+// An event with no start time is the interesting case: "an hour before" has
+// nothing to be an hour before. Rather than drop the reminder somebody asked
+// for, those fall back to the morning of the day — which is the only useful
+// answer for something that takes the whole day anyway.
+func EventReminderAt(date time.Time, startTime, reminder string, zone *time.Location) (time.Time, bool) {
+	r := strings.ToLower(strings.TrimSpace(reminder))
+	if r == "" {
+		return time.Time{}, false
+	}
+
+	day := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, zone)
+	morningOf := func(d time.Time) time.Time {
+		return time.Date(d.Year(), d.Month(), d.Day(), reminderMorning, 0, 0, 0, zone)
+	}
+	start, timed := startOf(day, startTime, zone)
+
+	if r == "the morning of" {
+		return morningOf(day), true
+	}
+	if r == "at the time" {
+		if !timed {
+			return morningOf(day), true
+		}
+		return start, true
+	}
+
+	m := eventReminderLead.FindStringSubmatch(r)
+	if m == nil {
+		return time.Time{}, false
+	}
+	n := 1
+	if m[1] != "a" && m[1] != "an" && m[1] != "the" {
+		parsed, err := strconv.Atoi(m[1])
+		if err != nil || parsed < 1 {
+			return time.Time{}, false
+		}
+		n = parsed
+	}
+	// A reminder counted in days is a morning, not a time of day carried
+	// backwards: "the day before" at 11pm is not what anybody means.
+	if m[2] == "day" {
+		return morningOf(day.AddDate(0, 0, -n)), true
+	}
+	if !timed {
+		return morningOf(day), true
+	}
+	unit := time.Minute
+	if m[2] == "hour" {
+		unit = time.Hour
+	}
+	return start.Add(-time.Duration(n) * unit), true
+}
+
+// startOf turns an event's wall-clock start into an instant on its own day.
+func startOf(day time.Time, hhmm string, zone *time.Location) (time.Time, bool) {
+	if !clockTime.MatchString(hhmm) {
+		return time.Time{}, false
+	}
+	hour := int(hhmm[0]-'0')*10 + int(hhmm[1]-'0')
+	minute := int(hhmm[3]-'0')*10 + int(hhmm[4]-'0')
+	return time.Date(day.Year(), day.Month(), day.Day(), hour, minute, 0, 0, zone), true
+}
+
 // Kinds of notification, used as notification_sends.kind.
 const (
 	KindNewWeek        = "new_week"
 	KindWeekPublished  = "week_published"
 	KindPrayerReminder = "prayer_reminder"
+	KindEventReminder  = "event_reminder"
 )

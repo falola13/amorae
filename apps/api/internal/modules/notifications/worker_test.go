@@ -138,6 +138,7 @@ func TestForReminder(t *testing.T) {
 // fakeRepo records what the worker did, and can be told to fail.
 type fakeRepo struct {
 	candidates []Candidate
+	events     []EventCandidate
 	subs       []Subscription
 	claimed    map[string]bool
 	released   []string
@@ -149,6 +150,9 @@ func newFakeRepo() *fakeRepo { return &fakeRepo{claimed: map[string]bool{}} }
 
 func (f *fakeRepo) CurrentWeekCandidates(context.Context, time.Time) ([]Candidate, error) {
 	return f.candidates, nil
+}
+func (f *fakeRepo) DueEventReminders(context.Context, time.Time) ([]EventCandidate, error) {
+	return f.events, nil
 }
 func (f *fakeRepo) ClaimSend(_ context.Context, userID uuid.UUID, kind, key string, _ time.Time) (bool, error) {
 	k := userID.String() + kind + key
@@ -358,6 +362,161 @@ func TestPreferencesAreRespected(t *testing.T) {
 		}
 		if ok {
 			t.Error("a reminder fired for somebody who turned reminders off")
+		}
+	})
+}
+
+func TestEventReminderAt(t *testing.T) {
+	lagos, err := time.LoadLocation("Africa/Lagos")
+	if err != nil {
+		t.Skip("no timezone database here")
+	}
+	// Friday.
+	date := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		start    string
+		reminder string
+		want     string // local, "2006-01-02 15:04"
+		none     bool
+	}{
+		{name: "at the time", start: "19:30", reminder: "at the time", want: "2026-09-25 19:30"},
+		{name: "minutes", start: "19:30", reminder: "30 minutes before", want: "2026-09-25 19:00"},
+		{name: "hours", start: "19:30", reminder: "2 hours before", want: "2026-09-25 17:30"},
+		{name: "across midnight", start: "00:30", reminder: "2 hours before", want: "2026-09-24 22:30"},
+		{name: "the morning of", start: "19:30", reminder: "the morning of", want: "2026-09-25 08:00"},
+		{name: "the day before", start: "19:30", reminder: "1 day before", want: "2026-09-24 08:00"},
+		// A phrase somebody typed before the list existed.
+		{name: "an hour before", start: "19:30", reminder: "an hour before", want: "2026-09-25 18:30"},
+		{name: "case and spacing", start: "19:30", reminder: "  1 Hour Before ", want: "2026-09-25 18:30"},
+		// Nothing to be an hour before, so it becomes the morning rather
+		// than being dropped.
+		{name: "all-day event", start: "", reminder: "1 hour before", want: "2026-09-25 08:00"},
+		{name: "all-day, at the time", start: "", reminder: "at the time", want: "2026-09-25 08:00"},
+		{name: "all-day, day before", start: "", reminder: "1 day before", want: "2026-09-24 08:00"},
+		{name: "no reminder", start: "19:30", reminder: "", none: true},
+		{name: "a phrase we cannot read", start: "19:30", reminder: "when you get a chance", none: true},
+		{name: "zero is not a lead", start: "19:30", reminder: "0 hours before", none: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			at, ok := EventReminderAt(date, tc.start, tc.reminder, lagos)
+			if tc.none {
+				if ok {
+					t.Fatalf("got %v, want no reminder at all", at)
+				}
+				return
+			}
+			if !ok {
+				t.Fatal("no reminder, want one")
+			}
+			if got := at.In(lagos).Format("2006-01-02 15:04"); got != tc.want {
+				t.Errorf("at = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestForEventReminder(t *testing.T) {
+	if _, err := time.LoadLocation("Africa/Lagos"); err != nil {
+		t.Skip("no timezone database here")
+	}
+	id := uuid.New()
+	base := EventCandidate{
+		UserID: uuid.New(), EventID: id,
+		Timezone: "Africa/Lagos",
+		Date:     time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		// 19:30 Lagos is 18:30 UTC, so "1 hour before" is 17:30 UTC.
+		StartTime: "19:30", Reminder: "1 hour before",
+		Prefs: Preferences{EventReminders: true},
+	}
+	due := time.Date(2026, 9, 25, 17, 30, 0, 0, time.UTC)
+
+	t.Run("it goes out once the moment arrives", func(t *testing.T) {
+		n, ok := ForEventReminder(base, due)
+		if !ok {
+			t.Fatal("nothing was sent at the moment it was due")
+		}
+		if n.Message.Path != "/together/events/"+id.String() {
+			t.Errorf("path = %q, should open the event", n.Message.Path)
+		}
+		// FR-NOTF-005: a lock screen never carries what they wrote.
+		if strings.Contains(n.Message.Body+n.Message.Title, "Dinner") {
+			t.Errorf("the event's own words reached the lock screen: %q", n.Message.Body)
+		}
+		if !strings.Contains(n.Message.Body, "7:30 pm") {
+			t.Errorf("body = %q, should say when it is", n.Message.Body)
+		}
+		if !strings.Contains(n.Message.Body, "Today") {
+			t.Errorf("body = %q, should place the day", n.Message.Body)
+		}
+	})
+
+	t.Run("not a minute before", func(t *testing.T) {
+		if _, ok := ForEventReminder(base, due.Add(-time.Minute)); ok {
+			t.Error("a reminder went out early")
+		}
+	})
+
+	t.Run("a late tick still catches it", func(t *testing.T) {
+		if _, ok := ForEventReminder(base, due.Add(59*time.Minute)); !ok {
+			t.Error("a reminder was lost to a tick that ran late")
+		}
+	})
+
+	t.Run("but not hours later", func(t *testing.T) {
+		if _, ok := ForEventReminder(base, due.Add(2*time.Hour)); ok {
+			t.Error("a reminder arrived long after it could help")
+		}
+	})
+
+	t.Run("somebody who turned these off hears nothing", func(t *testing.T) {
+		c := base
+		c.Prefs.EventReminders = false
+		if _, ok := ForEventReminder(c, due); ok {
+			t.Error("a preference was ignored")
+		}
+	})
+
+	t.Run("the key moves when the event does", func(t *testing.T) {
+		// Otherwise moving an event you have already been reminded about
+		// means never hearing about the new time.
+		first, _ := ForEventReminder(base, due)
+		moved := base
+		moved.StartTime = "20:30"
+		second, ok := ForEventReminder(moved, due.Add(time.Hour))
+		if !ok {
+			t.Fatal("the moved event produced no reminder")
+		}
+		if first.Key == second.Key {
+			t.Error("both times share a key, so only one of them could ever be sent")
+		}
+	})
+
+	t.Run("the day before says tomorrow", func(t *testing.T) {
+		c := base
+		c.Reminder = "1 day before"
+		// 08:00 Lagos on the 24th is 07:00 UTC.
+		n, ok := ForEventReminder(c, time.Date(2026, 9, 24, 7, 0, 0, 0, time.UTC))
+		if !ok {
+			t.Fatal("no reminder the day before")
+		}
+		if !strings.Contains(n.Message.Body, "Tomorrow") {
+			t.Errorf("body = %q, want it to say tomorrow", n.Message.Body)
+		}
+	})
+
+	t.Run("an all-day event says the day and no time", func(t *testing.T) {
+		c := base
+		c.StartTime = ""
+		c.Reminder = "the morning of"
+		n, ok := ForEventReminder(c, time.Date(2026, 9, 25, 7, 0, 0, 0, time.UTC))
+		if !ok {
+			t.Fatal("no reminder for an all-day event")
+		}
+		if strings.Contains(n.Message.Body, "at ") {
+			t.Errorf("body = %q, there is no time to give", n.Message.Body)
 		}
 	})
 }

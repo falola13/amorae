@@ -104,6 +104,71 @@ func ForReminder(c Candidate, now time.Time) (Notification, bool, error) {
 	}, true, nil
 }
 
+// eventReminderGrace is how late a reminder may arrive and still be one.
+//
+// It exists because the worker can be restarted, deployed or simply down.
+// Within the hour a nudge is still useful — the body says when the thing is,
+// not how long until it — and past it, telling somebody about a coffee that
+// started ninety minutes ago is noise.
+const eventReminderGrace = time.Hour
+
+// ForEventReminder is the nudge before something the two of them planned.
+//
+// The body says when, never what. An event title is theirs, and this lands on
+// a lock screen, which is the one place in Amorae that is not private
+// (FR-NOTF-005) — so "Coming up · Today at 8:30 am", and the event itself is
+// one tap away.
+func ForEventReminder(c EventCandidate, now time.Time) (Notification, bool) {
+	if !c.Prefs.EventReminders {
+		return Notification{}, false
+	}
+
+	zone, err := time.LoadLocation(c.Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	at, ok := EventReminderAt(c.Date, c.StartTime, c.Reminder, zone)
+	if !ok {
+		return Notification{}, false
+	}
+	if now.Before(at) || !now.Before(at.Add(eventReminderGrace)) {
+		return Notification{}, false
+	}
+
+	day := time.Date(c.Date.Year(), c.Date.Month(), c.Date.Day(), 0, 0, 0, 0, zone)
+	body := whenItIs(day, c.StartTime, at, zone)
+
+	return Notification{
+		UserID: c.UserID,
+		Kind:   KindEventReminder,
+		// The moment, not just the event: moving something to a new time is
+		// asking to be reminded about the new time, and a reminder already
+		// sent for the old one should not stop that.
+		Key: c.EventID.String() + "@" + at.UTC().Format(time.RFC3339),
+		Message: push.Message{
+			Title: "Coming up",
+			Body:  body,
+			Path:  "/together/events/" + c.EventID.String(),
+			Tag:   KindEventReminder,
+		},
+	}, true
+}
+
+// whenItIs says when the event is, from where the reminder is standing.
+func whenItIs(day time.Time, startTime string, at time.Time, zone *time.Location) string {
+	when := "Today"
+	switch days := int(day.Sub(time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, zone)).Hours() / 24); {
+	case days == 1:
+		when = "Tomorrow"
+	case days > 1:
+		when = day.Format("Monday")
+	}
+	if start, timed := startOf(day, startTime, zone); timed {
+		return fmt.Sprintf("%s at %s.", when, start.Format("3:04 pm"))
+	}
+	return when + "."
+}
+
 // statusDraft mirrors the prayers module's value without importing it: the
 // worker reads the column, and one string is a smaller thing to owe another
 // module than a dependency is.
@@ -111,9 +176,27 @@ type weekStatus string
 
 const statusDraft weekStatus = "draft"
 
+// EventCandidate is one person and one event of theirs that might be worth a
+// nudge. Separate from Candidate because it answers a different question:
+// that one is "where is this couple's week up to", this one is "is anything
+// they planned about to happen".
+type EventCandidate struct {
+	UserID  uuid.UUID
+	EventID uuid.UUID
+	// The couple's zone, not the person's: it is the zone the event's date
+	// and time were written in.
+	Timezone string
+	Date     time.Time
+	// "" when the event has no time — a whole day, not a moment.
+	StartTime string
+	Reminder  string
+	Prefs     Preferences
+}
+
 // WorkerRepository is what the worker needs of storage.
 type WorkerRepository interface {
 	CurrentWeekCandidates(ctx context.Context, now time.Time) ([]Candidate, error)
+	DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
@@ -161,6 +244,16 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 			continue
 		}
 		if ok {
+			due = append(due, n)
+		}
+	}
+
+	events, err := w.repo.DueEventReminders(ctx, now)
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range events {
+		if n, ok := ForEventReminder(c, now); ok {
 			due = append(due, n)
 		}
 	}

@@ -140,7 +140,7 @@ export default function NotificationSettings() {
               {row(p, "challenges", "Challenge reminders", true)}
             </Section>
             <Para size="support" className="mb-4 mt-4">
-              Never more than one reminder a day.
+              One prayer reminder a day, and one before anything you&rsquo;ve planned.
             </Para>
           </Main>
         )}
