@@ -293,20 +293,36 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 	if c.UserID == c.AuthorID {
 		return Notification{}, false
 	}
-	wanted := c.Prefs.Journal
-	message := push.Message{
-		Title: c.AuthorName + " wrote in your journal",
-		Body:  "Something they wanted to keep.",
-		Path:  "/together/journal",
-		Tag:   KindJournal,
-	}
-	if c.Kind == KindAppreciation {
+	var wanted bool
+	var message push.Message
+	switch c.Kind {
+	case KindAppreciation:
 		wanted = c.Prefs.Appreciation
 		message = push.Message{
 			Title: c.AuthorName + " appreciated you",
 			Body:  "A note, just for you.",
 			Path:  "/together/appreciation",
 			Tag:   KindAppreciation,
+		}
+	case KindGoal:
+		// The goal is named and the amount is not. A goal is a plan the two
+		// of them made, like an event (FR-NOTF-005.AC2); what somebody just
+		// moved in or out of their savings is not something to put on a
+		// lock screen in a coffee shop.
+		wanted = c.Prefs.Goals
+		message = push.Message{
+			Title: c.AuthorName + " put something towards " + c.Subject,
+			Body:  "See where the two of you are up to.",
+			Path:  "/together/goals",
+			Tag:   KindGoal,
+		}
+	default:
+		wanted = c.Prefs.Journal
+		message = push.Message{
+			Title: c.AuthorName + " wrote in your journal",
+			Body:  "Something they wanted to keep.",
+			Path:  "/together/journal",
+			Tag:   KindJournal,
 		}
 	}
 	if !wanted {
@@ -322,6 +338,70 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 		Kind:    c.Kind,
 		Key:     c.ItemID.String(),
 		Message: message,
+	}, true
+}
+
+// ChallengeCandidate is one person and the challenge their couple is part
+// way through.
+type ChallengeCandidate struct {
+	UserID uuid.UUID
+	// The challenge, and what it is called.
+	ChallengeID uuid.UUID
+	Title       string
+	// The couple's zone: which day of the challenge it is is a fact about
+	// where they are, not where the server is.
+	Timezone string
+	// Which day of it today is, counting from one, and how many there are.
+	// Worked out in SQL against the couple's own date, because that is where
+	// started_on and the zone already sit together.
+	Day  int
+	Days int
+	// Whether this person has already said something about today.
+	MarkedToday bool
+	Prefs       Preferences
+}
+
+// ForChallenge is the daily nudge for a challenge somebody is in the middle
+// of and has not marked today.
+//
+// It goes out in the morning rather than at their prayer reminder time. Those
+// are the two recurring nudges in the app, and firing both at seven in the
+// evening would make one of them noise.
+//
+// A challenge is never a streak and this never says how many days were
+// missed. Missing yesterday is not a thing to be told about — the whole point
+// of the model is that a skipped day is a day, not a failure (DEC-30).
+func ForChallenge(c ChallengeCandidate, now time.Time) (Notification, bool) {
+	if !c.Prefs.Challenges || c.MarkedToday {
+		return Notification{}, false
+	}
+	// Before it starts, or after the last day: nothing to nudge about.
+	if c.Day < 1 || c.Day > c.Days {
+		return Notification{}, false
+	}
+
+	zone, err := time.LoadLocation(c.Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	local := now.In(zone)
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, zone)
+	if local.Before(today.Add(reminderMorning * time.Hour)) {
+		return Notification{}, false
+	}
+
+	return Notification{
+		UserID: c.UserID,
+		Kind:   KindChallenge,
+		// One a day, keyed on their own date, exactly as the prayer reminder
+		// is: a worker that restarts or runs late still sends one.
+		Key: c.ChallengeID.String() + ":" + today.Format(time.DateOnly),
+		Message: push.Message{
+			Title: c.Title,
+			Body:  fmt.Sprintf("Day %d of %d is waiting for you.", c.Day, c.Days),
+			Path:  "/together/challenges",
+			Tag:   KindChallenge,
+		},
 	}, true
 }
 
@@ -371,7 +451,11 @@ type WrittenCandidate struct {
 	AuthorID   uuid.UUID
 	AuthorName string
 	ItemID     uuid.UUID
-	// KindAppreciation or KindJournal.
+	// What the thing is called, when it has a name worth saying: the goal
+	// they put something towards. Empty for a journal entry or a note,
+	// which have no name and whose words stay inside the app.
+	Subject string
+	// KindAppreciation, KindJournal or KindGoal.
 	Kind      string
 	WrittenAt time.Time
 	// How long this kind waits before it is safe to announce — the undo
@@ -386,6 +470,7 @@ type WorkerRepository interface {
 	DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error)
 	ImportantDates(ctx context.Context) ([]ImportantDateCandidate, error)
 	RecentlyWritten(ctx context.Context, since time.Time) ([]WrittenCandidate, error)
+	LiveChallenges(ctx context.Context) ([]ChallengeCandidate, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
@@ -461,6 +546,16 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	}
 	for _, c := range written {
 		if n, ok := ForWritten(c, now); ok {
+			due = append(due, n)
+		}
+	}
+
+	challenges, err := w.repo.LiveChallenges(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range challenges {
+		if n, ok := ForChallenge(c, now); ok {
 			due = append(due, n)
 		}
 	}

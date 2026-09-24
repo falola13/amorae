@@ -141,6 +141,7 @@ type fakeRepo struct {
 	events     []EventCandidate
 	dates      []ImportantDateCandidate
 	written    []WrittenCandidate
+	challenges []ChallengeCandidate
 	subs       []Subscription
 	claimed    map[string]bool
 	released   []string
@@ -161,6 +162,9 @@ func (f *fakeRepo) ImportantDates(context.Context) ([]ImportantDateCandidate, er
 }
 func (f *fakeRepo) RecentlyWritten(context.Context, time.Time) ([]WrittenCandidate, error) {
 	return f.written, nil
+}
+func (f *fakeRepo) LiveChallenges(context.Context) ([]ChallengeCandidate, error) {
+	return f.challenges, nil
 }
 func (f *fakeRepo) ClaimSend(_ context.Context, userID uuid.UUID, kind, key string, _ time.Time) (bool, error) {
 	k := userID.String() + kind + key
@@ -780,6 +784,134 @@ func TestForWritten(t *testing.T) {
 		n, _ := ForWritten(note, sent.Add(time.Minute))
 		if strings.Contains(n.Message.Body, "appreciate") || len(n.Message.Body) > 60 {
 			t.Errorf("body = %q, want it to say nothing of the words", n.Message.Body)
+		}
+	})
+}
+
+func TestForWritten_Goals(t *testing.T) {
+	author, partner := uuid.New(), uuid.New()
+	sent := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	base := WrittenCandidate{
+		UserID: partner, AuthorID: author, AuthorName: "Ada",
+		ItemID: uuid.New(), Subject: "A place of our own",
+		Kind: KindGoal, WrittenAt: sent,
+		Prefs: Preferences{Goals: true},
+	}
+
+	t.Run("the partner hears that something went in", func(t *testing.T) {
+		n, ok := ForWritten(base, sent.Add(time.Minute))
+		if !ok {
+			t.Fatal("nobody was told about progress on a goal")
+		}
+		if !strings.Contains(n.Message.Title, "A place of our own") {
+			t.Errorf("title = %q, should name the goal", n.Message.Title)
+		}
+		if n.Message.Path != "/together/goals" {
+			t.Errorf("path = %q", n.Message.Path)
+		}
+	})
+
+	t.Run("but never how much", func(t *testing.T) {
+		// A goal is a shared plan and may be named (FR-NOTF-005.AC2). What
+		// somebody just moved into their savings is not for a lock screen.
+		n, _ := ForWritten(base, sent.Add(time.Minute))
+		if strings.ContainsAny(n.Message.Title+n.Message.Body, "0123456789₦") {
+			t.Errorf("an amount reached the lock screen: %q / %q", n.Message.Title, n.Message.Body)
+		}
+	})
+
+	t.Run("goals are off unless asked for", func(t *testing.T) {
+		c := base
+		c.Prefs.Goals = false
+		if _, ok := ForWritten(c, sent.Add(time.Minute)); ok {
+			t.Error("a goal notification went out with the switch off")
+		}
+	})
+
+	t.Run("and never to whoever logged it", func(t *testing.T) {
+		c := base
+		c.UserID = author
+		if _, ok := ForWritten(c, sent.Add(time.Minute)); ok {
+			t.Error("somebody was told about their own entry")
+		}
+	})
+}
+
+func TestForChallenge(t *testing.T) {
+	if _, err := time.LoadLocation("Africa/Lagos"); err != nil {
+		t.Skip("no timezone database here")
+	}
+	base := ChallengeCandidate{
+		UserID: uuid.New(), ChallengeID: uuid.New(),
+		Title: "Seven days of noticing", Timezone: "Africa/Lagos",
+		Day: 3, Days: 7,
+		Prefs: Preferences{Challenges: true},
+	}
+	// 08:00 Lagos is 07:00 UTC.
+	morning := time.Date(2026, 9, 24, 7, 0, 0, 0, time.UTC)
+
+	t.Run("a day not yet marked is nudged in the morning", func(t *testing.T) {
+		n, ok := ForChallenge(base, morning)
+		if !ok {
+			t.Fatal("no nudge for an unmarked day")
+		}
+		if !strings.Contains(n.Message.Body, "Day 3 of 7") {
+			t.Errorf("body = %q, should say where they are", n.Message.Body)
+		}
+	})
+
+	t.Run("not before anyone is awake", func(t *testing.T) {
+		if _, ok := ForChallenge(base, time.Date(2026, 9, 24, 2, 0, 0, 0, time.UTC)); ok {
+			t.Error("a nudge went out in the small hours")
+		}
+	})
+
+	t.Run("and not once they have marked it", func(t *testing.T) {
+		c := base
+		c.MarkedToday = true
+		if _, ok := ForChallenge(c, morning); ok {
+			t.Error("somebody was nudged about a day they had already marked")
+		}
+	})
+
+	t.Run("one a day, keyed on their own date", func(t *testing.T) {
+		first, _ := ForChallenge(base, morning)
+		later, _ := ForChallenge(base, morning.Add(6*time.Hour))
+		if first.Key != later.Key {
+			t.Error("two ticks the same day would send two nudges")
+		}
+		next, _ := ForChallenge(base, morning.Add(24*time.Hour))
+		if next.Key == first.Key {
+			t.Error("tomorrow shares today's key, so tomorrow would be silent")
+		}
+	})
+
+	t.Run("nothing before it starts or after it ends", func(t *testing.T) {
+		for _, day := range []int{0, 8} {
+			c := base
+			c.Day = day
+			if _, ok := ForChallenge(c, morning); ok {
+				t.Errorf("a nudge went out on day %d of 7", day)
+			}
+		}
+	})
+
+	t.Run("challenges are off unless asked for", func(t *testing.T) {
+		c := base
+		c.Prefs.Challenges = false
+		if _, ok := ForChallenge(c, morning); ok {
+			t.Error("a nudge went out with the switch off")
+		}
+	})
+
+	t.Run("it never counts what was missed", func(t *testing.T) {
+		// A challenge is not a streak (DEC-30): a skipped day is a day, not
+		// a failure, and nothing here should imply otherwise.
+		n, _ := ForChallenge(base, morning)
+		for _, word := range []string{"miss", "streak", "behind", "broke"} {
+			if strings.Contains(strings.ToLower(n.Message.Body+n.Message.Title), word) {
+				t.Errorf("body = %q, want no scolding", n.Message.Body)
+			}
 		}
 	})
 }

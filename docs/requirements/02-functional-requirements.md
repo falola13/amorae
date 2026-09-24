@@ -1701,7 +1701,7 @@ spend it.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Partial — all but goals and challenges | Test |
+| Must | MVP | Implemented | Test |
 
 The worker shall send a push notification for each enabled category, respecting each user's own
 preferences and reminder time.
@@ -1729,7 +1729,22 @@ And the two things one partner writes for the other, respecting `appreciation` a
 a note of appreciation, once its undo window has closed, and a journal entry straight away.
 Neither goes to the person who wrote it, and neither carries a word of what was written.
 
-Goals and challenges wait on those modules.
+And the last two, both off unless somebody asks for them (FR-NOTF-006):
+
+- **A goal one of them put something towards.** The goal is named and the
+  amount never is. A goal is a shared plan and may be named the way an event
+  may (FR-NOTF-005.AC2), but what somebody just moved into their savings is
+  not something to put on a lock screen in a coffee shop. Only while the goal
+  is still going, and never to whoever logged it.
+- **A challenge day nobody has marked.** Once in the morning, in the couple's
+  zone, keyed on their own date, and silent as soon as they mark it. It goes
+  out in the morning rather than at their prayer reminder time, because those
+  are the two recurring nudges in the app and firing both at seven in the
+  evening turns one of them into noise. It says which day of how many and
+  never what was missed: a challenge is not a streak, and under DEC-30 a
+  skipped day is a day rather than a failure.
+
+Every category FR-NOTF-007.AC1 names is now sent.
 
 **Acceptance criteria**
 

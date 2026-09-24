@@ -255,6 +255,8 @@ const (
 	KindImportantDate  = "important_date"
 	KindAppreciation   = "appreciation"
 	KindJournal        = "journal"
+	KindGoal           = "goal"
+	KindChallenge      = "challenge"
 )
 
 // OccursOn reports whether a kept date comes round on the given day —

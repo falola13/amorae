@@ -202,18 +202,31 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			SELECT j.id, j.couple_id, j.author_id, j.created_at, $3::text AS kind
 			FROM journal_entries j
 			WHERE j.created_at >= $1
+			UNION ALL
+			-- A goal somebody put something towards. Only while it is still
+			-- going: nobody needs telling about a goal already finished.
+			SELECT gp.id, g.couple_id, gp.user_id, gp.logged_at, $4::text AS kind
+			FROM goal_progress gp
+			JOIN goals g ON g.id = gp.goal_id AND NOT g.done
+			WHERE gp.logged_at >= $1
 		)
 		SELECT u.id, written.author_id, author.display_name, written.id, written.kind,
 		       written.created_at,
-		       COALESCE(p.appreciation, true), COALESCE(p.journal, true)
+		       COALESCE(p.appreciation, true), COALESCE(p.journal, true),
+		       -- Goals default to off, unlike the rest: following one is
+		       -- something you opt into (FR-NOTF-006).
+		       COALESCE(p.goals, false),
+		       COALESCE(g.title, '')
 		FROM written
+		LEFT JOIN goal_progress gpr ON gpr.id = written.id AND written.kind = $4
+		LEFT JOIN goals g ON g.id = gpr.goal_id
 		JOIN couples c ON c.id = written.couple_id AND c.dissolved_at IS NULL
 		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
 		JOIN users u ON u.id = m.user_id
 		JOIN users author ON author.id = written.author_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE u.id <> written.author_id
-	`, since, KindAppreciation, KindJournal)
+	`, since, KindAppreciation, KindJournal, KindGoal)
 	if err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
 	}
@@ -223,7 +236,8 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 	for rows.Next() {
 		var c WrittenCandidate
 		if err := rows.Scan(&c.UserID, &c.AuthorID, &c.AuthorName, &c.ItemID, &c.Kind,
-			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal); err != nil {
+			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal, &c.Prefs.Goals,
+			&c.Subject); err != nil {
 			return nil, fmt.Errorf("scanning something written: %w", err)
 		}
 		if c.Kind == KindAppreciation {
@@ -233,6 +247,53 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
+	}
+	return out, nil
+}
+
+// LiveChallenges is every person in a live couple paired with the challenge
+// their couple is part way through.
+//
+// Which day of it today is comes back from SQL, because started_on and the
+// couple's zone are already sitting together in these rows — and so does
+// whether this person has marked that day, which is the only reason to stay
+// quiet. Everything about when to say it stays in Go (ForChallenge).
+func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCandidate, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT u.id, ch.id, ch.title, c.timezone,
+		       (((now() AT TIME ZONE c.timezone)::date - ch.started_on) + 1)::int AS day,
+		       (SELECT count(*) FROM challenge_days d WHERE d.challenge_id = ch.id)::int AS days,
+		       EXISTS (
+		           SELECT 1
+		           FROM challenge_days d
+		           JOIN challenge_progress pr ON pr.day_id = d.id AND pr.user_id = u.id
+		           WHERE d.challenge_id = ch.id
+		             AND d.n = ((now() AT TIME ZONE c.timezone)::date - ch.started_on) + 1
+		       ) AS marked_today,
+		       COALESCE(p.challenges, false)
+		FROM challenges ch
+		JOIN couples c ON c.id = ch.couple_id
+		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN notification_preferences p ON p.user_id = u.id
+		WHERE c.dissolved_at IS NULL
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("finding challenges to nudge about: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ChallengeCandidate
+	for rows.Next() {
+		var c ChallengeCandidate
+		if err := rows.Scan(&c.UserID, &c.ChallengeID, &c.Title, &c.Timezone,
+			&c.Day, &c.Days, &c.MarkedToday, &c.Prefs.Challenges); err != nil {
+			return nil, fmt.Errorf("scanning a challenge to nudge about: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding challenges to nudge about: %w", err)
 	}
 	return out, nil
 }
