@@ -141,3 +141,30 @@ func TestValidVAPIDSubject(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPAddr_PORTWinsForAPaaS(t *testing.T) {
+	// Render, Railway, Fly and Heroku all hand a process its port this way.
+	// A service that ignores it binds where nothing is listening and is
+	// killed as unhealthy — which is a confusing way to learn this.
+	t.Setenv("PORT", "10000")
+	t.Setenv("HTTP_ADDR", ":8088")
+	if got := httpAddr(); got != ":10000" {
+		t.Errorf("addr = %q, want the platform's port", got)
+	}
+}
+
+func TestHTTPAddr_FallsBackToHTTPAddr(t *testing.T) {
+	t.Setenv("PORT", "")
+	t.Setenv("HTTP_ADDR", "127.0.0.1:9999")
+	if got := httpAddr(); got != "127.0.0.1:9999" {
+		t.Errorf("addr = %q, want the whole address, host included", got)
+	}
+}
+
+func TestHTTPAddr_DefaultsWhenNeitherIsSet(t *testing.T) {
+	t.Setenv("PORT", "")
+	t.Setenv("HTTP_ADDR", "")
+	if got := httpAddr(); got != ":8088" {
+		t.Errorf("addr = %q", got)
+	}
+}

@@ -60,6 +60,20 @@ type Config struct {
 	FaithVersion   string
 }
 
+// httpAddr is where the server listens.
+//
+// PORT wins when it is set, because that is how every platform-as-a-service
+// tells a process which port it has been given — Render, Railway, Fly and
+// Heroku all inject it, and a service that ignores it binds somewhere nothing
+// is listening for and is killed as unhealthy. HTTP_ADDR stays for everywhere
+// else, where the whole address matters and not just the port.
+func httpAddr() string {
+	if port := strings.TrimSpace(getEnv("PORT", "")); port != "" {
+		return ":" + port
+	}
+	return getEnv("HTTP_ADDR", ":8088")
+}
+
 // minBFFSecretLen keeps the secret out of reach of guessing.
 const minBFFSecretLen = 32
 
@@ -179,7 +193,7 @@ func Load() (Config, error) {
 	return Config{
 		AppEnv:          appEnv,
 		TickSecret:      tickSecret,
-		HTTPAddr:        getEnv("HTTP_ADDR", ":8088"),
+		HTTPAddr:        httpAddr(),
 		DatabaseURL:     databaseURL,
 		DBMaxConns:      dbMaxConns,
 		LogLevel:        logLevel,

@@ -117,9 +117,20 @@ request, so nothing here has to stay awake.
    Repeat this on any deploy that adds a migration, *before* the new API goes
    live.
 
-3. **The API.** Deploy `apps/api/Dockerfile`, command `/app/api`. It needs
-   every secret in the table below, `APP_ENV=production`, and `TICK_SECRET`.
-   Note the public URL it gets.
+3. **The API.** Deploy `apps/api/Dockerfile`, command `/app/api`, root
+   directory `apps/api`. It needs every secret in the table below,
+   `APP_ENV=production`, and `TICK_SECRET`. Note the public URL it gets.
+
+   You do not set a port. The API reads `PORT` when the platform injects one
+   — Render, Railway, Fly and Heroku all do — and falls back to `HTTP_ADDR`
+   everywhere else. A service that ignored `PORT` would bind where nothing is
+   listening and be killed as unhealthy, which is a confusing way to learn
+   this.
+
+   `APP_URL` has to be the web app's address, which does not exist until
+   step 4. Put the address you expect Vercel to give you, deploy, and correct
+   it afterwards if it differs — it is only used to build the links inside
+   emails, so nothing else waits on it.
 
 4. **The web app** on Vercel, root directory `apps/web`. `API_URL` is that
    public API URL. `BFF_SECRET` must be character-for-character what the API
