@@ -208,6 +208,36 @@ and never subscribes anybody. `docker-compose.yml` now passes it as a build
 argument from `VAPID_PUBLIC_KEY`, so exporting that before
 `docker compose build` handles it. Anywhere else, remember it.
 
+## If one platform never delivers
+
+Worth knowing because it cost an evening, and because the symptom is so easily
+misread as "my phone is broken".
+
+Push services disagree about how strictly to check a VAPID signature. Google's
+barely looks; Apple's validates the JWT properly. So a signature that is
+subtly wrong delivers perfectly to every Android and every Chrome, and is
+refused by every Apple device with `403 Forbidden` — which reads exactly like
+a device problem and is not one.
+
+The worker names the service in the log now, so this is visible:
+
+```
+"a device did not take the notification" service=apple kind=event_reminder error="push service answered 403 Forbidden"
+```
+
+`service=apple` failing while `fcm` succeeds, from one key pair on one tick,
+means the signature and not the devices. Check the JWT's `sub` claim first —
+that is what was wrong here, and `internal/platform/push` has the detail.
+
+Two things that are *not* the cause, both worth eliminating before chasing it:
+
+- **The key pair.** A public key that is genuinely derived from the private
+  one is easy to verify and was correct all along.
+- **Apple's Home Screen rule.** On iPhone, web push only reaches a site
+  installed to the Home Screen and opened from that icon — real, but it stops
+  a subscription being *created*, so it cannot explain a subscription that
+  exists and is refused.
+
 ## Backups
 
 The point of this app is that it is a record. A free VM that dies takes it
