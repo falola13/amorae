@@ -12,6 +12,17 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# NEXT_PUBLIC_* is inlined into the client bundle at build time, not read from
+# the environment at runtime — so a key supplied only to the running container
+# arrives too late and is simply absent. Without it usePush has nothing to
+# subscribe with, finds no key, and quietly never subscribes: notifications
+# are then switched on, permitted by the browser, and still never arrive.
+#
+# Empty is allowed so a build without push still works; it is the deployment
+# that has to remember, which is why docker-compose passes it through.
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY=""
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 RUN npm run build
 
 FROM node:24-alpine AS runner

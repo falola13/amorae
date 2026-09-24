@@ -73,6 +73,9 @@ Root `package.json` scripts work the same on Windows, macOS and Linux:
 | `npm run check` | vet + test + lint + typecheck + build: what CI runs, minus Docker |
 | `npm run lock:web` | Regenerate `apps/web/package-lock.json` **on Linux**, in Docker |
 
+Putting it somewhere other than your laptop, for nothing:
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ### Why no notification arrived
 
 Three things have to be true, and locally none of them is by default.

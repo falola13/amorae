@@ -91,7 +91,13 @@ services:
     restart: unless-stopped
 
   web:
-    build: ./apps/web
+    build:
+      context: ./apps/web
+      # Baked into the bundle, not read at runtime — see the note in the
+      # Dockerfile. Set VAPID_PUBLIC_KEY in the environment before building,
+      # or the deployed app can never subscribe anybody to push.
+      args:
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
     environment:
       API_URL: http://api:8088
       # Served over plain http on localhost here; set true behind TLS.
