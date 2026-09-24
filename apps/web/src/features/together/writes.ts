@@ -1,5 +1,12 @@
 import type { EventInput, GoalInput } from "@/lib/api/schemas";
-import type { ChallengeDay, JournalEntry, Memory, Milestone } from "@/lib/api/types";
+import type {
+  Challenge,
+  ChallengeDay,
+  Event,
+  JournalEntry,
+  Memory,
+  Milestone,
+} from "@/lib/api/types";
 import { keys } from "@/lib/query/keys";
 import { defineWrite } from "@/lib/query/mutations";
 import { togetherApi as api } from "./api";
@@ -27,6 +34,17 @@ export const togetherWrites = {
       api.updateEvent(id, patch),
     invalidates: [keys.events],
     idempotent: "sets the fields it names to the values it carries, however often it lands.",
+    // The rows on an event save as you leave them, so the value should settle
+    // the moment you do rather than blink back to the old one and forward
+    // again. A refusal — an end before its start — rolls this back, and the
+    // toast says which.
+    optimistic: (qc, { id, patch }) => {
+      const apply = (e: Event): Event => ({ ...e, ...patch }) as Event;
+      qc.setQueryData<Event>(keys.event(id), (e) => (e ? apply(e) : e));
+      qc.setQueryData<Event[]>(keys.events, (list) =>
+        list?.map((e) => (e.id === id ? apply(e) : e)),
+      );
+    },
   }),
   deleteEvent: defineWrite({
     mutationKey: ["events", "delete"],
@@ -46,6 +64,18 @@ export const togetherWrites = {
       api.checklist(id, item, done),
     invalidates: [keys.events],
     idempotent: "sets one item to a given value, so a replay lands the same state.",
+    // A checkbox that waits for a round trip is a checkbox somebody taps
+    // twice.
+    optimistic: (qc, { id, item, done }) => {
+      const tick = (e: Event): Event => ({
+        ...e,
+        checklist: e.checklist.map((c) => (c.id === item ? { ...c, done } : c)),
+      });
+      qc.setQueryData<Event>(keys.event(id), (e) => (e ? tick(e) : e));
+      qc.setQueryData<Event[]>(keys.events, (list) =>
+        list?.map((e) => (e.id === id ? tick(e) : e)),
+      );
+    },
   }),
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
@@ -92,6 +122,13 @@ export const togetherWrites = {
       api.challengeDay(n, patch),
     invalidates: [keys.challenge],
     idempotent: "a patch of one numbered day; the same patch twice is the same day.",
+    // Same reasoning as the checklist: a day you mark should look marked.
+    // Only this person's own mark moves — the partner's is theirs (DEC-30).
+    optimistic: (qc, { n, patch }) => {
+      qc.setQueryData<Challenge>(keys.challenge, (c) =>
+        c ? { ...c, days: c.days.map((d) => (d.n === n ? { ...d, ...patch } : d)) } : c,
+      );
+    },
   }),
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key

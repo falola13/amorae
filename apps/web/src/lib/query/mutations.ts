@@ -30,6 +30,21 @@ interface BaseWriteDef<A, R> {
   scope?: string;
   /** The screen shows this write's errors itself, so skip the global toast. */
   handlesError?: boolean;
+  /**
+   * Change the cache the moment the write starts, rather than when it lands.
+   *
+   * This is what a tap feeling instant is made of: ticking a prayer should
+   * look done while the request is still in the air, because on a phone on a
+   * bad connection the alternative is half a second of a control that appears
+   * not to have worked — and then the tap again, and the wondering.
+   *
+   * Write it against the cache with qc.setQueryData. Everything else is
+   * handled: the queries in `invalidates` are cancelled first so a reply
+   * already on its way cannot overwrite this, snapshotted before, and put
+   * back exactly as they were if the write fails. So this only ever has to
+   * describe the happy path.
+   */
+  optimistic?: (qc: QueryClient, args: A) => void;
 }
 
 /**
@@ -83,8 +98,26 @@ export function useWrite<A, R>(def: WriteDef<A, R>) {
     // "always" skips the offline pause: the request goes out and, with no
     // connection, fails straight away instead of waiting.
     networkMode: def.onlineOnly ? "always" : undefined,
+    onMutate: def.optimistic ? (args) => applyOptimistic(qc, def, args) : undefined,
+    onError: (_error, _args, rollback) => rollback?.(),
     onSettled: () => invalidate(qc, def.invalidates),
   });
+}
+
+/**
+ * Applies a write's optimistic change and hands back the undo.
+ *
+ * The cancel matters more than it looks: without it a refetch already in
+ * flight can land after the optimistic change and quietly put the old value
+ * back, which reads as the tap having been ignored a moment later.
+ */
+function applyOptimistic<A, R>(qc: QueryClient, def: WriteDef<A, R>, args: A) {
+  const snapshot = def.invalidates.map((key) => [key, qc.getQueryData(key)] as const);
+  for (const key of def.invalidates) void qc.cancelQueries({ queryKey: key });
+  def.optimistic?.(qc, args);
+  return () => {
+    for (const [key, data] of snapshot) qc.setQueryData(key, data);
+  };
 }
 
 /**

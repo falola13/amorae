@@ -46,6 +46,13 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
+// Everything dynamic in this app ends up asking the Go API, which sits in
+// Frankfurt with its database. Rendering in the United States and then
+// fetching across the Atlantic is a second per screen that nobody chose; see
+// the note in app/api/v1/[...path]/route.ts for the measurement. Static
+// assets are unaffected — they are served from the edge either way.
+export const preferredRegion = "fra1";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,

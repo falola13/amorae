@@ -103,7 +103,6 @@ export function PickRow({
     setDraft(null);
   };
   const native = "absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default";
-  const isPicker = type === "date" || type === "time";
 
   return (
     <label
@@ -153,13 +152,19 @@ export function PickRow({
         <input
           id={id}
           type={type ?? "text"}
-          value={isPicker ? value : text}
+          value={text}
           placeholder={placeholder}
           disabled={disabled}
-          onChange={(e) => (isPicker ? onChange(e.target.value) : setDraft(e.target.value))}
-          onBlur={isPicker ? undefined : commit}
+          // React's onChange on an input is the DOM *input* event, which a
+          // date or time field fires on every digit — so "19:30" was four
+          // separate values, and on a row that saves as you go, four separate
+          // requests, three of them for times nobody meant. Every kind of
+          // field now holds a draft and reports it when the person is done
+          // with it: on blur, which is also when a phone's picker closes.
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
           onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-            if (!isPicker && e.key === "Enter") {
+            if (e.key === "Enter") {
               e.preventDefault();
               e.currentTarget.blur();
             }

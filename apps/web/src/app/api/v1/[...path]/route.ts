@@ -10,6 +10,20 @@ import { env } from "@/lib/env";
 // cookie's bearer token attached. The browser never holds the token
 // (docs/adr/0002). Nothing here is cached: every call carries a session.
 
+// Run this next to what it talks to.
+//
+// Every call through here is browser -> this function -> the Go API, and the
+// API and its database are both in Frankfurt. Left on Vercel's default the
+// function is in the United States, so each request crosses the Atlantic
+// twice for no reason: measured at roughly 280ms straight to the API against
+// 700-1800ms through here. Nothing is cached at this door — every call
+// carries a session — so that second is paid on every screen.
+//
+// A region is a deployment decision, but it belongs in the repository rather
+// than a dashboard: the reason is the sentence above, and a dashboard has
+// nowhere to put it.
+export const preferredRegion = "fra1";
+
 const TIMEOUT_MS = 10_000;
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 

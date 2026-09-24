@@ -16,6 +16,24 @@ declare module "@tanstack/react-query" {
 }
 
 /**
+ * What to actually say when a write fails.
+ *
+ * A validation error's own message is "Some fields are invalid." — true, and
+ * no use to anybody. The sentence worth reading is in `fields`: the API
+ * already writes one per field, in words a person can act on ("This is before
+ * it starts."). Showing the wrapper instead of the contents made every
+ * validation failure in the app read the same and explain nothing.
+ *
+ * Several fields are joined rather than one picked, because a form that is
+ * wrong twice should say so once.
+ */
+function readableMessage(error: unknown): string {
+  if (!isApiError(error)) return GENERIC_ERROR_MESSAGE;
+  const fields = Object.values(error.fields ?? {}).filter(Boolean);
+  return fields.length > 0 ? fields.join(" ") : error.message;
+}
+
+/**
  * The app's QueryClient. Two policies live here, once, instead of in every
  * page:
  *
@@ -36,7 +54,7 @@ export function createQueryClient(): QueryClient {
       onError: (error, _variables, _context, mutation) => {
         if (mutation.meta?.handlesError) return;
         if (isApiError(error) && error.status === 401) return;
-        notify(isApiError(error) ? error.message : GENERIC_ERROR_MESSAGE);
+        notify(readableMessage(error));
       },
     }),
     defaultOptions: {
