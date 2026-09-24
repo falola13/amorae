@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -27,13 +28,34 @@ func NewWebPush(publicKey, privateKey, subject string) *WebPush {
 	return &WebPush{
 		publicKey:  publicKey,
 		privateKey: privateKey,
-		subject:    subject,
+		subject:    vapidSubscriber(subject),
 		// A notification about this week is worthless next week. If a phone
 		// has been off for a day, let the push service drop it rather than
 		// deliver something stale.
 		ttl:    int((24 * time.Hour).Seconds()),
 		client: &http.Client{Timeout: 10 * time.Second},
 	}
+}
+
+// vapidSubscriber is the contact detail in the form webpush-go wants, which
+// is not the form RFC 8292 wants.
+//
+// The JWT's "sub" claim must be a mailto: or https: URL, which is why the
+// configuration insists on one. But the library prepends "mailto:" itself to
+// anything that is not an https URL — so handing it the correct value
+// produces "mailto:mailto:someone@example.com", and a claim no validator
+// should accept.
+//
+// Google's push service does not look, so Chrome and Android worked
+// perfectly. Apple does look, and answered 403 to every send, which is how
+// this was found: one platform silently fine, one platform never once
+// delivering. Passing the bare address lets the library build the URL it
+// intends to.
+func vapidSubscriber(subject string) string {
+	if strings.HasPrefix(subject, "https:") {
+		return subject
+	}
+	return strings.TrimPrefix(subject, "mailto:")
 }
 
 // payload is what the service worker receives.
