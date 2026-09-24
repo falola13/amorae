@@ -8,7 +8,10 @@ export const brand = {
   description: "A private space for the life you are building together.",
   colors: {
     plum: "#5B2A4A",
+    // The mark and accent on dark backgrounds, per docs/BRAND.md.
+    plumDark: "#E0B4CD",
     background: "#F7F4EF",
+    backgroundDark: "#16130F",
     ink: "#24201F",
     softWhite: "#FFFDFA",
   },

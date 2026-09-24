@@ -50,7 +50,13 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: brand.colors.background,
+  // One value would paint the status bar and the PWA's chrome linen whatever
+  // the app underneath is doing. media queries here are how Next lets a
+  // viewport answer per scheme.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: brand.colors.background },
+    { media: "(prefers-color-scheme: dark)", color: brand.colors.backgroundDark },
+  ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -37,6 +37,26 @@
   --color-success: #3f6b52;
   --color-success-bg: #e4ede6;
 
+  /* Dark mode. Q-21 held this back until every text pair could be checked in
+     both themes; it is checked now, by measuring the rendered contrast of
+     every screen rather than by eye.
+
+     The same token names carry different values, so no component changes and
+     nothing has a `dark:` variant to forget. Two of them do double duty and
+     that is what makes this work rather than invert badly:
+
+       --color-surface is both a card's background and the text colour on a
+       filled button (`bg-plum text-surface`). Dark, it becomes the dark card
+       — and therefore dark text on a light plum button, which is how a
+       primary button should read on a dark screen anyway.
+
+       --color-plum is both the accent text and that button's fill. Deep plum
+       is unreadable on near-black, so dark mode uses the light plum
+       BRAND.md already specifies for the mark on dark backgrounds.
+
+     Warm, not cold: the light palette is linen and ink, so the dark one is a
+     warm near-black rather than the blue-grey most dark modes default to. */
+
   /* Type scale */
   --text-micro: 12px;
   --text-micro--line-height: 1.4;
@@ -146,6 +166,44 @@
       opacity: 0;
       transform: translateY(8px);
     }
+  }
+}
+
+/* The dark values for the tokens above. They sit outside @theme because
+   @theme writes the :root defaults and this overrides them; see the note
+   in @theme for why the same names carry both themes. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-bg: #16130f;
+    --color-paper: #1e1a16;
+    --color-surface: #221e19;
+    --color-ink: #f3efe8;
+    --color-stone: #aca295;
+    --color-line: #322c26;
+    --color-edge: #6a6055;
+    --color-faint: #3a342d;
+    --color-photo: #2a251f;
+    --color-plum: #e0b4cd;
+    --color-plum-dark: #efd2e2;
+    --color-plum-tint: #3c2634;
+    --color-green: #8fd0a8;
+    --color-green-tint: #21362a;
+    --color-amber: #e6b76c;
+    --color-amber-tint: #3a2e18;
+    --color-red: #ef9c92;
+    --color-red-tint: #402420;
+    --color-bg-elevated: #221e19;
+    --color-fg: #f3efe8;
+    --color-fg-muted: #aca295;
+    --color-border: #322c26;
+    --color-accent: #e0b4cd;
+    --color-accent-hover: #efd2e2;
+    --color-accent-fg: #221e19;
+    --color-danger: #ef9c92;
+    --color-danger-bg: #402420;
+    --color-success: #8fd0a8;
+    --color-success-bg: #21362a;
   }
 }
 
