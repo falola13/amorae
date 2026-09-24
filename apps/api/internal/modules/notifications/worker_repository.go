@@ -185,6 +185,64 @@ func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDat
 	return out, nil
 }
 
+// RecentlyWritten is every appreciation and journal entry written since
+// `since`, paired with the partner who did not write it.
+//
+// One query over two tables because the question is one question: what has
+// one of them written for the other lately. The undo window travels with each
+// row as `settles`, so the rule about when a note is safe to announce lives
+// in Go (ForWritten) and this only says which kind each row is.
+func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Time) ([]WrittenCandidate, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		WITH written AS (
+			SELECT a.id, a.couple_id, a.from_id AS author_id, a.created_at, $2::text AS kind
+			FROM appreciations a
+			WHERE a.created_at >= $1
+			UNION ALL
+			SELECT j.id, j.couple_id, j.author_id, j.created_at, $3::text AS kind
+			FROM journal_entries j
+			WHERE j.created_at >= $1
+		)
+		SELECT u.id, written.author_id, author.display_name, written.id, written.kind,
+		       written.created_at,
+		       COALESCE(p.appreciation, true), COALESCE(p.journal, true)
+		FROM written
+		JOIN couples c ON c.id = written.couple_id AND c.dissolved_at IS NULL
+		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
+		JOIN users u ON u.id = m.user_id
+		JOIN users author ON author.id = written.author_id
+		LEFT JOIN notification_preferences p ON p.user_id = u.id
+		WHERE u.id <> written.author_id
+	`, since, KindAppreciation, KindJournal)
+	if err != nil {
+		return nil, fmt.Errorf("finding what they have written: %w", err)
+	}
+	defer rows.Close()
+
+	var out []WrittenCandidate
+	for rows.Next() {
+		var c WrittenCandidate
+		if err := rows.Scan(&c.UserID, &c.AuthorID, &c.AuthorName, &c.ItemID, &c.Kind,
+			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal); err != nil {
+			return nil, fmt.Errorf("scanning something written: %w", err)
+		}
+		if c.Kind == KindAppreciation {
+			c.Settles = appreciationUndoWindow
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding what they have written: %w", err)
+	}
+	return out, nil
+}
+
+// appreciationUndoWindow mirrors appreciation.UndoWindow without importing
+// it: the worker reads that module's table, and one duration is a smaller
+// thing to owe another module than a dependency is — the same trade as
+// statusDraft above. BR-APPR-02 is where the thirty seconds is decided.
+const appreciationUndoWindow = 30 * time.Second
+
 // ClaimSend records that this notification is being sent, and reports whether
 // this caller is the one that got to send it.
 //

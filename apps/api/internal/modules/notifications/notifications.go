@@ -253,6 +253,8 @@ const (
 	KindPrayerReminder = "prayer_reminder"
 	KindEventReminder  = "event_reminder"
 	KindImportantDate  = "important_date"
+	KindAppreciation   = "appreciation"
+	KindJournal        = "journal"
 )
 
 // OccursOn reports whether a kept date comes round on the given day —

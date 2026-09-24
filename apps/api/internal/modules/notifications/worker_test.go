@@ -140,6 +140,7 @@ type fakeRepo struct {
 	candidates []Candidate
 	events     []EventCandidate
 	dates      []ImportantDateCandidate
+	written    []WrittenCandidate
 	subs       []Subscription
 	claimed    map[string]bool
 	released   []string
@@ -157,6 +158,9 @@ func (f *fakeRepo) DueEventReminders(context.Context, time.Time) ([]EventCandida
 }
 func (f *fakeRepo) ImportantDates(context.Context) ([]ImportantDateCandidate, error) {
 	return f.dates, nil
+}
+func (f *fakeRepo) RecentlyWritten(context.Context, time.Time) ([]WrittenCandidate, error) {
+	return f.written, nil
 }
 func (f *fakeRepo) ClaimSend(_ context.Context, userID uuid.UUID, kind, key string, _ time.Time) (bool, error) {
 	k := userID.String() + kind + key
@@ -688,6 +692,94 @@ func TestForImportantDates(t *testing.T) {
 		due := ForImportantDates(c, morningOfTheDay)
 		if !strings.Contains(due[0].Message.Body, "One year today") {
 			t.Errorf("body = %q", due[0].Message.Body)
+		}
+	})
+}
+
+func TestForWritten(t *testing.T) {
+	author, partner := uuid.New(), uuid.New()
+	item := uuid.New()
+	sent := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	note := WrittenCandidate{
+		UserID: partner, AuthorID: author, AuthorName: "Ada",
+		ItemID: item, Kind: KindAppreciation, WrittenAt: sent,
+		Settles: appreciationUndoWindow,
+		Prefs:   Preferences{Appreciation: true, Journal: true},
+	}
+
+	t.Run("the partner hears about a note, once it can no longer be taken back", func(t *testing.T) {
+		n, ok := ForWritten(note, sent.Add(appreciationUndoWindow+time.Second))
+		if !ok {
+			t.Fatal("nobody was told about an appreciation")
+		}
+		if !strings.Contains(n.Message.Title, "Ada") {
+			t.Errorf("title = %q, should say who", n.Message.Title)
+		}
+		if n.Message.Path != "/together/appreciation" {
+			t.Errorf("path = %q", n.Message.Path)
+		}
+		if n.Key != item.String() {
+			t.Errorf("key = %q, want the note's own id", n.Key)
+		}
+	})
+
+	t.Run("not while it can still be undone", func(t *testing.T) {
+		// A note taken back ten seconds later should never have reached a
+		// lock screen, and this is the only place that can promise it.
+		if _, ok := ForWritten(note, sent.Add(10*time.Second)); ok {
+			t.Error("an appreciation was announced inside its undo window")
+		}
+	})
+
+	t.Run("the sender never hears about their own", func(t *testing.T) {
+		c := note
+		c.UserID = author
+		if _, ok := ForWritten(c, sent.Add(time.Minute)); ok {
+			t.Error("somebody was told about something they wrote themselves")
+		}
+	})
+
+	t.Run("nor does a day-old backlog go out", func(t *testing.T) {
+		if _, ok := ForWritten(note, sent.Add(25*time.Hour)); ok {
+			t.Error("a note from yesterday was announced today")
+		}
+	})
+
+	t.Run("a journal entry goes out at once, and reads differently", func(t *testing.T) {
+		c := note
+		c.Kind, c.Settles = KindJournal, 0
+		n, ok := ForWritten(c, sent.Add(time.Second))
+		if !ok {
+			t.Fatal("nobody was told about a journal entry")
+		}
+		if n.Message.Path != "/together/journal" {
+			t.Errorf("path = %q", n.Message.Path)
+		}
+		if strings.Contains(n.Message.Title, "appreciated") {
+			t.Errorf("title = %q, that is the other one", n.Message.Title)
+		}
+	})
+
+	t.Run("each switch is read on its own", func(t *testing.T) {
+		// Turning off journal notifications must not silence appreciations.
+		c := note
+		c.Prefs.Journal = false
+		if _, ok := ForWritten(c, sent.Add(time.Minute)); !ok {
+			t.Error("the journal switch silenced an appreciation")
+		}
+		c = note
+		c.Prefs.Appreciation = false
+		if _, ok := ForWritten(c, sent.Add(time.Minute)); ok {
+			t.Error("the appreciation switch was ignored")
+		}
+	})
+
+	t.Run("nothing about the note itself goes out", func(t *testing.T) {
+		// FR-NOTF-005: what one of them wrote is the one thing a lock screen
+		// must not carry.
+		n, _ := ForWritten(note, sent.Add(time.Minute))
+		if strings.Contains(n.Message.Body, "appreciate") || len(n.Message.Body) > 60 {
+			t.Errorf("body = %q, want it to say nothing of the words", n.Message.Body)
 		}
 	})
 }

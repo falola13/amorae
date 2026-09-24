@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/falola13/amorae/apps/api/internal/config"
+	"github.com/falola13/amorae/apps/api/internal/modules/appreciation"
 	"github.com/falola13/amorae/apps/api/internal/modules/auth"
 	"github.com/falola13/amorae/apps/api/internal/modules/challenges"
 	"github.com/falola13/amorae/apps/api/internal/modules/couples"
@@ -23,6 +24,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/export"
 	"github.com/falola13/amorae/apps/api/internal/modules/goals"
 	"github.com/falola13/amorae/apps/api/internal/modules/health"
+	"github.com/falola13/amorae/apps/api/internal/modules/journal"
 	"github.com/falola13/amorae/apps/api/internal/modules/memories"
 	"github.com/falola13/amorae/apps/api/internal/modules/milestones"
 	"github.com/falola13/amorae/apps/api/internal/modules/notifications"
@@ -119,6 +121,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	memoriesRepo := memories.NewPostgresRepository(db)
 	memoriesSvc := memories.NewService(memoriesRepo, togetherCouples, now)
 
+	journalRepo := journal.NewPostgresRepository(db)
+	journalSvc := journal.NewService(journalRepo, togetherCouples, now)
+
+	appreciationRepo := appreciation.NewPostgresRepository(db)
+	appreciationSvc := appreciation.NewService(appreciationRepo, togetherCouples, now)
+
 	// Leaving a couple freezes it rather than deleting it; this is what
 	// finally deletes it, once both partners have had the retention window
 	// to read and export (FR-PAIR-008).
@@ -152,6 +160,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	challengesHandler := challenges.NewHandler(challengesSvc, togetherCouples)
 	milestonesHandler := milestones.NewHandler(milestonesSvc)
 	memoriesHandler := memories.NewHandler(memoriesSvc)
+	journalHandler := journal.NewHandler(journalSvc)
+	appreciationHandler := appreciation.NewHandler(appreciationSvc)
 
 	// --- HTTP ---
 	mux := http.NewServeMux()
@@ -175,6 +185,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	challengesHandler.RegisterRoutes(v1)
 	milestonesHandler.RegisterRoutes(v1)
 	memoriesHandler.RegisterRoutes(v1)
+	journalHandler.RegisterRoutes(v1)
+	appreciationHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
 	// logs and responds with the request id. ClientIP resolves the caller

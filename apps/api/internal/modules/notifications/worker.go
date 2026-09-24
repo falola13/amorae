@@ -269,6 +269,62 @@ func plural(n int, unit string) string {
 	return fmt.Sprintf("%d %ss", n, unit)
 }
 
+// writtenGrace is how far back the worker looks for something one partner
+// wrote for the other.
+//
+// It is not about being late — the claim row already makes a late send safe
+// — but about a first deploy, or a worker that has been down since Tuesday,
+// not opening with a week of buzzing about notes somebody has long since
+// read.
+const writtenGrace = 24 * time.Hour
+
+// ForWritten is the nudge when one of them writes something for the other: a
+// note of appreciation, or an entry in the journal.
+//
+// Only the other partner hears about it. Telling somebody they have written
+// something is the emptiest notification there is, and for an appreciation it
+// would also undo the point of it.
+//
+// It waits out the undo window before going anywhere. A note taken back ten
+// seconds after it was sent should never have reached a lock screen, and the
+// worker is the only thing that can promise that — the send itself cannot
+// know what happens next.
+func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
+	if c.UserID == c.AuthorID {
+		return Notification{}, false
+	}
+	wanted := c.Prefs.Journal
+	message := push.Message{
+		Title: c.AuthorName + " wrote in your journal",
+		Body:  "Something they wanted to keep.",
+		Path:  "/together/journal",
+		Tag:   KindJournal,
+	}
+	if c.Kind == KindAppreciation {
+		wanted = c.Prefs.Appreciation
+		message = push.Message{
+			Title: c.AuthorName + " appreciated you",
+			Body:  "A note, just for you.",
+			Path:  "/together/appreciation",
+			Tag:   KindAppreciation,
+		}
+	}
+	if !wanted {
+		return Notification{}, false
+	}
+
+	ready := c.WrittenAt.Add(c.Settles)
+	if now.Before(ready) || !now.Before(c.WrittenAt.Add(writtenGrace)) {
+		return Notification{}, false
+	}
+	return Notification{
+		UserID:  c.UserID,
+		Kind:    c.Kind,
+		Key:     c.ItemID.String(),
+		Message: message,
+	}, true
+}
+
 // statusDraft mirrors the prayers module's value without importing it: the
 // worker reads the column, and one string is a smaller thing to owe another
 // module than a dependency is.
@@ -308,11 +364,28 @@ type ImportantDateCandidate struct {
 	Prefs    Preferences
 }
 
+// WrittenCandidate is one thing one partner wrote, and the other partner who
+// has not been told about it.
+type WrittenCandidate struct {
+	UserID     uuid.UUID
+	AuthorID   uuid.UUID
+	AuthorName string
+	ItemID     uuid.UUID
+	// KindAppreciation or KindJournal.
+	Kind      string
+	WrittenAt time.Time
+	// How long this kind waits before it is safe to announce — the undo
+	// window for an appreciation, nothing for a journal entry.
+	Settles time.Duration
+	Prefs   Preferences
+}
+
 // WorkerRepository is what the worker needs of storage.
 type WorkerRepository interface {
 	CurrentWeekCandidates(ctx context.Context, now time.Time) ([]Candidate, error)
 	DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error)
 	ImportantDates(ctx context.Context) ([]ImportantDateCandidate, error)
+	RecentlyWritten(ctx context.Context, since time.Time) ([]WrittenCandidate, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
@@ -380,6 +453,16 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	}
 	for _, c := range dates {
 		due = append(due, ForImportantDates(c, now)...)
+	}
+
+	written, err := w.repo.RecentlyWritten(ctx, now.Add(-writtenGrace))
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range written {
+		if n, ok := ForWritten(c, now); ok {
+			due = append(due, n)
+		}
 	}
 
 	sent := 0

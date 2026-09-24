@@ -1316,7 +1316,7 @@ each tagged and dated.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner add a private, couple-shared journal entry with a tag and
 body text.
@@ -1326,12 +1326,22 @@ body text.
 - **FR-JRNL-001.AC1** Given a tag from the defined set and non-empty text, when either partner
   submits an entry, then the API shall store it with their id as author and today's date, and it
   shall be visible to both partners.
+- **FR-JRNL-001.AC2** Given a tag outside the defined set, or a different spelling of one in it,
+  when an entry is submitted, then the API shall refuse it.
+
+*Two things the request does not get to decide:* the author is whoever the session says it is, and
+the date is the couple's local day (DEC-27), worked out where the couple row already is rather
+than from UTC in Go. Taking the UTC date would file anything written between midnight and one in
+the morning in Lagos under yesterday — the hour somebody is most likely to be writing in a
+journal. The tag is matched exactly, not case-insensitively: it comes from a picker, so another
+spelling means a client sending something this server has never offered, and two spellings of
+"Gratitude" is a list the screen cannot group.
 
 #### FR-JRNL-002 View journal entries
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall list a couple's journal entries to both partners identically, in date order.
 
@@ -1365,7 +1375,7 @@ there is no feed, no likes, no reactions.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let a partner send a short appreciation note to their partner.
 
@@ -1379,7 +1389,7 @@ The system shall let a partner send a short appreciation note to their partner.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started — Blocked by Q-16 | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall notify only the receiving partner when an appreciation is sent, not the sender.
 
@@ -1388,15 +1398,18 @@ The system shall notify only the receiving partner when an appreciation is sent,
 - **FR-APPR-002.AC1** Given an appreciation is sent, when it is stored, then the system shall
   queue exactly one push notification, addressed to the recipient only.
 
-*Status note:* sending itself is UI only (FR-APPR-001); this requirement covers push delivery,
-which depends on the worker and push-sending infrastructure (FR-NOTF-007, Q-16) and is Not
-started.
+*Built:* the worker sends it, not the endpoint, and that is the point. A note is announced only
+once it can no longer be taken back (BR-APPR-02) — one withdrawn ten seconds after sending should
+never have reached a lock screen, and the send itself cannot know what happens next, so only
+something that looks back can promise it. Journal entries ride the same path with no such wait,
+since there is nothing to take back. Both name who wrote it and nothing of what they wrote
+(FR-NOTF-005.AC1), and neither ever goes to the person who wrote it.
 
 #### FR-APPR-003 Sender undo
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let the sender withdraw an appreciation shortly after sending it, per BR-APPR-02.
 
@@ -1413,9 +1426,11 @@ The system shall let the sender withdraw an appreciation shortly after sending i
   partner who did not send it, when the API processes it, then it shall refuse with 409
   `undo_window_closed` or 403 `forbidden` respectively, and the note shall remain.
 
-*Status note:* AC1–AC3 were verified in the browser on 2026-09-22, while the in-browser mock
-still existed; they need re-checking against the Go endpoint once it lands. AC4 is the contract
-for that endpoint (`../API.md`).
+*Verified 2026-09-24 against the Go endpoint:* the sender takes a note back inside the window and
+it disappears for both of them; the partner is refused 403; a delete after the window is refused
+409 `undo_window_closed` and the note stays; and a repeated undo of one already gone answers 204,
+because a retry should find the world as it wanted it. The undo is never queued offline (AC3), so
+it is the one write here that is online-only.
 
 ### 3.11 MEM — Memories
 
@@ -1681,7 +1696,7 @@ spend it.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Partial — prayers, events and important dates | Test |
+| Must | MVP | Partial — all but goals and challenges | Test |
 
 The worker shall send a push notification for each enabled category, respecting each user's own
 preferences and reminder time.
@@ -1705,7 +1720,11 @@ names the event and says when it is, and nothing else about it (FR-NOTF-005.AC2)
 
 And important dates (FR-DATE-003), respecting `important_dates`.
 
-Appreciation, journal, goals and challenges wait on those modules.
+And the two things one partner writes for the other, respecting `appreciation` and `journal`:
+a note of appreciation, once its undo window has closed, and a journal entry straight away.
+Neither goes to the person who wrote it, and neither carries a word of what was written.
+
+Goals and challenges wait on those modules.
 
 **Acceptance criteria**
 
@@ -2262,11 +2281,11 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-CHAL-001 | G-03 | `GET /v1/challenges/current` | Implemented | Go unit tests; 23-check API pass and browser check 2026-09-24 |
 | FR-CHAL-002 | G-03 | `PATCH /v1/challenges/current/days/:n` | Implemented | Go unit tests; 23-check API pass and browser check 2026-09-24 |
 | FR-CHAL-003 | G-03 | `GET /v1/challenges/templates`, `POST /v1/challenges` | Implemented | Go unit tests; 23-check API pass and browser check 2026-09-24 |
-| FR-JRNL-001 | G-04 | `POST /v1/journal` | UI only | Screen built; no endpoint to test against |
-| FR-JRNL-002 | G-04 | `GET /v1/journal` | UI only | Screen built; no endpoint to test against |
-| FR-APPR-001 | G-04 | `POST /v1/appreciations` | UI only | Screen built; no endpoint to test against |
-| FR-APPR-002 | G-04 | TBD — Blocked by Q-16 | Not started | None yet |
-| FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | UI only | Browser check 2026-09-22 against the mock, before it was removed (AC1–AC3) |
+| FR-JRNL-001 | G-04 | `POST /v1/journal` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
+| FR-JRNL-002 | G-04 | `GET /v1/journal` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
+| FR-APPR-001 | G-04 | `POST /v1/appreciations` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
+| FR-APPR-002 | G-04 | Worker (`ForWritten`) | Implemented | Go unit tests; worker run against the database 2026-09-24 |
+| FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | Implemented | Go unit tests; API pass incl. the closed window, and the toast's Undo driven in the browser 2026-09-24 |
 | FR-MEM-001 | G-04 | `POST /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
 | FR-MEM-002 | G-04 | `GET /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
 | FR-MEM-003 | G-04 | TBD — Blocked by Q-06 | Not started | None yet |
