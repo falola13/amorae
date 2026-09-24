@@ -233,6 +233,7 @@ building, rather than launching:
 
 | Date | What |
 |---|---|
+| 2026-09-24 | **Goals, end to end** [FR-GOAL-001..005]: create, list, detail, progress log and completion. The running total is the sum of the log rather than a stored counter, and marking a goal done existed in neither half [Q-23 also settled → DEC-30, per-partner challenge days] |
 | 2026-09-24 | **Events, end to end** [FR-EVT-001..006]: create, read, edit, complete, checklist and delete. The checklist could be shown and ticked but never filled — the form collects one now — and delete existed in neither half |
 | 2026-09-24 | **Step 3 closed**: the service worker receives what the worker sends, the partner is told when a week is published, and the settings screen asks for permission with a reason instead of never asking [FR-NOTF-006 done] |
 | 2026-09-24 | **The worker and push** [FR-NOTF-001..004, 007]: `cmd/worker` in the same module, hourly, holding no state — what has been sent is a row, so a restart or a second worker sends each notification once. Preferences and subscriptions endpoints; a push seam that logs in development and encrypts in production |

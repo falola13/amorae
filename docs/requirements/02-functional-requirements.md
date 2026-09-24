@@ -1136,7 +1136,7 @@ sum of `progress[].amount`, computed on read rather than stored and incremented.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner create a shared goal with a title, optional description
 ("why"), a target value and unit, and start/end dates.
@@ -1150,7 +1150,7 @@ The system shall let either partner create a shared goal with a title, optional 
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall list a couple's goals to both partners identically, each with its running total.
 
@@ -1164,7 +1164,7 @@ The system shall list a couple's goals to both partners identically, each with i
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall show a single goal's full detail, including its progress log.
 
@@ -1177,7 +1177,7 @@ The system shall show a single goal's full detail, including its progress log.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let either partner add a progress entry to a shared goal.
 
@@ -1191,7 +1191,7 @@ The system shall let either partner add a progress entry to a shared goal.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Not started | Test |
+| Should | MVP | Implemented | Test |
 
 The system shall let either partner edit a goal's fields or mark it done.
 
@@ -1201,10 +1201,10 @@ The system shall let either partner edit a goal's fields or mark it done.
   its fields or marks it done, then the API shall save the change and it shall be visible to both
   partners.
 
-*Contract note:* the v2.0 spec required update, completion and archiving; the current API
-contract exposes only create, read and progress logging for goals — there is no `PATCH`. How a
-goal reaches `done: true` (seen in the seed data) is not yet defined by any documented endpoint.
-Recorded as a gap against the old spec.
+*Contract note:* closed. `PATCH /v1/goals/:id` exists, and the goal screen offers "Mark as done"
+and "Still going" — always, rather than appearing once the total is high enough, because reaching
+the number is not the only way a goal ends. Archiving is still not built, and is not missed:
+a finished goal sorts below the live ones.
 
 ---
 
@@ -1249,9 +1249,9 @@ The system shall let a partner mark a challenge day done or skipped.
 
 **Acceptance criteria**
 
-- **FR-CHAL-002.AC1** Given a challenge day, when a partner marks it done, then the API shall set
-  that day's `done` flag and it shall be visible to both partners as a single shared state
-  (BR-CHAL-01 records this as a gap against per-partner completion).
+- **FR-CHAL-002.AC1** Given a challenge day, when a partner marks it done, then the API shall
+  record it **for that partner only**, and their partner's state for that day shall be unchanged
+  (DEC-30). Both can see both, as with prayer completion.
 - **FR-CHAL-002.AC2** Given a day marked done, when a partner marks it skipped instead, then the
   API shall update the day's status accordingly, without penalty language in the UI (01 §6).
 
@@ -2176,11 +2176,11 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-EVT-006 | G-03 | `DELETE /v1/events/:id` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-CAL-001 | G-03 | `GET /v1/events`, `GET /v1/prayers/current` | UI only | Manual demo 2026-09-22 |
 | FR-CAL-002 | G-03 | — (client navigation) | UI only | Manual demo 2026-09-22 |
-| FR-GOAL-001 | G-03 | `POST /v1/goals` | UI only | Screen built; no endpoint to test against |
-| FR-GOAL-002 | G-03 | `GET /v1/goals` | UI only | Screen built; no endpoint to test against |
-| FR-GOAL-003 | G-03 | `GET /v1/goals/:id` | UI only | Screen built; no endpoint to test against |
-| FR-GOAL-004 | G-03 | `POST /v1/goals/:id/progress` | UI only | Screen built; no endpoint to test against |
-| FR-GOAL-005 | G-03 | TBD | Not started | None yet |
+| FR-GOAL-001 | G-03 | `POST /v1/goals` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
+| FR-GOAL-002 | G-03 | `GET /v1/goals` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
+| FR-GOAL-003 | G-03 | `GET /v1/goals/:id` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
+| FR-GOAL-004 | G-03 | `POST /v1/goals/:id/progress` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
+| FR-GOAL-005 | G-03 | `PATCH /v1/goals/:id` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
 | FR-CHAL-001 | G-03 | `GET /v1/challenges/current` | UI only | Screen built; no endpoint to test against |
 | FR-CHAL-002 | G-03 | `PATCH /v1/challenges/current/days/:n` | UI only | Screen built; no endpoint to test against |
 | FR-CHAL-003 | G-03 | TBD | Not started | None yet |

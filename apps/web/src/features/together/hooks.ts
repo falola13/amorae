@@ -28,6 +28,7 @@ export const useCompleteEvent = () => useWrite(w.completeEvent);
 export const useDeleteEvent = () => useWrite(w.deleteEvent);
 export const useChecklist = () => useWrite(w.checklist);
 export const useCreateGoal = () => useWrite(w.createGoal);
+export const useUpdateGoal = () => useWrite(w.updateGoal);
 export const useAddProgress = () => useWrite(w.addProgress);
 export const useChallengeDay = () => useWrite(w.challengeDay);
 export const useAddJournal = () => useWrite(w.addJournal);

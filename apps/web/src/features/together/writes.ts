@@ -48,6 +48,13 @@ export const togetherWrites = {
   // Adds an amount rather than setting one, so a replay double-counts it.
   // The endpoint should take the new total, not a delta, and then this can
   // queue like the rest (FR-PWA-009).
+  updateGoal: defineWrite({
+    mutationKey: ["goals", "update"],
+    mutationFn: ({ id, patch }: { id: string; patch: { done?: boolean } }) =>
+      api.updateGoal(id, patch),
+    invalidates: [keys.goals],
+    idempotent: "sets the fields it names to the values it carries, however often it lands.",
+  }),
   addProgress: defineWrite({
     mutationKey: ["goals", "progress"],
     mutationFn: ({ id, amount }: { id: string; amount: number }) => api.progress(id, amount),

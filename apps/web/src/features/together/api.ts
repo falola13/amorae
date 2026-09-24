@@ -29,6 +29,8 @@ export const togetherApi = {
   goals: () => http.get<Goal[]>("/goals").then((r) => r.data),
   goal: (id: string) => http.get<Goal>(apiPath`/goals/${id}`).then((r) => r.data),
   createGoal: (g: GoalInput) => http.post<Goal>("/goals", g).then((r) => r.data),
+  updateGoal: (id: string, patch: Partial<GoalInput> & { done?: boolean }) =>
+    http.patch<Goal>(apiPath`/goals/${id}`, patch).then((r) => r.data),
   progress: (id: string, amount: number) =>
     http.post<Goal>(apiPath`/goals/${id}/progress`, { amount }).then((r) => r.data),
 

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { useCouple } from "@/features/couple/hooks";
-import { useAddProgress, useGoal } from "@/features/together/hooks";
+import { useAddProgress, useGoal, useUpdateGoal } from "@/features/together/hooks";
 import { sumOf } from "@/features/together/goals";
 import { progressSchema } from "@/lib/api/schemas";
 import { dayNum, daysUntil, naira, range, shortMonth } from "@/lib/dates";
@@ -47,6 +47,7 @@ export default function GoalDetail() {
   const goal = useGoal(id);
   const couple = useCouple();
   const add = useAddProgress();
+  const update = useUpdateGoal();
   const [open, setOpen] = useState(false);
   const {
     register,
@@ -130,13 +131,33 @@ export default function GoalDetail() {
                   </Section>
                 ) : null}
               </Main>
-              {!g.done ? (
-                <BottomActions>
-                  <Button icon="plus" onClick={() => setOpen(true)}>
-                    Add progress
+              <BottomActions>
+                {!g.done ? (
+                  <>
+                    <Button icon="plus" onClick={() => setOpen(true)}>
+                      Add progress
+                    </Button>
+                    {/* Reaching the number is not the only way a goal ends,
+                        so this is always offered rather than appearing once
+                        the total is high enough. */}
+                    <Button
+                      variant="text"
+                      loading={update.isPending}
+                      onClick={() => update.mutate({ id: g.id, patch: { done: true } })}
+                    >
+                      Mark as done
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="text"
+                    loading={update.isPending}
+                    onClick={() => update.mutate({ id: g.id, patch: { done: false } })}
+                  >
+                    Still going
                   </Button>
-                </BottomActions>
-              ) : null}
+                )}
+              </BottomActions>
               <Sheet open={open} onClose={close} title="What did you add?" labelledBy="prog-h">
                 <form
                   method="post"

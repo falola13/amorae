@@ -344,8 +344,9 @@ those two names meet.
 | `DELETE /v1/events/:id` | 204. Removes it for both partners, checklist included |
 | `POST` / `DELETE /v1/events/:id/complete` | |
 | `PATCH /v1/events/:id/checklist/:item` `{ done }` | |
-| `GET`, `POST /v1/goals` · `GET /v1/goals/:id` | `unit` is `naira` or `count` |
-| `POST /v1/goals/:id/progress` `{ amount }` | one shared total; progress rows carry `user_id` for the log only |
+| `GET`, `POST /v1/goals` · `GET /v1/goals/:id` | `unit` is `naira` or `count`; amounts are whole units, never a float. A goal has **no** running total field: it is the sum of `progress[].amount`, so a client that adds it up can never disagree with one that was told (BR-GOAL-01). Another couple's goal is 404 (DEC-19) |
+| `PATCH /v1/goals/:id` | 200 `Goal`. Either partner may edit any field or set `done`; an absent field is left alone |
+| `POST /v1/goals/:id/progress` `{ amount }` | Appends an entry carrying the caller's `user_id` and today's date. A negative amount is allowed — a correction is how a wrong number is fixed, and deleting the entry would lose that it happened. Zero is 400 |
 | `GET /v1/challenges/current` · `PATCH /v1/challenges/current/days/:n` `{ done?, skipped? }` | |
 | `GET`, `POST /v1/journal` | `{ tag, text }` |
 | `GET`, `POST /v1/appreciations` · `DELETE /v1/appreciations/:id` | delete is the sender's undo: 204 within 30 seconds of sending; 403 `forbidden` for the partner's note; 409 `undo_window_closed` after the window. The web app offers Undo for 5 seconds and never queues it offline |
