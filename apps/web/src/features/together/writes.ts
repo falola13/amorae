@@ -61,6 +61,20 @@ export const togetherWrites = {
     invalidates: [keys.goals],
     onlineOnly: true,
   }),
+  startChallenge: defineWrite({
+    mutationKey: ["challenge", "start"],
+    mutationFn: (template: string) => api.startChallenge(template),
+    invalidates: [keys.challenge],
+    // Starting a second one is refused by the server, so a replay after a
+    // dropped response finds the one it already made.
+    idempotent: "one challenge at a time, enforced by a unique index on the couple.",
+  }),
+  leaveChallenge: defineWrite({
+    mutationKey: ["challenge", "leave"],
+    mutationFn: () => api.leaveChallenge(),
+    invalidates: [keys.challenge],
+    idempotent: "leaving one that has already gone leaves the same nothing behind.",
+  }),
   challengeDay: defineWrite({
     mutationKey: ["challenge", "day"],
     mutationFn: ({ n, patch }: { n: number; patch: Partial<ChallengeDay> }) =>

@@ -30,6 +30,10 @@ export const useChecklist = () => useWrite(w.checklist);
 export const useCreateGoal = () => useWrite(w.createGoal);
 export const useUpdateGoal = () => useWrite(w.updateGoal);
 export const useAddProgress = () => useWrite(w.addProgress);
+export const useChallengeTemplates = () =>
+  useQuery({ queryKey: ["challenge", "templates"], queryFn: api.challengeTemplates });
+export const useStartChallenge = () => useWrite(w.startChallenge);
+export const useLeaveChallenge = () => useWrite(w.leaveChallenge);
 export const useChallengeDay = () => useWrite(w.challengeDay);
 export const useAddJournal = () => useWrite(w.addJournal);
 export const useSendAppreciation = () => useWrite(w.sendAppreciation);

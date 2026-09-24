@@ -1218,18 +1218,17 @@ optional and never framed with penalty language.
 
 **Business rules**
 
-- **BR-CHAL-01** — A challenge runs for a fixed number of days, each with a prompt. The v2.0 spec
-  called for independent per-partner completion of each day
-  (`challenge_progress`, `unique(challenge_day_id, user_id)`), but the built contract
-  (`ChallengeDay` in `types.ts`: `{n, text, done, skipped}`) has a single `done`/`skipped` flag
-  per day, not one per partner. Recorded as a regression against the old design, not a deliberate
-  simplification — no `DEC` records this choice. Which model to keep is Q-23.
+- **BR-CHAL-01** — A challenge runs for a fixed number of days, each with a prompt, and each
+  partner marks their own days: `challenge_progress` is keyed on (day, person), as the v2.0
+  design had it (DEC-30, resolving Q-23). `ChallengeDay` in `types.ts` carries `done`/`skipped`
+  for the caller and `partner_done`/`partner_skipped` alongside, exactly as a prayer week carries
+  `my_completed` and `partner_completed`. Both can see both; neither can change the other's.
 
 #### FR-CHAL-001 View current challenge
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall show a couple's current multi-day challenge with each day's prompt and status.
 
@@ -1243,7 +1242,7 @@ The system shall show a couple's current multi-day challenge with each day's pro
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Test |
+| Must | MVP | Implemented | Test |
 
 The system shall let a partner mark a challenge day done or skipped.
 
@@ -1259,7 +1258,7 @@ The system shall let a partner mark a challenge day done or skipped.
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Should | MVP | Not started | Test |
+| Should | MVP | Implemented | Test |
 
 The system shall let either partner start a new multi-day challenge from a template.
 
@@ -1268,9 +1267,11 @@ The system shall let either partner start a new multi-day challenge from a templ
 - **FR-CHAL-003.AC1** Given a couple with no active challenge, when either partner starts one
   from a template, then the API shall create it with day 1 through N and respond 201.
 
-*Contract note:* the current API contract has no create endpoint; it assumes one
-pre-seeded "current" challenge. Recorded as a gap against the v2.0 spec, which required a couple
-to be able to start a challenge.
+*Contract note:* closed. `GET /v1/challenges/templates` lists a curated catalogue and
+`POST /v1/challenges` starts one; `DELETE /v1/challenges/current` leaves it, which is what frees
+a couple to start another. One at a time, enforced by a unique index rather than a check, so two
+taps race to one challenge. The templates live in Go rather than a table: they are copy, and a
+table would mean a migration to fix a typo in a sentence somebody reads on day four.
 
 ---
 
@@ -2181,9 +2182,9 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-GOAL-003 | G-03 | `GET /v1/goals/:id` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
 | FR-GOAL-004 | G-03 | `POST /v1/goals/:id/progress` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
 | FR-GOAL-005 | G-03 | `PATCH /v1/goals/:id` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
-| FR-CHAL-001 | G-03 | `GET /v1/challenges/current` | UI only | Screen built; no endpoint to test against |
-| FR-CHAL-002 | G-03 | `PATCH /v1/challenges/current/days/:n` | UI only | Screen built; no endpoint to test against |
-| FR-CHAL-003 | G-03 | TBD | Not started | None yet |
+| FR-CHAL-001 | G-03 | `GET /v1/challenges/current` | Implemented | Go unit tests; 23-check API pass and browser check 2026-09-24 |
+| FR-CHAL-002 | G-03 | `PATCH /v1/challenges/current/days/:n` | Implemented | Go unit tests; 23-check API pass and browser check 2026-09-24 |
+| FR-CHAL-003 | G-03 | `GET /v1/challenges/templates`, `POST /v1/challenges` | Implemented | Go unit tests; 23-check API pass and browser check 2026-09-24 |
 | FR-JRNL-001 | G-04 | `POST /v1/journal` | UI only | Screen built; no endpoint to test against |
 | FR-JRNL-002 | G-04 | `GET /v1/journal` | UI only | Screen built; no endpoint to test against |
 | FR-APPR-001 | G-04 | `POST /v1/appreciations` | UI only | Screen built; no endpoint to test against |

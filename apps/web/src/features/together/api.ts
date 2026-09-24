@@ -3,6 +3,7 @@ import type {
   Appreciation,
   Challenge,
   ChallengeDay,
+  ChallengeTemplate,
   Event,
   Goal,
   JournalEntry,
@@ -35,6 +36,11 @@ export const togetherApi = {
     http.post<Goal>(apiPath`/goals/${id}/progress`, { amount }).then((r) => r.data),
 
   challenge: () => http.get<Challenge>("/challenges/current").then((r) => r.data),
+  challengeTemplates: () =>
+    http.get<ChallengeTemplate[]>("/challenges/templates").then((r) => r.data),
+  startChallenge: (template: string) =>
+    http.post<Challenge>("/challenges", { template }).then((r) => r.data),
+  leaveChallenge: () => http.delete("/challenges/current").then(() => undefined),
   challengeDay: (n: number, patch: Partial<ChallengeDay>) =>
     http.patch<Challenge>(apiPath`/challenges/current/days/${n}`, patch).then((r) => r.data),
 

@@ -61,3 +61,18 @@ func (a prayersCouples) CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.U
 	}
 	return mine.Couple.ID, nil
 }
+
+// PartnerOf is the other member of the caller's couple, or the zero id while
+// they are still waiting for one.
+func (a prayersCouples) PartnerOf(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	mine, err := a.couples.GetMine(ctx, userID)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	for _, m := range mine.Members {
+		if m.ID != userID {
+			return m.ID, nil
+		}
+	}
+	return uuid.UUID{}, nil
+}

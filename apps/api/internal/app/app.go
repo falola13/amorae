@@ -17,6 +17,7 @@ import (
 
 	"github.com/falola13/amorae/apps/api/internal/config"
 	"github.com/falola13/amorae/apps/api/internal/modules/auth"
+	"github.com/falola13/amorae/apps/api/internal/modules/challenges"
 	"github.com/falola13/amorae/apps/api/internal/modules/couples"
 	"github.com/falola13/amorae/apps/api/internal/modules/events"
 	"github.com/falola13/amorae/apps/api/internal/modules/export"
@@ -107,6 +108,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	goalsRepo := goals.NewPostgresRepository(db)
 	goalsSvc := goals.NewService(goalsRepo, togetherCouples, now)
 
+	challengesRepo := challenges.NewPostgresRepository(db)
+	challengesSvc := challenges.NewService(challengesRepo, togetherCouples, now)
+
 	// Leaving a couple freezes it rather than deleting it; this is what
 	// finally deletes it, once both partners have had the retention window
 	// to read and export (FR-PAIR-008).
@@ -137,6 +141,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	notificationsHandler := notifications.NewHandler(notificationsSvc)
 	eventsHandler := events.NewHandler(eventsSvc)
 	goalsHandler := goals.NewHandler(goalsSvc)
+	challengesHandler := challenges.NewHandler(challengesSvc, togetherCouples)
 
 	// --- HTTP ---
 	mux := http.NewServeMux()
@@ -157,6 +162,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	notificationsHandler.RegisterRoutes(v1)
 	eventsHandler.RegisterRoutes(v1)
 	goalsHandler.RegisterRoutes(v1)
+	challengesHandler.RegisterRoutes(v1)
 
 	// RequestID first so everything below it, including a recovered panic,
 	// logs and responds with the request id. ClientIP resolves the caller

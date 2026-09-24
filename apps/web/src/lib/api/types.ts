@@ -119,18 +119,34 @@ export interface Goal {
   done: boolean;
 }
 
+/**
+ * One day of a challenge. `done` and `skipped` are YOURS, exactly as
+ * `my_completed` is on a prayer week; your partner's sit alongside so both of
+ * you can see both, and neither can change the other's (DEC-30).
+ */
 export interface ChallengeDay {
   n: number;
   text: string;
   done: boolean;
   skipped?: boolean;
+  partner_done?: boolean;
+  partner_skipped?: boolean;
 }
 
 export interface Challenge {
   id: string;
+  template: string;
   title: string;
   started_on: string;
   days: ChallengeDay[];
+}
+
+/** One of the curated challenges a couple can start. */
+export interface ChallengeTemplate {
+  key: string;
+  title: string;
+  blurb: string;
+  days: number;
 }
 
 export type JournalTag = "Gratitude" | "Reflection" | "Memory" | "Appreciation" | "Plans";
