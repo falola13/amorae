@@ -29,6 +29,50 @@ export const prayerWrites = {
     invalidates: [keys.week, keys.history],
     idempotent: "publishing a week that is already published changes nothing.",
   }),
+  // Marking a prayer answered is the gladdest thing the app does, so it
+  // should not be the slowest. The note is sent with the mark rather than
+  // after it: two round trips would mean a moment where the prayer is
+  // answered but the reason why is missing.
+  answer: defineWrite({
+    mutationKey: ["prayers", "answer"],
+    mutationFn: ({ pointId, note }: { pointId: string; note: string }) =>
+      prayersApi.setAnswered(pointId, note),
+    invalidates: [keys.week, keys.history, keys.weeksById, keys.answered],
+    scope: "prayers.answer",
+    idempotent: "sets one point to answered with a given note, so a replay lands the same state.",
+    optimistic: (qc, { pointId, note }) => {
+      const at = new Date().toISOString();
+      qc.setQueryData<PrayerWeek>(keys.week, (w) =>
+        w
+          ? {
+              ...w,
+              points: w.points.map((p) =>
+                p.id === pointId ? { ...p, answered_at: at, answer_note: note } : p,
+              ),
+            }
+          : w,
+      );
+    },
+  }),
+  unanswer: defineWrite({
+    mutationKey: ["prayers", "unanswer"],
+    mutationFn: ({ pointId }: { pointId: string }) => prayersApi.unsetAnswered(pointId),
+    invalidates: [keys.week, keys.history, keys.weeksById, keys.answered],
+    scope: "prayers.answer",
+    idempotent: "clears the mark, which is already clear the second time.",
+    optimistic: (qc, { pointId }) => {
+      qc.setQueryData<PrayerWeek>(keys.week, (w) =>
+        w
+          ? {
+              ...w,
+              points: w.points.map((p) =>
+                p.id === pointId ? { ...p, answered_at: undefined, answer_note: undefined } : p,
+              ),
+            }
+          : w,
+      );
+    },
+  }),
   reflection: defineWrite({
     mutationKey: ["prayers", "reflection"],
     mutationFn: ({ weekId, text }: { weekId: string; text: string }) =>

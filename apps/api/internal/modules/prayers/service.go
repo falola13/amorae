@@ -19,6 +19,8 @@ type Repository interface {
 	ReplacePoints(ctx context.Context, weekID uuid.UUID, points []Point, at time.Time) error
 	Publish(ctx context.Context, weekID uuid.UUID, at time.Time) error
 	SetCompletion(ctx context.Context, pointID, userID uuid.UUID, done bool, at time.Time) error
+	SetAnswered(ctx context.Context, pointID, userID uuid.UUID, answered bool, note string, at time.Time) error
+	Answered(ctx context.Context, coupleID uuid.UUID) ([]Answered, error)
 	SetReflection(ctx context.Context, weekID, userID uuid.UUID, body string, at time.Time) error
 }
 
@@ -206,6 +208,57 @@ func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, 
 
 // SetReflection stores the caller's own words about a week. Both partners
 // write their own, and both can read both.
+// SetAnswered marks a prayer answered, or takes the mark back.
+//
+// Deliberately not restricted to the current week. Prayers are answered on
+// their own schedule — months later, long after the week has closed into
+// history — and a feature that only worked for seven days would miss most of
+// what it exists to catch. The couple-scoped lookup of the point is the whole
+// permission check: a point belonging to anyone else is simply not found.
+func (s *Service) SetAnswered(
+	ctx context.Context, userID, pointID uuid.UUID, answered bool, note string,
+) (Record, CoupleContext, error) {
+	cc, err := s.couples.ForPrayers(ctx, userID)
+	if err != nil {
+		return Record{}, CoupleContext{}, err
+	}
+	note, err = ValidateAnswerNote(note)
+	if err != nil {
+		return Record{}, CoupleContext{}, err
+	}
+
+	weekID, err := s.repo.WeekOfPoint(ctx, cc.CoupleID, pointID)
+	if err != nil {
+		return Record{}, CoupleContext{}, err
+	}
+	rec, err := s.repo.WeekByID(ctx, cc.CoupleID, weekID)
+	if err != nil {
+		return Record{}, CoupleContext{}, err
+	}
+	if err := CanAnswer(rec.Week); err != nil {
+		return Record{}, CoupleContext{}, err
+	}
+
+	if err := s.repo.SetAnswered(ctx, pointID, userID, answered, note, s.now()); err != nil {
+		return Record{}, CoupleContext{}, err
+	}
+	rec, err = s.repo.WeekByID(ctx, cc.CoupleID, weekID)
+	return rec, cc, err
+}
+
+// Answered is everything the couple has marked answered, newest first.
+func (s *Service) Answered(ctx context.Context, userID uuid.UUID) ([]Answered, CoupleContext, error) {
+	cc, err := s.couples.ForPrayers(ctx, userID)
+	if err != nil {
+		return nil, CoupleContext{}, err
+	}
+	out, err := s.repo.Answered(ctx, cc.CoupleID)
+	if err != nil {
+		return nil, CoupleContext{}, err
+	}
+	return out, cc, nil
+}
+
 func (s *Service) SetReflection(ctx context.Context, userID, weekID uuid.UUID, body string) (Record, CoupleContext, error) {
 	cc, err := s.couples.ForPrayers(ctx, userID)
 	if err != nil {

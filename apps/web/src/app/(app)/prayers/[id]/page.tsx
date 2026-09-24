@@ -7,6 +7,7 @@ import { BottomActions, Button, LinkButton, Skeleton, Title, TopBar } from "@/co
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { Scripture } from "@/components/ui/scripture";
 import { useCouple } from "@/features/couple/hooks";
+import { AnsweredBlock } from "@/features/prayers/components/answered-block";
 import { useSetCompleted, useWeek } from "@/features/prayers/hooks";
 import { routes } from "@/lib/routes";
 
@@ -52,6 +53,7 @@ export default function PrayerDetailPage() {
               </div>
               {p.text ? <p className="m-0 text-[19px] leading-[1.6]">{p.text}</p> : null}
               {p.scripture ? <Scripture reference={p.scripture} verse={p.verse} /> : null}
+              <AnsweredBlock p={p} />
             </Main>
             <BottomActions>
               {done ? (

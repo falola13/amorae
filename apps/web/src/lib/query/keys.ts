@@ -8,6 +8,7 @@ export const keys = {
   weeksById: ["prayers", "week"] as const,
   weekById: (id: string) => ["prayers", "week", id] as const,
   history: ["prayers", "history"] as const,
+  answered: ["prayers", "answered"] as const,
   events: ["events"] as const,
   event: (id: string) => ["events", id] as const,
   goals: ["goals"] as const,

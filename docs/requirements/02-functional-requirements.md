@@ -981,6 +981,67 @@ The system shall notify both partners by push when a new prayer week is created.
 
 ---
 
+#### FR-PRAY-011 Mark a prayer answered
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Implemented | Test |
+
+The system shall let either partner mark a shared prayer point as answered, with an optional note
+about what happened, and take that mark back.
+
+**Acceptance criteria**
+
+- **FR-PRAY-011.AC1** Given a point in a published week, when either partner marks it answered,
+  then the API shall record the moment, who marked it, and the note, and return the week.
+- **FR-PRAY-011.AC2** Given an already-answered point, when it is marked again with a different
+  note, then the API shall replace the note and shall not move the original answered time.
+- **FR-PRAY-011.AC3** Given a point in a draft week, when a partner tries to mark it answered,
+  then the API shall respond 409 `prayer_not_shared`.
+- **FR-PRAY-011.AC4** Given an answered point, when a partner unmarks it, then the API shall clear
+  the time, the marker and the note together.
+
+*Why either partner, and why forever:* a prayer belongs to the two of them, and the one who
+notices it was answered is not always the one who wrote it down. Nor is it limited to the current
+week — prayers are answered on their own schedule, often months later, and a feature that only
+worked for seven days would miss most of what it exists to catch. The couple-scoped lookup of the
+point is the whole permission check: a point belonging to anyone else is simply not found
+(BR-PAIR-04 / DEC-19).
+
+*The note is optional on purpose.* Sometimes the answer is the whole story and there is nothing to
+add. Requiring a sentence before you may mark a prayer answered would turn the gladdest action in
+the app into a piece of homework.
+
+#### FR-PRAY-012 Answered prayers
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Implemented | Test |
+
+The system shall show a couple every prayer they have marked answered, newest first, grouped by
+the month it was answered in.
+
+**Acceptance criteria**
+
+- **FR-PRAY-012.AC1** Given a couple with answered prayers, when either partner requests them,
+  then the API shall return them ordered by answered time descending, each carrying the week it
+  was prayed in.
+- **FR-PRAY-012.AC2** Given a couple with none, when either partner requests them, then the API
+  shall return an empty array rather than an error.
+
+*What this screen deliberately does not have:* any list of prayers that were **not** answered, any
+count of them, and any way to sort or filter by that. A tally of things you asked for and did not
+receive is a wound, not a feature, and the moment this screen implies one it stops being worth
+opening. Only answered things accumulate here.
+
+*Dates:* `answered_at` is the instant, used for ordering. `answered_on` is the same moment as a
+date in the couple's own timezone, computed in SQL beside the couple row the way every other
+couple-local date in this system is (FR-JRNL, FR-APPR) — a prayer answered at half past midnight
+in Lagos happened today, and must not read as yesterday because the server keeps UTC, nor read as
+a different day to each partner.
+
+---
+
 ### 3.5 EVT — Shared events
 
 Events the couple plans together — dinners, dates, appointments — visible and editable by both
@@ -2312,6 +2373,8 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-PRAY-008 | G-02 | `GET /v1/prayers/weeks/:id` | UI only | Screen built; no endpoint to test against |
 | FR-PRAY-009 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-PRAY-010 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
+| FR-PRAY-011 | G-02 | `PUT`/`DELETE /v1/prayers/points/:id/answered` | Implemented | Go unit tests; API round-trip and browser check 2026-09-25 |
+| FR-PRAY-012 | G-02 | `GET /v1/prayers/answered` | Implemented | Go unit tests; API round-trip and browser check 2026-09-25 |
 | FR-EVT-001 | G-03 | `POST /v1/events` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-EVT-002 | G-03 | `GET /v1/events` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-EVT-003 | G-03 | `PATCH /v1/events/:id` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |

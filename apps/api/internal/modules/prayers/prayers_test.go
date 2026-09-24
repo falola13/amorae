@@ -1,6 +1,7 @@
 package prayers
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -355,4 +356,52 @@ func errorOf(t *testing.T, fn func() error) *apperr.Error {
 		t.Fatalf("expected *apperr.Error, got %T", err)
 	}
 	return appErr
+}
+
+func TestValidateAnswerNote_AllowsEmpty(t *testing.T) {
+	// Marking a prayer answered with nothing to add is the common case, not a
+	// mistake. If this ever starts failing, the gladdest action in the app has
+	// quietly become a piece of homework.
+	got, err := ValidateAnswerNote("   ")
+	if err != nil {
+		t.Fatalf("ValidateAnswerNote(blank) error = %v, want nil", err)
+	}
+	if got != "" {
+		t.Errorf("ValidateAnswerNote(blank) = %q, want empty", got)
+	}
+}
+
+func TestValidateAnswerNote_TrimsAndBounds(t *testing.T) {
+	got, err := ValidateAnswerNote("  he started on Monday  ")
+	if err != nil {
+		t.Fatalf("ValidateAnswerNote() error = %v, want nil", err)
+	}
+	if got != "he started on Monday" {
+		t.Errorf("ValidateAnswerNote() = %q, want it trimmed", got)
+	}
+
+	if _, err := ValidateAnswerNote(strings.Repeat("a", maxAnswerRunes+1)); err == nil {
+		t.Error("ValidateAnswerNote(too long) error = nil, want a validation error")
+	}
+}
+
+func TestCanAnswer_OnlyOnceShared(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status Status
+		wantOK bool
+	}{
+		{"published week can be answered", StatusPublished, true},
+		{"a draft cannot: the partner has not seen it", StatusDraft, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CanAnswer(Week{Status: tc.status})
+			if tc.wantOK && err != nil {
+				t.Errorf("CanAnswer(%s) = %v, want nil", tc.status, err)
+			}
+			if !tc.wantOK && !errors.Is(err, ErrNotShared) {
+				t.Errorf("CanAnswer(%s) = %v, want ErrNotShared", tc.status, err)
+			}
+		})
+	}
 }

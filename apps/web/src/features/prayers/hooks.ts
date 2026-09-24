@@ -65,6 +65,13 @@ export function usePendingCompletions(): Set<string> {
   );
 }
 
+/** Everything the two of them have marked answered, newest first. */
+export const useAnswered = () =>
+  useQuery({ queryKey: keys.answered, queryFn: prayersApi.answered });
+
+export const useAnswer = () => useWrite(prayerWrites.answer);
+export const useUnanswer = () => useWrite(prayerWrites.unanswer);
+
 export const useSavePoints = () => useWrite(prayerWrites.savePoints);
 export const usePublish = () => useWrite(prayerWrites.publish);
 export const useSaveReflection = () => useWrite(prayerWrites.reflection);

@@ -327,6 +327,8 @@ do not leak.
 | `POST /v1/prayers/current/publish` | Setter only. Publishing an already-published week is a no-op, and does not move `published_at`. The setter may still edit after publishing — fixing a typo is not a betrayal — until the partner prays any of it |
 | `POST` / `DELETE /v1/prayers/points/:id/complete` | the caller's own completion; the other partner's is untouched |
 | `PATCH /v1/prayers/weeks/:id/reflection` `{ reflection }` | the caller's reflection |
+| `PUT` / `DELETE /v1/prayers/points/:id/answered` `{ note }` | Marks a prayer answered, or takes the mark back. Either partner may — a prayer belongs to them both, and the one who notices is not always the one who wrote it down. Deliberately **not** limited to the current week: prayers are answered months later, and an endpoint that only worked for seven days would miss most of what it exists to catch. `note` is optional; `PUT` twice is an edit of the note, not a second answer, and does not move `answered_at`. 409 `prayer_not_shared` on a draft |
+| `GET /v1/prayers/answered` | Every answered prayer, newest answer first, each with the week it came from. Note what is absent: there is no way to ask for the prayers that were *not* answered, and no count of them — see FR-PRAY-012 |
 
 `PrayerWeek.status` is `draft` (setter still writing), `published`, or
 `waiting` (the other partner sees this while the setter writes). A `waiting`

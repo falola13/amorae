@@ -20,6 +20,8 @@ type service interface {
 	Publish(ctx context.Context, userID uuid.UUID) (Record, CoupleContext, error)
 	SetCompletion(ctx context.Context, userID, pointID uuid.UUID, done bool) (Record, CoupleContext, error)
 	SetReflection(ctx context.Context, userID, weekID uuid.UUID, body string) (Record, CoupleContext, error)
+	SetAnswered(ctx context.Context, userID, pointID uuid.UUID, answered bool, note string) (Record, CoupleContext, error)
+	Answered(ctx context.Context, userID uuid.UUID) ([]Answered, CoupleContext, error)
 }
 
 type Handler struct {
@@ -39,6 +41,9 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("POST /prayers/points/{id}/complete", http.HandlerFunc(h.complete))
 	r.HandleAuthed("DELETE /prayers/points/{id}/complete", http.HandlerFunc(h.uncomplete))
 	r.HandleAuthed("PATCH /prayers/weeks/{id}/reflection", http.HandlerFunc(h.reflection))
+	r.HandleAuthed("GET /prayers/answered", http.HandlerFunc(h.answered))
+	r.HandleAuthed("PUT /prayers/points/{id}/answered", http.HandlerFunc(h.setAnswered))
+	r.HandleAuthed("DELETE /prayers/points/{id}/answered", http.HandlerFunc(h.unsetAnswered))
 }
 
 // Every write answers with the whole week, the same shape a read returns, so
@@ -176,6 +181,57 @@ func (h *Handler) reflection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, cc, err := h.svc.SetReflection(r.Context(), userID, weekID, req.Reflection)
+	h.respond(w, r, rec, cc, userID, err, http.StatusOK)
+}
+
+type answeredRequest struct {
+	Note string `json:"note"`
+}
+
+func (h *Handler) answered(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	items, _, err := h.svc.Answered(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, ToAnsweredDTOs(items))
+}
+
+// PUT rather than POST: saying a prayer was answered, with this note, twice
+// means the same as saying it once, and the second one is an edit of the
+// note rather than a second answer.
+func (h *Handler) setAnswered(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	pointID, ok := pathID(w, r, "id", "prayer")
+	if !ok {
+		return
+	}
+	var req answeredRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	rec, cc, err := h.svc.SetAnswered(r.Context(), userID, pointID, true, req.Note)
+	h.respond(w, r, rec, cc, userID, err, http.StatusOK)
+}
+
+func (h *Handler) unsetAnswered(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	pointID, ok := pathID(w, r, "id", "prayer")
+	if !ok {
+		return
+	}
+	rec, cc, err := h.svc.SetAnswered(r.Context(), userID, pointID, false, "")
 	h.respond(w, r, rec, cc, userID, err, http.StatusOK)
 }
 

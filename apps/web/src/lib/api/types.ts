@@ -64,6 +64,22 @@ export interface PrayerPoint {
   scripture?: string;
   verse?: string;
   position: number;
+  /** When this was marked answered. Absent until it is, which is what the
+   *  answered treatment keys off — there is no boolean. */
+  answered_at?: string;
+  /** The day it was, in the couple's timezone — the one to show. `answered_at`
+   *  is the instant, for ordering; the two can fall on different dates. */
+  answered_on?: string;
+  /** Who noticed. Answering is for the couple, but it is worth knowing. */
+  answered_by?: string;
+  /** A line about what happened. Optional even once answered. */
+  answer_note?: string;
+}
+
+/** An answered prayer, carrying enough of its week to be placed in time. */
+export interface AnsweredPrayer extends PrayerPoint {
+  week_id: string;
+  week_start: string;
 }
 
 export type WeekStatus = "draft" | "published" | "waiting";

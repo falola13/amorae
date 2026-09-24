@@ -178,9 +178,15 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 
 	// Points, ordered so the setter's arrangement survives the round trip.
 	pointRows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT id, week_id, position, title, body, COALESCE(scripture, ''), COALESCE(verse, '')
-		FROM prayer_points WHERE week_id = ANY($1)
-		ORDER BY week_id, position
+		SELECT p.id, p.week_id, p.position, p.title, p.body,
+		       COALESCE(p.scripture, ''), COALESCE(p.verse, ''),
+		       p.answered_at, (p.answered_at AT TIME ZONE c.timezone)::date,
+		       p.answered_by, p.answer_note
+		FROM prayer_points p
+		JOIN prayer_weeks w ON w.id = p.week_id
+		JOIN couples c ON c.id = w.couple_id
+		WHERE p.week_id = ANY($1)
+		ORDER BY p.week_id, p.position
 	`, weekIDs)
 	if err != nil {
 		return nil, fmt.Errorf("loading prayer points: %w", err)
@@ -189,10 +195,15 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 	for pointRows.Next() {
 		var p Point
 		var weekID uuid.UUID
+		var answeredBy *uuid.UUID
 		if err := pointRows.Scan(&p.ID, &weekID, &p.Position, &p.Title, &p.Body,
-			&p.Scripture, &p.Verse); err != nil {
+			&p.Scripture, &p.Verse, &p.AnsweredAt, &p.AnsweredOn, &answeredBy,
+			&p.AnswerNote); err != nil {
 			pointRows.Close()
 			return nil, fmt.Errorf("scanning prayer point: %w", err)
+		}
+		if answeredBy != nil {
+			p.AnsweredBy = *answeredBy
 		}
 		weekOfPoint[p.ID] = weekID
 		i := at[weekID]
@@ -405,6 +416,76 @@ func (r *PostgresRepository) SetCompletion(ctx context.Context, pointID, userID 
 
 // SetReflection stores one person's words about a week, replacing whatever
 // they wrote before. An empty body removes it.
+// SetAnswered records — or takes back — the fact that a prayer was answered.
+//
+// Unanswering clears the note too. Keeping it would leave a sentence about
+// something that, as far as the app is now concerned, never happened.
+func (r *PostgresRepository) SetAnswered(
+	ctx context.Context, pointID, userID uuid.UUID, answered bool, note string, at time.Time,
+) error {
+	if !answered {
+		_, err := r.db.Q(ctx).Exec(ctx, `
+			UPDATE prayer_points
+			SET answered_at = NULL, answered_by = NULL, answer_note = '', updated_at = $2
+			WHERE id = $1
+		`, pointID, at)
+		if err != nil {
+			return fmt.Errorf("clearing answered prayer: %w", err)
+		}
+		return nil
+	}
+	// COALESCE keeps the original moment when this is a re-save of the note,
+	// so editing what you wrote does not re-date the answer — or, through the
+	// worker, tell your partner about it twice.
+	_, err := r.db.Q(ctx).Exec(ctx, `
+		UPDATE prayer_points
+		SET answered_at = COALESCE(answered_at, $3), answered_by = $2,
+		    answer_note = $4, updated_at = $3
+		WHERE id = $1
+	`, pointID, userID, at, note)
+	if err != nil {
+		return fmt.Errorf("marking prayer answered: %w", err)
+	}
+	return nil
+}
+
+// Answered is every answered prayer a couple has, newest answer first.
+func (r *PostgresRepository) Answered(ctx context.Context, coupleID uuid.UUID) ([]Answered, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT p.id, p.position, p.title, p.body, COALESCE(p.scripture, ''), COALESCE(p.verse, ''),
+		       p.answered_at, (p.answered_at AT TIME ZONE c.timezone)::date,
+		       p.answered_by, p.answer_note, w.id, w.week_start
+		FROM prayer_points p
+		JOIN prayer_weeks w ON w.id = p.week_id
+		JOIN couples c ON c.id = w.couple_id
+		WHERE w.couple_id = $1 AND p.answered_at IS NOT NULL
+		ORDER BY p.answered_at DESC
+	`, coupleID)
+	if err != nil {
+		return nil, fmt.Errorf("loading answered prayers: %w", err)
+	}
+	defer rows.Close()
+
+	out := []Answered{}
+	for rows.Next() {
+		var a Answered
+		var answeredBy *uuid.UUID
+		if err := rows.Scan(&a.ID, &a.Position, &a.Title, &a.Body, &a.Scripture, &a.Verse,
+			&a.AnsweredAt, &a.AnsweredOn, &answeredBy, &a.AnswerNote,
+			&a.WeekID, &a.WeekStart); err != nil {
+			return nil, fmt.Errorf("scanning answered prayer: %w", err)
+		}
+		if answeredBy != nil {
+			a.AnsweredBy = *answeredBy
+		}
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading answered prayers: %w", err)
+	}
+	return out, nil
+}
+
 func (r *PostgresRepository) SetReflection(ctx context.Context, weekID, userID uuid.UUID, body string, at time.Time) error {
 	if body == "" {
 		if _, err := r.db.Q(ctx).Exec(ctx, `

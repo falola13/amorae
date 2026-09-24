@@ -40,6 +40,7 @@ export const routes = {
   prayerEdit: (id?: string) => `/prayers/edit${q({ id })}`,
   prayerMode: (opts: { at?: number; quiet?: boolean } = {}) =>
     `/prayers/mode${q({ at: opts.at, quiet: opts.quiet })}`,
+  prayersAnswered: "/prayers/answered",
   history: "/history",
   historyWeek: (id: string) => `/history/${seg(id)}`,
 

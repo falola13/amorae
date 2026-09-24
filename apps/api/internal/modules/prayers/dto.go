@@ -21,6 +21,22 @@ type pointDTO struct {
 	Scripture string `json:"scripture,omitempty"`
 	Verse     string `json:"verse,omitempty"`
 	Position  int    `json:"position"`
+	// Absent until somebody marks this answered, which is what the client
+	// keys the whole answered treatment off.
+	AnsweredAt string `json:"answered_at,omitempty"`
+	// The date to show. answered_at is the instant, for ordering; this is
+	// the day it was where the couple lives.
+	AnsweredOn string `json:"answered_on,omitempty"`
+	AnsweredBy string `json:"answered_by,omitempty"`
+	AnswerNote string `json:"answer_note,omitempty"`
+}
+
+// answeredDTO is one answered prayer, carrying enough of its week to be
+// placed in time on a screen that mixes every week together.
+type answeredDTO struct {
+	pointDTO
+	WeekID    string `json:"week_id"`
+	WeekStart string `json:"week_start"`
 }
 
 type weekDTO struct {
@@ -58,14 +74,7 @@ func ToDTO(rec Record, viewer, partner uuid.UUID) weekDTO {
 	}
 
 	for _, p := range visible {
-		out.Points = append(out.Points, pointDTO{
-			ID:        p.ID.String(),
-			Title:     p.Title,
-			Text:      p.Body,
-			Scripture: p.Scripture,
-			Verse:     p.Verse,
-			Position:  p.Position,
-		})
+		out.Points = append(out.Points, toPointDTO(p))
 	}
 
 	// With no points visible there is no progress to report either — saying
@@ -85,6 +94,41 @@ func ToDTOs(records []Record, viewer, partner uuid.UUID) []weekDTO {
 	out := make([]weekDTO, 0, len(records))
 	for _, rec := range records {
 		out = append(out, ToDTO(rec, viewer, partner))
+	}
+	return out
+}
+
+func toPointDTO(p Point) pointDTO {
+	out := pointDTO{
+		ID:         p.ID.String(),
+		Title:      p.Title,
+		Text:       p.Body,
+		Scripture:  p.Scripture,
+		Verse:      p.Verse,
+		Position:   p.Position,
+		AnswerNote: p.AnswerNote,
+	}
+	if p.AnsweredAt != nil {
+		out.AnsweredAt = p.AnsweredAt.UTC().Format(time.RFC3339)
+	}
+	if p.AnsweredOn != nil {
+		out.AnsweredOn = p.AnsweredOn.Format(time.DateOnly)
+	}
+	if p.AnsweredBy != (uuid.UUID{}) {
+		out.AnsweredBy = p.AnsweredBy.String()
+	}
+	return out
+}
+
+// ToAnsweredDTOs renders the answered list, always an array rather than null.
+func ToAnsweredDTOs(items []Answered) []answeredDTO {
+	out := make([]answeredDTO, 0, len(items))
+	for _, a := range items {
+		out = append(out, answeredDTO{
+			pointDTO:  toPointDTO(a.Point),
+			WeekID:    a.WeekID.String(),
+			WeekStart: a.WeekStart.Format(time.DateOnly),
+		})
 	}
 	return out
 }

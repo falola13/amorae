@@ -29,6 +29,7 @@ const (
 	maxScriptureRunes  = 60
 	maxVerseRunes      = 500
 	maxReflectionRunes = 2000
+	maxAnswerRunes     = 1000
 )
 
 type Status string
@@ -49,6 +50,9 @@ var (
 	ErrNotSetter   = apperr.Forbidden("not_this_weeks_setter", "It’s your partner’s week to set the prayers.")
 	ErrNotDraft    = apperr.Conflict("week_already_published", "This week has been shared already.")
 	ErrLockedByUse = apperr.Conflict("prayer_in_use", "Your partner has already prayed this one, so it stays as it is. You can still add more, or change the ones they haven’t reached.")
+	// You cannot answer a prayer that was never shared. A draft is still the
+	// setter thinking aloud, and the other partner has not seen it.
+	ErrNotShared = apperr.Conflict("prayer_not_shared", "This one hasn’t been shared yet.")
 	// A week needs two people to have a setter at all, so a couple still
 	// waiting for its second member has no week — which is a state of the
 	// couple, not a missing thing.
@@ -75,6 +79,28 @@ type Point struct {
 	Body      string
 	Scripture string
 	Verse     string
+
+	// Set when somebody marked this answered. Answering is not per-person the
+	// way praying is — a prayer is answered for the couple, once — so this is
+	// one nullable time and not a join table. AnsweredBy is who noticed.
+	AnsweredAt *time.Time
+	// The same moment as AnsweredAt, as a date in the couple's own timezone.
+	// Computed in SQL beside the couple row, the way every other couple-local
+	// date in this codebase is: a prayer answered at half past midnight in
+	// Lagos happened today, and must not read as yesterday because the server
+	// keeps UTC — or read as a different day to each partner.
+	AnsweredOn *time.Time
+	AnsweredBy uuid.UUID
+	AnswerNote string
+}
+
+// Answered is one answered prayer with enough of its week to place it in
+// time. The read-back screen shows these across every week a couple has had,
+// so a point on its own would have no date to sit under.
+type Answered struct {
+	Point
+	WeekID    uuid.UUID
+	WeekStart time.Time
 }
 
 // Member is the part of couple membership this module needs: who, and when
@@ -175,6 +201,35 @@ func ValidateReflection(body string) (string, error) {
 		})
 	}
 	return body, nil
+}
+
+// ValidateAnswerNote bounds the line about what happened.
+//
+// Empty is allowed on purpose. Sometimes the answer is the whole story and
+// there is nothing to add, and demanding a sentence before you may mark a
+// prayer answered would make the smallest, gladdest action in the app into a
+// piece of homework.
+func ValidateAnswerNote(note string) (string, error) {
+	note = strings.TrimSpace(note)
+	if utf8.RuneCountInString(note) > maxAnswerRunes {
+		return "", apperr.Validation(map[string]string{
+			"note": fmt.Sprintf("Keep it under %d characters.", maxAnswerRunes),
+		})
+	}
+	return note, nil
+}
+
+// CanAnswer says whether this point may be marked answered.
+//
+// Either partner may: a prayer belongs to the two of them, and the one who
+// notices it was answered is not always the one who wrote it down. The only
+// bar is that the week was actually shared — a draft is still the setter
+// thinking aloud.
+func CanAnswer(w Week) error {
+	if w.Status != StatusPublished {
+		return ErrNotShared
+	}
+	return nil
 }
 
 // StatusFor is what `viewer` should be told the week's status is. A draft is

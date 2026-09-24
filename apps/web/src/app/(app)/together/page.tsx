@@ -11,6 +11,7 @@ import {
   useMemories,
   useMilestones,
 } from "@/features/together/hooks";
+import { useAnswered } from "@/features/prayers/hooks";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
 import { iso, longDate, relativeDay, time12 } from "@/lib/dates";
 import { isApiError } from "@/lib/api/errors";
@@ -33,6 +34,7 @@ export default function Together() {
   const journal = useJournal();
   const memories = useMemories();
   const milestones = useMilestones();
+  const answered = useAnswered();
   const appr = useAppreciations();
   const partner = couple.data?.partner?.display_name ?? "your partner";
   const todayIso = iso(today());
@@ -201,10 +203,24 @@ export default function Together() {
                       : "The dates that matter to us"
                   }
                   href={routes.milestones}
-                  last
                 />
               );
             }}
+          </QueryState>
+          <QueryState queries={[answered]} loading={<Skeleton lines={1} />}>
+            {(answeredData) => (
+              <Row
+                icon="check"
+                title="Answered prayers"
+                sub={
+                  answeredData.length
+                    ? `${answeredData.length} so far`
+                    : "What you've prayed for, and seen happen"
+                }
+                href={routes.prayersAnswered}
+                last
+              />
+            )}
           </QueryState>
         </Section>
       </div>
