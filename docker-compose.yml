@@ -49,13 +49,28 @@ services:
   api:
     build: ./apps/api
     environment:
-      APP_ENV: production
+      # Development unless told otherwise. This said `production`, which made
+      # `docker compose up` crash-loop on a clean checkout: config refuses to
+      # start in production without RESEND_API_KEY, MAIL_FROM and APP_URL, and
+      # none of them were passed. Set APP_ENV=production in .env when you mean
+      # it, supply those three, and the same file is the deployment
+      # (docs/DEPLOYMENT.md).
+      APP_ENV: ${APP_ENV:-development}
+      APP_URL: ${APP_URL:-http://localhost:3000}
       HTTP_ADDR: ":8088"
       DATABASE_URL: postgres://amorae:amorae@db:5432/amorae?sslmode=disable
       LOG_LEVEL: info
       # Inside the container network only; deliberately not published.
       METRICS_ADDR: ":9090"
       BFF_SECRET: *bff-secret
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # Set only where there is nowhere to run the worker, and something
+      # external calls POST /internal/tick instead. Empty means no endpoint.
+      TICK_SECRET: ${TICK_SECRET:-}
     ports:
       - "127.0.0.1:8088:8088"
     depends_on:
@@ -76,9 +91,12 @@ services:
     build: ./apps/api
     command: ["/app/worker"]
     environment:
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-development}
+      APP_URL: ${APP_URL:-http://localhost:3000}
       DATABASE_URL: postgres://amorae:amorae@db:5432/amorae?sslmode=disable
       LOG_LEVEL: info
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       # Without these it decides everything and logs what it would have sent,
       # which is what you want locally. Real keys belong in a secret store.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}

@@ -44,6 +44,12 @@ type Config struct {
 	// push service can use if something goes wrong. Required by RFC 8292.
 	VAPIDSubject string
 
+	// TickSecret, when set, exposes POST /internal/tick — one pass of the
+	// notification worker, on request. It is for deployments with nowhere to
+	// put a process that runs forever: something external and free calls it
+	// every few minutes instead. Empty means the endpoint does not exist.
+	TickSecret string
+
 	// AppURL is the web origin, used to build links in emails
 	// (e.g. the password-reset link).
 	AppURL string
@@ -154,6 +160,13 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("BFF_SECRET: must be at least %d characters when set", minBFFSecretLen))
 	}
 
+	// The same floor as the BFF secret, for the same reason: it is the only
+	// thing between the internet and an endpoint that does work.
+	tickSecret := getEnv("TICK_SECRET", "")
+	if tickSecret != "" && len(tickSecret) < minBFFSecretLen {
+		errs = append(errs, fmt.Errorf("TICK_SECRET: must be at least %d characters when set", minBFFSecretLen))
+	}
+
 	appURL := getEnv("APP_URL", "http://localhost:3000")
 	if appEnv == "production" && os.Getenv("APP_URL") == "" {
 		errs = append(errs, errors.New("APP_URL: required in production"))
@@ -165,6 +178,7 @@ func Load() (Config, error) {
 
 	return Config{
 		AppEnv:          appEnv,
+		TickSecret:      tickSecret,
 		HTTPAddr:        getEnv("HTTP_ADDR", ":8088"),
 		DatabaseURL:     databaseURL,
 		DBMaxConns:      dbMaxConns,

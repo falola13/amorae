@@ -35,6 +35,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/mailer"
 	"github.com/falola13/amorae/apps/api/internal/platform/metrics"
 	"github.com/falola13/amorae/apps/api/internal/platform/middleware"
+	"github.com/falola13/amorae/apps/api/internal/platform/push"
 	"github.com/falola13/amorae/apps/api/internal/platform/ratelimit"
 	"github.com/falola13/amorae/apps/api/internal/platform/server"
 )
@@ -155,6 +156,22 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	exportHandler := export.NewHandler(userSvc, couplesSvc, consentRepo, now)
 	prayersHandler := prayers.NewHandler(prayersSvc)
 	notificationsHandler := notifications.NewHandler(notificationsSvc)
+
+	// One pass of the worker, on request, for deployments with nowhere to run
+	// a process that never stops (docs/DEPLOYMENT.md). nil unless TICK_SECRET
+	// is set, and then nothing is registered — the API carries no extra
+	// surface for a deployment that does run the worker properly.
+	var tickHandler *notifications.TickHandler
+	if cfg.TickSecret != "" {
+		var sender push.Sender = push.NewLog(log)
+		if cfg.VAPIDPrivateKey != "" {
+			sender = push.NewWebPush(cfg.VAPIDPublicKey, cfg.VAPIDPrivateKey, cfg.VAPIDSubject)
+		} else {
+			log.Warn("no VAPID keys: /internal/tick will log notifications, not send them")
+		}
+		tickHandler = notifications.NewTickHandler(
+			notifications.NewWorker(notificationsRepo, sender, now, log), cfg.TickSecret, log)
+	}
 	eventsHandler := events.NewHandler(eventsSvc)
 	goalsHandler := goals.NewHandler(goalsSvc)
 	challengesHandler := challenges.NewHandler(challengesSvc, togetherCouples)
@@ -169,6 +186,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	router := httpx.NewRouter(mux, requireAuth, m)
 
 	healthHandler.RegisterRoutes(router)
+	if tickHandler != nil {
+		tickHandler.RegisterRoutes(router)
+	}
 
 	// Product routes are versioned here, once. Handlers register
 	// "/auth/login" and "/users/me"; they do not know which version

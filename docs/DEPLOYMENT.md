@@ -29,7 +29,12 @@ row before it goes out, so running it late, twice, or from two places at once
 still sends each notification exactly once. That allows more freedom about
 *how* it gets called than a stateful scheduler would.
 
-## Option A — one Always Free VM (recommended)
+> **Chosen for this deployment: [Option C](#option-c--split-across-managed-free-tiers-chosen).**
+> A and B are kept below because they are better answers if the friction each
+> describes turns out not to apply to you — and because C's costs (a cold
+> start, a reminder up to five minutes late) are real ones you may tire of.
+
+## Option A — one Always Free VM
 
 Oracle Cloud's Always Free tier includes ARM (Ampere) instances that do not
 expire and are not a trial. One of them runs this repository as it stands:
@@ -84,26 +89,68 @@ For two users this is a serious answer, not a hack. What you trade is uptime:
 the app is up while that machine and your home internet are up. Given who is
 using it, that may be perfectly fine.
 
-## Option C — split across managed free tiers
+## Option C — split across managed free tiers (chosen)
 
-Worth it only if A and B both fail. It has the most moving parts and is the
-only option that needs a code change.
+The most moving parts of the three, and the one that needed a code change.
+That change is now made: `POST /internal/tick` runs one pass of the worker on
+request, so nothing here has to stay awake.
 
-- **web** → Vercel Hobby. Free for personal projects, does not sleep.
-- **Postgres** → Neon or Supabase free tier.
-- **API** → a free container host. These sleep on inactivity; a request wakes
-  them, so a slow first load is the cost.
-- **worker** → *this is the code change*. Nothing free keeps a process alive,
-  so `Tick` has to become an HTTP endpoint — `POST /internal/tick`, guarded by
-  a shared secret — called every five minutes by a free scheduler
-  (cron-job.org, or a GitHub Actions schedule if the repo is public; a private
-  repo's Actions minutes will not cover a five-minute cron).
+| | Where | Note |
+|---|---|---|
+| web | **Vercel Hobby** | Free for personal projects, does not sleep. Set the project's root directory to `apps/web` |
+| Postgres | **Neon** or **Supabase** free tier | `DATABASE_URL` needs `?sslmode=require` |
+| API | a free container host | `apps/api/Dockerfile` builds it. These sleep on inactivity; the cron below keeps it awake |
+| worker | **nothing** | It is the cron, calling the API |
 
-That endpoint is about twenty lines, and it is safe to expose *because* of the
-claim rows: somebody who guesses the URL and calls it a thousand times still
-causes at most one send per notification. It does not exist yet.
+### The order to do it in
 
-The same cron keeps the API awake, since it is a request every five minutes.
+1. **Postgres first**, because everything else needs its URL. Create the
+   database, copy the connection string.
+
+2. **Migrate.** Nothing runs migrations for you here — that is `migrate`'s own
+   container in compose, which this option does not use. From your laptop:
+
+   ```
+   cd apps/api && DATABASE_URL='postgres://…?sslmode=require' go run ./cmd/migrate up
+   ```
+
+   Repeat this on any deploy that adds a migration, *before* the new API goes
+   live.
+
+3. **The API.** Deploy `apps/api/Dockerfile`, command `/app/api`. It needs
+   every secret in the table below, `APP_ENV=production`, and `TICK_SECRET`.
+   Note the public URL it gets.
+
+4. **The web app** on Vercel, root directory `apps/web`. `API_URL` is that
+   public API URL. `BFF_SECRET` must be character-for-character what the API
+   has. `COOKIE_SECURE=true`. And `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, which Vercel
+   supplies at build time — which is exactly when it is needed.
+
+5. **The cron.** cron-job.org, free, every five minutes:
+
+   ```
+   POST https://your-api-host/internal/tick
+   Authorization: Bearer <TICK_SECRET>
+   ```
+
+   A GitHub Actions schedule works too if the repository is public. On a
+   private one the monthly Actions minutes will not cover a five-minute cron,
+   and GitHub's scheduler is unreliable to the minute anyway — which does not
+   matter here, since a late tick sends the same notifications.
+
+### What to expect from it
+
+- **The first request after a quiet spell is slow.** A free API host sleeps;
+  the five-minute cron mostly prevents that, but a cold start of thirty
+  seconds or so is the price of the tier.
+- **A reminder can be up to five minutes late.** "Ten minutes before" may
+  arrive six minutes before. That is inherent to driving the worker from
+  outside and is why the grace windows exist.
+- **`{"status":"already running"}`** in the cron's log is not an error. A pass
+  overran its five minutes and the next one declined to pile on.
+- **Watch the cron's own log** for a week. It is the only thing that will tell
+  you the worker has stopped, and silence from a notification system looks
+  exactly like having nothing to say.
 
 ## The domain
 
