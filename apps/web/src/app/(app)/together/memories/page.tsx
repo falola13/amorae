@@ -34,6 +34,11 @@ function Photo({ h, label }: { h: number; label: string }) {
 
 export default function Memories() {
   const memories = useMemories();
+  // The empty state already offers this, centred, with a line saying what
+  // it is for. Showing the bar as well put two buttons for the same thing
+  // on one screen, one under the other. The bar is for when there is a
+  // list to add to.
+  const hasAny = (memories.data?.length ?? 0) > 0;
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -97,11 +102,13 @@ export default function Memories() {
           }}
         </QueryState>
       </Main>
-      <BottomActions>
-        <Button icon="plus" onClick={() => setOpen(true)}>
-          Save a moment from today
-        </Button>
-      </BottomActions>
+      {hasAny ? (
+        <BottomActions>
+          <Button icon="plus" onClick={() => setOpen(true)}>
+            Save a moment from today
+          </Button>
+        </BottomActions>
+      ) : null}
       <MemoryComposer open={open} onClose={() => setOpen(false)} />
     </>
   );

@@ -27,9 +27,13 @@ export default function NewEventPage() {
 function EventForm() {
   const params = useSearchParams();
   const editId = params.get("edit") ?? undefined;
+  // The day the calendar was showing when this was tapped. Only trusted if it
+  // looks like a date — it comes from a URL.
+  const on = params.get("on");
+  const startOn = on && /^\d{4}-\d{2}-\d{2}$/.test(on) ? on : undefined;
   const existing = useEvent(editId ?? "");
 
-  if (!editId) return <EventComposer />;
+  if (!editId) return <EventComposer startOn={startOn} />;
   return (
     <QueryState
       queries={[existing]}
@@ -46,7 +50,15 @@ function EventForm() {
   );
 }
 
-function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
+function EventComposer({
+  editId,
+  event,
+  startOn,
+}: {
+  editId?: string;
+  event?: Event;
+  startOn?: string;
+}) {
   const router = useRouter();
   const save = useSaveEvent();
   // One per line, rather than a row of inputs with an add button: a list of
@@ -74,7 +86,7 @@ function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
         }
       : {
           title: "",
-          date: iso(today()),
+          date: startOn ?? iso(today()),
           start_time: "",
           end_time: "",
           location: "",

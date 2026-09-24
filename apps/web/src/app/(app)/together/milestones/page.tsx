@@ -23,6 +23,11 @@ import {
 
 export default function Milestones() {
   const ms = useMilestones();
+  // The empty state already offers this, centred, with a line saying what
+  // it is for. Showing the bar as well put two buttons for the same thing
+  // on one screen, one under the other. The bar is for when there is a
+  // list to add to.
+  const hasAny = (ms.data?.length ?? 0) > 0;
   const [open, setOpen] = useState(false);
   const todayIso = iso(today());
   return (
@@ -88,11 +93,13 @@ export default function Milestones() {
           }}
         </QueryState>
       </Main>
-      <BottomActions>
-        <Button icon="plus" onClick={() => setOpen(true)}>
-          Add a date
-        </Button>
-      </BottomActions>
+      {hasAny ? (
+        <BottomActions>
+          <Button icon="plus" onClick={() => setOpen(true)}>
+            Add a date
+          </Button>
+        </BottomActions>
+      ) : null}
       <MilestoneComposer open={open} onClose={() => setOpen(false)} />
     </>
   );

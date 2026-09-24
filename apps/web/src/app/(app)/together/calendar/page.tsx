@@ -37,7 +37,19 @@ export default function Calendar() {
       <Main>
         <div className="flex items-center justify-between pt-2">
           <Title>Calendar</Title>
-          <div className="-mr-2.5 flex">
+          <div className="-mr-2.5 flex items-center">
+            {offset !== 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOffset(0);
+                  setSelected(null);
+                }}
+                className="press h-11 px-2 text-[15px] font-semibold text-plum"
+              >
+                Today
+              </button>
+            ) : null}
             <button
               type="button"
               aria-label="Previous week"
@@ -175,9 +187,17 @@ export default function Calendar() {
                       </Link>
                     ))}
                     {(byDay.get(d) ?? []).length === 0 ? (
-                      <div className="py-2 text-support text-stone">
+                      // This line already said the right thing and did
+                      // nothing. Tapping a day and then "Add an event" used to
+                      // land you on today, so the one gesture the grid invites
+                      // — pick a day, put something on it — was the one it
+                      // would not do.
+                      <Link
+                        href={routes.eventNew({ on: d })}
+                        className="press py-2 text-support text-plum no-underline"
+                      >
                         Nothing planned. Add something you&rsquo;d love to do together.
-                      </div>
+                      </Link>
                     ) : null}
                   </section>
                 ))}
@@ -187,7 +207,7 @@ export default function Calendar() {
         </QueryState>
       </Main>
       <BottomActions>
-        <LinkButton href={routes.eventNew()} icon="plus">
+        <LinkButton href={routes.eventNew({ on: selected ?? undefined })} icon="plus">
           Add an event
         </LinkButton>
       </BottomActions>

@@ -48,7 +48,10 @@ export const routes = {
   calendar: "/together/calendar",
   events: "/together/events",
   event: (id: string) => `/together/events/${seg(id)}`,
-  eventNew: (opts: { edit?: string } = {}) => `/together/events/new${q({ edit: opts.edit })}`,
+  // `on` prefills the date. Tapping a day in the calendar and then adding
+  // something should put it on that day, not on today.
+  eventNew: (opts: { edit?: string; on?: string } = {}) =>
+    `/together/events/new${q({ edit: opts.edit, on: opts.on })}`,
   goals: "/together/goals",
   goal: (id: string) => `/together/goals/${seg(id)}`,
   goalNew: "/together/goals/new",

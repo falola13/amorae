@@ -19,6 +19,11 @@ import {
 
 export default function Events() {
   const events = useEvents();
+  // The empty state already offers this, centred, with a line saying what
+  // it is for. Showing the bar as well put two buttons for the same thing
+  // on one screen, one under the other. The bar is for when there is a
+  // list to add to.
+  const hasAny = (events.data?.length ?? 0) > 0;
   const todayIso = iso(today());
   return (
     <>
@@ -103,11 +108,13 @@ export default function Events() {
           }}
         </QueryState>
       </Main>
-      <BottomActions>
-        <LinkButton href={routes.eventNew()} icon="plus">
-          Add an event
-        </LinkButton>
-      </BottomActions>
+      {hasAny ? (
+        <BottomActions>
+          <LinkButton href={routes.eventNew()} icon="plus">
+            Add an event
+          </LinkButton>
+        </BottomActions>
+      ) : null}
     </>
   );
 }

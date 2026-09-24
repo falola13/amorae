@@ -23,6 +23,11 @@ import {
 
 export default function Journal() {
   const journal = useJournal();
+  // The empty state already offers this, centred, with a line saying what
+  // it is for. Showing the bar as well put two buttons for the same thing
+  // on one screen, one under the other. The bar is for when there is a
+  // list to add to.
+  const hasAny = (journal.data?.length ?? 0) > 0;
   const couple = useCouple();
   const [open, setOpen] = useState(false);
   const me = couple.data?.me;
@@ -89,11 +94,13 @@ export default function Journal() {
           }}
         </QueryState>
       </Main>
-      <BottomActions>
-        <Button icon="pencil" onClick={() => setOpen(true)}>
-          Write something for us
-        </Button>
-      </BottomActions>
+      {hasAny ? (
+        <BottomActions>
+          <Button icon="pencil" onClick={() => setOpen(true)}>
+            Write something for us
+          </Button>
+        </BottomActions>
+      ) : null}
       <JournalComposer open={open} onClose={() => setOpen(false)} />
     </>
   );
