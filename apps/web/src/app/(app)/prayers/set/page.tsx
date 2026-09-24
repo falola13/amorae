@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
-import { usePublish, useSavePoints, useWeek } from "@/features/prayers/hooks";
+import { useHistory, usePublish, useSavePoints, useWeek } from "@/features/prayers/hooks";
 import { useDragReorder } from "@/features/prayers/use-drag-reorder";
 import { range } from "@/lib/dates";
 import { routes } from "@/lib/routes";
@@ -25,10 +25,23 @@ export default function SetPrayers() {
   const router = useRouter();
   const [confirm, setConfirm] = useState(false);
   const [saved, setSaved] = useState(true);
+  // A prayer often outlasts a week — the same interview, the same month of
+  // saving — and retyping it was the whole complaint (Q-26). The most recent
+  // week that had anything in it is the one worth offering; a week nobody
+  // filled in is not.
+  const history = useHistory();
+  const previous = history.data?.find((h) => h.points.length > 0);
   const partner = couple.data?.partner?.display_name ?? "your partner";
   const commit = (next: PrayerPoint[]) => {
     setSaved(false);
     save.mutate(next, { onSuccess: () => setSaved(true) });
+  };
+  // Copied, not carried: these become this week's own prayers, to edit or
+  // drop freely. Their ids are dropped so the server makes new ones — the
+  // week you are writing never shares a row with the week behind it.
+  const startFromLast = () => {
+    if (!previous) return;
+    commit(previous.points.map((p) => ({ ...p, id: "" })));
   };
   const drag = useDragReorder(week.data?.points ?? null, commit);
 
@@ -45,6 +58,33 @@ export default function SetPrayers() {
       }
     >
       {(w) => {
+        // Whose week it is decides whether this screen is an editor at all.
+        // Without this it told whoever opened it "It's your week", and only
+        // the save came back 403 — the rotation was enforced by the API and
+        // nowhere the person could see it.
+        const me = couple.data?.me.id;
+        if (me && w.setter_id !== me) {
+          return (
+            <Main>
+              <div className="pt-3">
+                <Micro>{range(w.week_start, w.week_end)}</Micro>
+                <h1 className="m-0 mt-2 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
+                  It&rsquo;s {partner}&rsquo;s week.
+                </h1>
+                <Para className="mt-1.5">
+                  They set this week&rsquo;s prayers, and you&rsquo;ll see them as soon as they
+                  share them. Yours comes round next week.
+                </Para>
+              </div>
+              <div className="pt-6">
+                <LinkButton href={routes.prayers} variant="secondary">
+                  Back to this week
+                </LinkButton>
+              </div>
+            </Main>
+          );
+        }
+
         const items = drag.items ?? w.points;
         const doPublish = () =>
           publish.mutate(undefined, { onSuccess: () => router.replace(routes.home) });
@@ -76,7 +116,27 @@ export default function SetPrayers() {
               <h1 className="m-0 mt-2 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
                 It&rsquo;s your week.
               </h1>
-              <Para className="mt-1.5">Write what&rsquo;s on your heart. Up to {MAX} prayers.</Para>
+              <Para className="mt-1.5">
+                Write what&rsquo;s on your heart. One is enough, and you can have up to {MAX}.
+              </Para>
+              {items.length === 0 && previous ? (
+                <button
+                  type="button"
+                  onClick={startFromLast}
+                  disabled={save.isPending}
+                  className="press mt-4 flex w-full items-center gap-3 rounded-input border border-edge px-4 py-3 text-left"
+                >
+                  <Icon name="copy" size={20} className="shrink-0 text-stone" />
+                  <span className="flex min-w-0 grow flex-col">
+                    <span className="text-[16px] font-semibold text-ink">Start from last week</span>
+                    <span className="text-support text-stone">
+                      {previous.points.length === 1
+                        ? "Brings its one prayer over. Change or remove it as you like."
+                        : `Brings all ${previous.points.length} over. Change or remove any of them.`}
+                    </span>
+                  </span>
+                </button>
+              ) : null}
               <ol className="m-0 mt-6 list-none border-t border-line p-0" {...drag.listProps}>
                 {items.map((p, i) => (
                   <li
