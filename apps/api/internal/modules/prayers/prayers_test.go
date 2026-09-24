@@ -255,18 +255,79 @@ func TestViewOfADraftWeek(t *testing.T) {
 
 func TestCanEditPoints(t *testing.T) {
 	setter, partner := uuid.New(), uuid.New()
-	week := Week{SetterUserID: setter, Status: StatusDraft}
-
-	if err := CanEditPoints(week, setter, false); err != nil {
-		t.Errorf("the setter should be able to edit their own draft: %v", err)
+	first, second := uuid.New(), uuid.New()
+	week := Week{
+		SetterUserID: setter,
+		Status:       StatusPublished,
+		Points: []Point{
+			{ID: first, Position: 0, Title: "For his new job", Body: "That it settles."},
+			{ID: second, Position: 1, Title: "For her mother"},
+		},
 	}
-	if err := CanEditPoints(week, partner, false); err == nil {
+	// The partner has prayed the first one. The second, nobody has reached.
+	prayed := map[uuid.UUID]bool{first: true}
+
+	// Who may write at all.
+	if err := CanEditPoints(week, setter, week.Points, nil); err != nil {
+		t.Errorf("the setter should be able to edit their own week: %v", err)
+	}
+	if err := CanEditPoints(week, partner, week.Points, nil); err == nil {
 		t.Error("the other partner must not edit the week")
 	}
-	// The point of the rule: nobody rewrites prayers someone is already praying.
-	if err := CanEditPoints(week, setter, true); err == nil {
-		t.Error("editing should be refused once the partner has completed any point")
-	}
+
+	unchanged := func() []Point { return append([]Point(nil), week.Points...) }
+
+	t.Run("adding is always allowed", func(t *testing.T) {
+		// The reason the old whole-week lock had to go: something remembered
+		// on Wednesday still belongs in Wednesday's week.
+		points := append(unchanged(), Point{Title: "For the move"})
+		if err := CanEditPoints(week, setter, points, prayed); err != nil {
+			t.Errorf("adding after the partner started was refused: %v", err)
+		}
+	})
+
+	t.Run("a point nobody has reached is still the setter's", func(t *testing.T) {
+		points := unchanged()
+		points[1].Title = "For her mother's health"
+		if err := CanEditPoints(week, setter, points, prayed); err != nil {
+			t.Errorf("editing an unprayed point was refused: %v", err)
+		}
+	})
+
+	t.Run("a prayed point cannot be reworded", func(t *testing.T) {
+		points := unchanged()
+		points[0].Body = "That he turns it down."
+		if err := CanEditPoints(week, setter, points, prayed); err == nil {
+			t.Error("a point the partner had prayed was rewritten under them")
+		}
+	})
+
+	t.Run("a prayed point cannot be taken away", func(t *testing.T) {
+		points := []Point{week.Points[1]}
+		if err := CanEditPoints(week, setter, points, prayed); err == nil {
+			t.Error("a point the partner had prayed was deleted under them")
+		}
+	})
+
+	t.Run("a prayed point may be moved", func(t *testing.T) {
+		// Its position is where it sits in a list, not what it says. Nobody
+		// prays a position.
+		points := []Point{week.Points[1], week.Points[0]}
+		points[0].Position, points[1].Position = 0, 1
+		if err := CanEditPoints(week, setter, points, prayed); err != nil {
+			t.Errorf("reordering was refused: %v", err)
+		}
+	})
+
+	t.Run("their own praying does not tie their hands", func(t *testing.T) {
+		// prayedByOthers excludes the editor, so a setter who ticked their
+		// own point can still fix it.
+		points := unchanged()
+		points[0].Title = "For the new job"
+		if err := CanEditPoints(week, setter, points, nil); err != nil {
+			t.Errorf("the setter was blocked by their own completion: %v", err)
+		}
+	})
 }
 
 func TestCanPublish(t *testing.T) {

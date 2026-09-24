@@ -803,10 +803,11 @@ be deterministic and idempotent, and AI is never involved in whose turn it is.
   duplicate week.
 - **BR-PRAY-04** — A week holds at most 10 prayer points, each with a title/text and an optional
   scripture reference and verse text; order is the array order (`position`).
-- **BR-PRAY-05** — Once the setter publishes a week, the partner can view it; once the partner has
-  completed any point in a published week, its points become read-only, even to the setter (per
-  [`../API.md`](../API.md)'s contract for `POST /prayers/current/publish`). Nothing enforces this yet, because the
-  endpoint is not built; the Go module must.
+- **BR-PRAY-05** — Once the setter publishes a week, the partner can view it. The week itself stays
+  open to the setter for the whole week — adding a prayer on Wednesday is the point of a living
+  week — but a *point the partner has already completed* is read-only: it cannot be reworded or
+  removed, only moved. Additions and points nobody has reached stay editable (DEC-31). Enforced by
+  `CanEditPoints` in the prayers module.
 - **BR-PRAY-06** — Completion is per partner and per point
   (`unique(prayer_point_id, user_id)`), so marking a point twice never creates a duplicate, and
   one partner's completion is never visible to the other as something they can edit.
@@ -848,8 +849,12 @@ points, each with an optional scripture reference and verse text.
   (BR-PRAY-04).
 - **FR-PRAY-002.AC3** Given the caller is not this week's setter, when they attempt to save
   points, then the API shall reject the request without changing the week.
-- **FR-PRAY-002.AC4** Given the week's points are read-only under BR-PRAY-05, when any further
-  save is attempted, then the API shall reject it.
+- **FR-PRAY-002.AC4** Given the partner has completed a point (BR-PRAY-05), when the setter saves a
+  list that rewords or drops that point, then the API shall reject it 409 `prayer_in_use` and change
+  nothing.
+- **FR-PRAY-002.AC5** Given the partner has completed a point, when the setter saves a list that
+  adds a new point, edits one nobody has completed, or moves the completed one, then the API shall
+  accept it and the partner's completion shall survive.
 
 #### FR-PRAY-003 Publish week
 

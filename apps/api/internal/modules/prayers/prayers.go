@@ -48,7 +48,7 @@ var (
 	ErrNotFound    = apperr.NotFound("prayer_week_not_found", "That prayer week isn’t here.")
 	ErrNotSetter   = apperr.Forbidden("not_this_weeks_setter", "It’s your partner’s week to set the prayers.")
 	ErrNotDraft    = apperr.Conflict("week_already_published", "This week has been shared already.")
-	ErrLockedByUse = apperr.Conflict("week_in_use", "Your partner has started praying these, so they can’t change now.")
+	ErrLockedByUse = apperr.Conflict("prayer_in_use", "Your partner has already prayed this one, so it stays as it is. You can still add more, or change the ones they haven’t reached.")
 	// A week needs two people to have a setter at all, so a couple still
 	// waiting for its second member has no week — which is a state of the
 	// couple, not a missing thing.
@@ -196,17 +196,53 @@ func PointsFor(w Week, viewer uuid.UUID) []Point {
 	return w.Points
 }
 
-// CanEditPoints reports whether the setter may still change this week.
+// CanEditPoints reports whether this edit is allowed.
 //
-// Two rules in one place: only the setter writes, and once the other partner
-// has prayed any of it, it is fixed — editing under someone mid-prayer would
-// change what they had already prayed for.
-func CanEditPoints(w Week, editor uuid.UUID, partnerHasCompleted bool) error {
+// Two rules, and the second is narrower than it used to be. Only the setter
+// writes the week. And a prayer their partner has already prayed is fixed:
+// it cannot be reworded and it cannot be taken away, because changing it
+// under someone would change what they had already prayed for.
+//
+// Everything else stays open for the whole week — adding a prayer, editing
+// one nobody has reached, reordering. The old rule locked the entire week the
+// moment the partner ticked anything, which meant a week you could not add to
+// on Wednesday because of something they prayed on Monday.
+//
+// Reordering a prayed point is allowed: its position is where it sits in a
+// list, not what it says. Nobody prays a position.
+//
+// prayedByOthers is the set of point ids somebody other than the editor has
+// completed. Their own completions do not stop them editing: changing a
+// prayer you alone have prayed affects nobody else.
+func CanEditPoints(w Week, editor uuid.UUID, incoming []Point, prayedByOthers map[uuid.UUID]bool) error {
 	if editor != w.SetterUserID {
 		return ErrNotSetter
 	}
-	if partnerHasCompleted {
-		return ErrLockedByUse
+	if len(prayedByOthers) == 0 {
+		return nil
+	}
+
+	kept := make(map[uuid.UUID]Point, len(incoming))
+	for _, p := range incoming {
+		if p.ID != (uuid.UUID{}) {
+			kept[p.ID] = p
+		}
+	}
+
+	for _, stored := range w.Points {
+		if !prayedByOthers[stored.ID] {
+			continue
+		}
+		sent, still := kept[stored.ID]
+		if !still {
+			// Dropped from the list, which would delete it and their
+			// completion with it.
+			return ErrLockedByUse
+		}
+		if sent.Title != stored.Title || sent.Body != stored.Body ||
+			sent.Scripture != stored.Scripture || sent.Verse != stored.Verse {
+			return ErrLockedByUse
+		}
 	}
 	return nil
 }

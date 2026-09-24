@@ -126,9 +126,11 @@ func (s *Service) Week(ctx context.Context, userID, weekID uuid.UUID) (Record, C
 	return rec, cc, err
 }
 
-// SavePoints replaces this week's points. The setter may keep editing after
-// publishing — fixing a typo is not a betrayal — right up until their partner
-// prays any of it, after which the week is theirs as much as the setter's.
+// SavePoints replaces this week's points. The setter may keep editing all
+// week — fixing a typo is not a betrayal, and a week you cannot add to on
+// Wednesday is a week that stops being useful on Monday. What they cannot do
+// is rewrite or remove a prayer their partner has already prayed; see
+// CanEditPoints.
 func (s *Service) SavePoints(ctx context.Context, userID uuid.UUID, points []Point) (Record, CoupleContext, error) {
 	rec, cc, err := s.Current(ctx, userID)
 	if err != nil {
@@ -139,7 +141,7 @@ func (s *Service) SavePoints(ctx context.Context, userID uuid.UUID, points []Poi
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
-	if err := CanEditPoints(rec.Week, userID, rec.CompletedByAnyoneBut(userID)); err != nil {
+	if err := CanEditPoints(rec.Week, userID, cleaned, rec.PrayedByOthers(userID)); err != nil {
 		return Record{}, CoupleContext{}, err
 	}
 	if err := s.repo.ReplacePoints(ctx, rec.ID, cleaned, s.now()); err != nil {

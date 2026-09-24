@@ -86,6 +86,10 @@ export default function SetPrayers() {
         }
 
         const items = drag.items ?? w.points;
+        // Editing no longer ends at publishing, so this screen spends most of
+        // the week on an already-shared week. Offering "Publish prayers"
+        // there asks for something already done.
+        const shared = w.status === "published";
         const doPublish = () =>
           publish.mutate(undefined, { onSuccess: () => router.replace(routes.home) });
         return (
@@ -102,7 +106,7 @@ export default function SetPrayers() {
                 {saved ? (
                   <>
                     <Icon name="check" size={16} strokeWidth={2} className="text-green" />
-                    Draft saved
+                    {shared ? "Saved" : "Draft saved"}
                   </>
                 ) : (
                   "Saving…"
@@ -117,7 +121,9 @@ export default function SetPrayers() {
                 It&rsquo;s your week.
               </h1>
               <Para className="mt-1.5">
-                Write what&rsquo;s on your heart. One is enough, and you can have up to {MAX}.
+                {shared
+                  ? `${partner} can see these. Add another whenever you think of one, and change any they haven’t prayed yet.`
+                  : `Write what’s on your heart. One is enough, and you can have up to ${MAX}.`}
               </Para>
               {items.length === 0 && previous ? (
                 <button
@@ -138,43 +144,65 @@ export default function SetPrayers() {
                 </button>
               ) : null}
               <ol className="m-0 mt-6 list-none border-t border-line p-0" {...drag.listProps}>
-                {items.map((p, i) => (
-                  <li
-                    key={p.id}
-                    className="flex min-h-[72px] items-center gap-3 border-b border-line"
-                  >
-                    <span className="tabular w-[22px] self-start pt-[17px] text-[13px] font-semibold text-stone">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <Link
-                      href={routes.prayerEdit(p.id)}
-                      className="press flex min-h-[72px] grow flex-col justify-center gap-0.5 text-ink no-underline"
-                    >
+                {items.map((p, i) => {
+                  // Once they have prayed it, it is theirs too: it can still
+                  // be moved, but not reworded or taken away underneath them.
+                  // Everything else on this screen stays open all week.
+                  const prayed = w.partner_completed.includes(p.id);
+                  const body = (
+                    <>
                       <span className="text-bodylg font-semibold tracking-[-0.01em]">
                         {p.title || "Untitled prayer"}
                       </span>
                       {p.text ? <span className="text-support text-stone">{p.text}</span> : null}
-                    </Link>
-                    <button
-                      type="button"
-                      aria-label={`Reorder ${p.title}. Use the arrow keys to move it.`}
-                      {...drag.handleProps(i)}
-                      onKeyDown={(e) => {
-                        if (e.key === "ArrowUp") {
-                          e.preventDefault();
-                          drag.moveByKey(i, i - 1);
-                        }
-                        if (e.key === "ArrowDown") {
-                          e.preventDefault();
-                          drag.moveByKey(i, i + 1);
-                        }
-                      }}
-                      className="press -mr-3 flex h-11 w-11 touch-none cursor-grab items-center justify-center text-stone active:cursor-grabbing"
+                      {prayed ? (
+                        <span className="text-support text-stone">
+                          {partner} has prayed this one.
+                        </span>
+                      ) : null}
+                    </>
+                  );
+                  return (
+                    <li
+                      key={p.id}
+                      className="flex min-h-[72px] items-center gap-3 border-b border-line"
                     >
-                      <Icon name="grip" size={22} strokeWidth={2.2} />
-                    </button>
-                  </li>
-                ))}
+                      <span className="tabular w-[22px] self-start pt-[17px] text-[13px] font-semibold text-stone">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      {prayed ? (
+                        <div className="flex min-h-[72px] grow flex-col justify-center gap-0.5 py-3 text-ink">
+                          {body}
+                        </div>
+                      ) : (
+                        <Link
+                          href={routes.prayerEdit(p.id)}
+                          className="press flex min-h-[72px] grow flex-col justify-center gap-0.5 text-ink no-underline"
+                        >
+                          {body}
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`Reorder ${p.title}. Use the arrow keys to move it.`}
+                        {...drag.handleProps(i)}
+                        onKeyDown={(e) => {
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            drag.moveByKey(i, i - 1);
+                          }
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            drag.moveByKey(i, i + 1);
+                          }
+                        }}
+                        className="press -mr-3 flex h-11 w-11 touch-none cursor-grab items-center justify-center text-stone active:cursor-grabbing"
+                      >
+                        <Icon name="grip" size={22} strokeWidth={2.2} />
+                      </button>
+                    </li>
+                  );
+                })}
                 {items.length < MAX ? (
                   <li>
                     <Link
@@ -195,12 +223,18 @@ export default function SetPrayers() {
               </ol>
             </Main>
             <div className="flex shrink-0 flex-col gap-2 px-6 pt-4 pb-safe">
-              <Button onClick={() => setConfirm(true)} disabled={items.length === 0 || !saved}>
-                Publish prayers
-              </Button>
-              <LinkButton href={routes.home} variant="text">
-                Save draft and finish later
-              </LinkButton>
+              {shared ? (
+                <LinkButton href={routes.home}>Done</LinkButton>
+              ) : (
+                <>
+                  <Button onClick={() => setConfirm(true)} disabled={items.length === 0 || !saved}>
+                    Publish prayers
+                  </Button>
+                  <LinkButton href={routes.home} variant="text">
+                    Save draft and finish later
+                  </LinkButton>
+                </>
+              )}
             </div>
 
             <Sheet
@@ -212,9 +246,9 @@ export default function SetPrayers() {
               <Para>
                 {/* "they" whoever the partner is: a name says nothing about
                     which pronoun somebody uses. */}
-                {partner} will see {items.length === 1 ? "it" : `all ${items.length}`}. Once they
-                start praying, {items.length === 1 ? "it can" : "they can"}&rsquo;t be changed, so
-                the week stays the same for both of you.
+                {partner} will see {items.length === 1 ? "it" : `all ${items.length}`}. You can keep
+                adding and changing them all week &mdash; only the ones they&rsquo;ve already prayed
+                stay as they are.
               </Para>
               <ol className="m-0 list-none border-y border-line py-1">
                 {items.map((p, i) => (

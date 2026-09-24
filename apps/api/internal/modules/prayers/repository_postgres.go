@@ -83,16 +83,26 @@ type Record struct {
 	Reflections map[uuid.UUID]string
 }
 
-// CompletedByAnyoneBut reports whether someone other than `except` has
-// completed any point of this week — the question CanEditPoints asks, in the
-// words it asks it.
-func (rec Record) CompletedByAnyoneBut(except uuid.UUID) bool {
+// PrayedByOthers is the set of point ids somebody other than `except` has
+// prayed — the question CanEditPoints asks, in the words it asks it.
+//
+// Their own completions are left out on purpose: the setter fixing the
+// wording of something only they have prayed changes nothing for anybody
+// else.
+func (rec Record) PrayedByOthers(except uuid.UUID) map[uuid.UUID]bool {
+	var out map[uuid.UUID]bool
 	for userID, points := range rec.Completed {
-		if userID != except && len(points) > 0 {
-			return true
+		if userID == except {
+			continue
+		}
+		for _, pointID := range points {
+			if out == nil {
+				out = make(map[uuid.UUID]bool, len(points))
+			}
+			out[pointID] = true
 		}
 	}
-	return false
+	return out
 }
 
 // WeekByID loads one week of this couple's, in full.

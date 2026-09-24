@@ -6,8 +6,18 @@ import { Suspense } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 
-import { BareInput, BareTextarea, Button, ComposeBar, Skeleton } from "@/components/ui/kit";
+import { Main } from "@/components/layout/screen";
+import {
+  BareInput,
+  BareTextarea,
+  Button,
+  ComposeBar,
+  LinkButton,
+  Para,
+  Skeleton,
+} from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
+import { useCouple } from "@/features/couple/hooks";
 import { useSavePoints, useWeek } from "@/features/prayers/hooks";
 import { prayerPointSchema } from "@/lib/api/schemas";
 import { routes } from "@/lib/routes";
@@ -28,6 +38,8 @@ function EditPrayer() {
   const params = useSearchParams();
   const id = params.get("id");
   const week = useWeek();
+  const couple = useCouple();
+  const partner = couple.data?.partner?.display_name ?? "Your partner";
   const save = useSavePoints();
   const router = useRouter();
   // The point's own values, handed to the form directly. An effect calling
@@ -61,6 +73,30 @@ function EditPrayer() {
       {(w) => {
         const points = w.points;
         const idx = points.findIndex((x) => x.id === id);
+
+        // The list hides the link to a prayer the partner has prayed, but a
+        // back button or an old tab can still land here. Saying so beats
+        // letting them retype it and meet a 409 at the end.
+        if (idx !== -1 && id && w.partner_completed.includes(id)) {
+          return (
+            <Main>
+              <div className="pt-3">
+                <h1 className="m-0 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
+                  {points[idx].title}
+                </h1>
+                <Para className="mt-1.5">
+                  {partner} has already prayed this one, so it stays as it is. You can still add new
+                  prayers, or change the ones they haven&rsquo;t reached.
+                </Para>
+              </div>
+              <div className="pt-6">
+                <LinkButton href={routes.prayersSet} variant="secondary">
+                  Back to the week
+                </LinkButton>
+              </div>
+            </Main>
+          );
+        }
 
         const onSubmit = (v: Form) => {
           const p: PrayerPoint = {
