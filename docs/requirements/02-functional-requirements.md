@@ -1082,34 +1082,49 @@ it — an event disappears for both partners, so it is not a one-tap action.
 
 ### 3.6 CAL — Couple calendar
 
-A simple, read-focused, mobile-friendly chronological view merging upcoming events and the active
-prayer week. No enterprise calendar complexity: no drag-resize, no overlapping-event grid.
+A simple, read-focused, mobile-friendly chronological view merging upcoming events, the dates the
+couple keep, and the active prayer week. No enterprise calendar complexity: no drag-resize, no
+overlapping-event grid.
 
 **Goals:** G-03 (Shared life planning/growth), G-04 (Connection and memory)
-**Related:** DEC-19
+**Related:** DEC-19, FR-DATE
 
 #### FR-CAL-001 Chronological view
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Demo |
+| Must | MVP | Implemented | Demo |
 
-The system shall show a couple's upcoming events and current prayer week together, in date order.
+The system shall show a couple's upcoming events, kept dates and current prayer week together, in
+date order.
 
 **Acceptance criteria**
 
 - **FR-CAL-001.AC1** Given a couple with events and a current prayer week, when either partner
   opens the calendar, then the client shall list them merged and sorted by date, nearest first.
+- **FR-CAL-001.AC2** Given a kept date set to come round every year (FR-DATE-001), when the
+  calendar shows the day it falls on in any year, then the client shall list it there with how
+  many years it has been, and shall not list a date kept without that flag.
 
-*Implementation note:* the calendar has no dedicated backend of its own; it composes the FR-EVT
-and FR-PRAY reads on the client, so its status follows theirs (UI only) and it is verified by
-demo rather than a distinct API test.
+*Implementation note:* the calendar has no dedicated backend of its own; it composes the FR-EVT,
+FR-DATE and FR-PRAY reads on the client, so its status follows theirs and it is verified by demo
+rather than a distinct API test.
+
+*Scope note:* AC2 goes beyond the original requirement, which named only events and the prayer
+week. A couple's calendar that does not show their anniversary is not their calendar — and once
+FR-DATE existed there was nothing to compose it from but a decision. Occurrence is asked per
+displayed day (`occursOn`), not per date ("when is this next"): "next" is relative to today, and
+a calendar you page backwards and forwards through needs an answer that does not move when you
+do. The twenty-ninth of February falls on the twenty-eighth in the years without one, the same
+rule the reminder uses, so the day the calendar shows and the day the notification arrives cannot
+disagree. Dates kept without the yearly flag stay off it: their owner said they were part of the
+story, not part of the week.
 
 #### FR-CAL-002 Open entry detail
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | UI only | Demo |
+| Must | MVP | Implemented | Demo |
 
 The system shall open an entry's detail screen when it is tapped from the calendar.
 
@@ -1117,6 +1132,10 @@ The system shall open an entry's detail screen when it is tapped from the calend
 
 - **FR-CAL-002.AC1** Given an event or the prayer week entry on the calendar, when a partner taps
   it, then the client shall navigate to that entry's own detail screen (FR-EVT-002/FR-PRAY-008).
+
+*Note:* an event goes to its own screen. The prayer week and a kept date have no per-entry
+screen to go to, so they open the week and the milestones list — the nearest thing that exists,
+rather than a tap that does nothing.
 
 ### 3.7 GOAL — Shared goals
 
@@ -2215,8 +2234,8 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-EVT-004 | G-03 | `POST`, `DELETE /v1/events/:id/complete` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-EVT-005 | G-03 | `PATCH /v1/events/:id/checklist/:item` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-EVT-006 | G-03 | `DELETE /v1/events/:id` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
-| FR-CAL-001 | G-03 | `GET /v1/events`, `GET /v1/prayers/current` | UI only | Manual demo 2026-09-22 |
-| FR-CAL-002 | G-03 | — (client navigation) | UI only | Manual demo 2026-09-22 |
+| FR-CAL-001 | G-03 | `GET /v1/events`, `GET /v1/milestones`, `GET /v1/prayers/current` | Implemented | Browser demo against live data 2026-09-24 |
+| FR-CAL-002 | G-03 | — (client navigation) | Implemented | Browser demo against live data 2026-09-24 |
 | FR-GOAL-001 | G-03 | `POST /v1/goals` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
 | FR-GOAL-002 | G-03 | `GET /v1/goals` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |
 | FR-GOAL-003 | G-03 | `GET /v1/goals/:id` | Implemented | Go unit tests; 26-check API pass and browser check 2026-09-24 |

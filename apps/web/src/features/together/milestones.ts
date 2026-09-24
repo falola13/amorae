@@ -38,3 +38,26 @@ export const countdown = (next: string, from: Date) => {
   if (days === 1) return "Tomorrow";
   return `in ${days} days`;
 };
+
+/**
+ * Whether a kept date comes round on this day — same month and day, any year.
+ *
+ * The calendar asks this of every day it is showing, rather than asking each
+ * date when it next comes round: "next" is relative to today, and a calendar
+ * you can page backwards and forwards through needs an answer that does not
+ * move when you do.
+ *
+ * It goes through dayIn, so the twenty-ninth of February lands on the
+ * twenty-eighth in the years without one — the same day the reminder arrives.
+ */
+export const occursOn = (date: string, day: string) => {
+  const [, month, dayOfMonth] = date.split("-");
+  return dayIn(Number(day.slice(0, 4)), month, dayOfMonth) === day;
+};
+
+/** "7 years", "One year", or nothing at all the first time round. */
+export const yearsBy = (date: string, day: string) => {
+  const years = Number(day.slice(0, 4)) - Number(date.slice(0, 4));
+  if (years <= 0) return "";
+  return years === 1 ? "One year" : `${years} years`;
+};

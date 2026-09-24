@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
 import { useWeek } from "@/features/prayers/hooks";
-import { useEvents } from "@/features/together/hooks";
+import { useEvents, useMilestones } from "@/features/together/hooks";
+import { occursOn, yearsBy } from "@/features/together/milestones";
 import { addDays, dayNum, iso, parse, startOfWeek, time12, weekdayDate } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { Icon } from "@/components/icons";
@@ -13,10 +14,15 @@ import { Main } from "@/components/layout/screen";
 import { QueryState } from "@/components/ui/query-state";
 import { BottomActions, LinkButton, Micro, Skeleton, Title, TopBar, cx } from "@/components/ui/kit";
 
-type Item = { time: string; title: string; sub: string; href: string };
+// `at` orders a day's entries: "" for all-day, so anniversaries and things
+// with no time sit above the timed ones, then 08:30 before 19:00. Three
+// sources feed one day now, and the order they happen to be read in is not
+// an order anybody meant.
+type Item = { at: string; time: string; title: string; sub: string; href: string };
 
 export default function Calendar() {
   const events = useEvents();
+  const milestones = useMilestones();
   const week = useWeek();
   const couple = useCouple();
   const todayIso = iso(today());
@@ -63,15 +69,31 @@ export default function Calendar() {
             for (const e of eventsData)
               if (!e.done)
                 push(e.date, {
+                  at: e.start_time ?? "",
                   time: time12(e.start_time) || "All day",
                   title: e.title,
                   sub: e.location ?? (e.reminder ? `Reminder ${e.reminder}` : ""),
                   href: routes.event(e.id),
                 });
+            // The dates they keep come round every year, so the calendar asks
+            // each day whether one falls on it rather than asking each date
+            // when it is next due. Only the ones set to come round: a date
+            // kept without that is part of their story, not their week.
+            for (const d of days)
+              for (const m of milestones.data ?? [])
+                if (m.reminder && occursOn(m.date, d))
+                  push(d, {
+                    at: "",
+                    time: "All day",
+                    title: m.title,
+                    sub: yearsBy(m.date, d) || m.sub || "",
+                    href: routes.milestones,
+                  });
             // The Sunday that starts a prayer week is a calendar item too.
             for (const d of days)
               if (parse(d).getDay() === 0)
                 push(d, {
+                  at: "",
                   time: "All day",
                   title: "Weekly prayer",
                   sub:
@@ -80,6 +102,7 @@ export default function Calendar() {
                       : "A new prayer week begins.",
                   href: routes.prayers,
                 });
+            for (const items of byDay.values()) items.sort((a, b) => a.at.localeCompare(b.at));
             const shown = days.filter((d) =>
               selected ? d === selected : (byDay.get(d)?.length ?? 0) > 0 && d >= todayIso,
             );
