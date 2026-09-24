@@ -8,6 +8,7 @@ import { Controller, useForm } from "react-hook-form";
 import { BareInput, BareTextarea, ComposeBar, Skeleton } from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { PickRow } from "@/components/ui/pick-row";
+import { REMINDER_OPTIONS } from "@/features/together/events";
 import { useEvent, useSaveEvent } from "@/features/together/hooks";
 import { eventSchema, type EventInput } from "@/lib/api/schemas";
 import type { Event } from "@/lib/api/types";
@@ -190,7 +191,7 @@ function EventComposer({ editId, event }: { editId?: string; event?: Event }) {
                 icon="bell"
                 label="Reminder"
                 value={field.value ?? ""}
-                type="text"
+                options={REMINDER_OPTIONS}
                 onChange={field.onChange}
                 placeholder="None"
                 last

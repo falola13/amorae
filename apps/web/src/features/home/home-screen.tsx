@@ -28,10 +28,19 @@ import {
   nextUpcomingEvent,
   plannedCount,
   reminderLabel,
-  tonightEvent,
+  todayEvent,
   upcomingEvents,
 } from "./derive";
-import { greeting, iso, naira, range, relativeDay, time12, weekdayDate } from "@/lib/dates";
+import {
+  greeting,
+  iso,
+  naira,
+  partOfDay,
+  range,
+  relativeDay,
+  time12,
+  weekdayDate,
+} from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
 
@@ -63,7 +72,7 @@ export function HomeScreen() {
   const me = coupleData.me;
   const partner = coupleData.partner?.display_name ?? "your partner";
   const upcoming = upcomingEvents(events.data ?? [], todayIso);
-  const tonight = tonightEvent(upcoming, todayIso);
+  const todays = todayEvent(upcoming, todayIso);
   const nextEvent = nextUpcomingEvent(upcoming, todayIso);
   const goal = activeGoal(goals.data ?? []);
   const lastWeek = lastWeekSummary(history.data, me.id);
@@ -174,23 +183,24 @@ export function HomeScreen() {
         </Link>
       </div>
 
-      {/* Tonight and this week sit side by side from `lg`, where a single
-          column would leave the right half of the screen empty. With no event
-          tonight, "This week" simply takes the row. */}
+      {/* Today's plan and this week sit side by side from `lg`, where a
+          single column would leave the right half of the screen empty. With
+          nothing on today, "This week" simply takes the row. */}
       <div className="flex flex-col lg:mt-6 lg:flex-row lg:items-start lg:gap-8">
-        {tonight ? (
+        {todays ? (
           <Link
-            href={routes.event(tonight.id)}
+            href={routes.event(todays.id)}
             className="press mt-5 flex items-center gap-4 rounded-card border border-line bg-surface py-[18px] pl-5 pr-4 text-ink no-underline lg:mt-0 lg:flex-1"
           >
             <span className="flex grow flex-col gap-0.5">
-              <Micro tone="plum">Tonight</Micro>
+              <Micro tone="plum">{partOfDay(todays.start_time)}</Micro>
               <span className="mt-1 text-[21px] font-semibold tracking-[-0.015em]">
-                {tonight.title}
+                {todays.title}
               </span>
               <span className="text-[15px] text-stone">
-                {time12(tonight.start_time)}
-                {tonight.location ? ` · ${tonight.location}` : ""}
+                {time12(todays.start_time)}
+                {todays.start_time && todays.location ? " · " : ""}
+                {todays.location ?? ""}
               </span>
             </span>
             <Icon name="right" size={18} className="text-stone" />
@@ -229,7 +239,7 @@ export function HomeScreen() {
             <Row
               icon="calendar"
               title={nextEvent.title}
-              sub={`${relativeDay(nextEvent.date, todayIso)}, ${time12(nextEvent.start_time)}`}
+              sub={`${relativeDay(nextEvent.date, todayIso)}${nextEvent.start_time ? `, ${time12(nextEvent.start_time)}` : ""}`}
               href={routes.event(nextEvent.id)}
             />
           ) : null}

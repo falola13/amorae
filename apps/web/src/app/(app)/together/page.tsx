@@ -64,7 +64,7 @@ export default function Together() {
                     title="Calendar"
                     sub={
                       next
-                        ? `${next.title} ${relativeDay(next.date, todayIso).toLowerCase()} at ${time12(next.start_time)}`
+                        ? `${next.title} ${relativeDay(next.date, todayIso).toLowerCase()}${next.start_time ? ` at ${time12(next.start_time)}` : ""}`
                         : "Nothing planned yet"
                     }
                     href={routes.calendar}

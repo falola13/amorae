@@ -53,6 +53,23 @@ export const time12 = (t?: string) => {
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
 };
 
+/**
+ * What to call an event happening today: "Tonight" only when it is actually
+ * the evening. A 7am breakfast labelled "Tonight" is wrong twice over — it
+ * says the wrong time of day, and it makes the card look like it belongs to
+ * someone else's plan.
+ *
+ * Without a time there is nothing to be more specific about, so it is "Today".
+ */
+export const partOfDay = (startTime?: string) => {
+  if (!startTime) return "Today";
+  const h = Number(startTime.split(":")[0]);
+  if (!Number.isFinite(h)) return "Today";
+  if (h < 12) return "This morning";
+  if (h < 17) return "This afternoon";
+  return "Tonight";
+};
+
 export const greeting = (d = new Date()) => {
   const h = d.getHours();
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";

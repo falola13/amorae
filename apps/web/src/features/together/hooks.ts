@@ -24,6 +24,7 @@ export const useMilestones = () => useQuery({ queryKey: keys.milestones, queryFn
 // Writes: each is defined once in ./writes.ts. Errors, offline pausing and
 // resuming after a restart are handled centrally (lib/query).
 export const useSaveEvent = () => useWrite(w.saveEvent);
+export const usePatchEvent = () => useWrite(w.patchEvent);
 export const useCompleteEvent = () => useWrite(w.completeEvent);
 export const useDeleteEvent = () => useWrite(w.deleteEvent);
 export const useChecklist = () => useWrite(w.checklist);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type MouseEvent } from "react";
+import { useId, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { cx } from "@/components/ui/kit";
 
@@ -28,13 +28,29 @@ function openPicker(event: MouseEvent<HTMLInputElement>) {
   }
 }
 
-/** A row on a compose screen that opens a native picker (date, time) or holds a short value. */
+/**
+ * A row on a compose screen that opens a native picker (date, time), offers a
+ * fixed set of choices, or holds a short value.
+ *
+ * With `options` the overlay is a native <select>, so the choice arrives as a
+ * wheel on a phone and a menu on a desktop rather than a text field nobody can
+ * see. A value that is not in the list is kept and offered as its own option:
+ * an event written before the list existed must not silently become whatever
+ * happens to be first.
+ *
+ * A text row holds a draft while it is being typed into and reports it when
+ * the person finishes — on blur, or on Enter. A date, a time and a choice are
+ * single decisions and report straight away. The difference matters where the
+ * row saves rather than filling in a form: a per-keystroke onChange there is a
+ * request per letter, and each one comes back and fights what is being typed.
+ */
 export function PickRow({
   icon,
   label,
   value,
   empty,
   type,
+  options,
   onChange,
   placeholder,
   last,
@@ -44,12 +60,26 @@ export function PickRow({
   value: string;
   empty?: string;
   type?: "date" | "time" | "text";
+  options?: readonly { value: string; label: string }[];
   onChange?: (v: string) => void;
   placeholder?: string;
   last?: boolean;
 }) {
   const id = useId();
-  const shown = value && type !== "date" && type !== "time" ? value : empty || placeholder || "";
+  const chosen = options?.find((o) => o.value === value);
+  // Null while nobody is typing, so the row follows `value`; a string once
+  // they are, so their own keystrokes are what they see.
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? value;
+  const commit = () => {
+    if (draft !== null && draft !== value) onChange?.(draft);
+    setDraft(null);
+  };
+  const shown = options
+    ? (chosen?.label ?? value ?? placeholder ?? "")
+    : text && type !== "date" && type !== "time"
+      ? text
+      : empty || placeholder || "";
   return (
     <label
       htmlFor={id}
@@ -63,13 +93,37 @@ export function PickRow({
       <span className={cx("tabular", value ? "font-semibold text-plum" : "text-stone")}>
         {shown}
       </span>
-      {onChange ? (
+      {options && onChange ? (
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          aria-label={label}
+        >
+          {chosen || !value ? null : <option value={value}>{value}</option>}
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : onChange ? (
         <input
           id={id}
           type={type ?? "text"}
-          value={value}
+          value={type === "date" || type === "time" ? value : text}
           placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) =>
+            type === "date" || type === "time" ? onChange(e.target.value) : setDraft(e.target.value)
+          }
+          onBlur={commit}
+          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
           onClick={openPicker}
           className={cx(
             "absolute inset-0 h-full w-full cursor-pointer opacity-0",

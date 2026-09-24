@@ -60,7 +60,7 @@ export default function Events() {
                         key={e.id}
                         date={e.date}
                         title={e.title}
-                        sub={`${relativeDay(e.date, todayIso)}, ${time12(e.start_time)}${e.date === todayIso && e.location ? ` · ${e.location}` : ""}`}
+                        sub={`${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}${e.date === todayIso && e.location ? ` · ${e.location}` : ""}`}
                         href={routes.event(e.id)}
                       />
                     ))}

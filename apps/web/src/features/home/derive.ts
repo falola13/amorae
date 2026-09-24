@@ -8,7 +8,12 @@ export const upcomingEvents = (events: Event[], todayIso: string): Event[] =>
     .filter((e) => !e.done && e.date >= todayIso)
     .sort((a, b) => (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")));
 
-export const tonightEvent = (upcoming: Event[], todayIso: string): Event | undefined =>
+/**
+ * The first thing happening today. It used to be called tonightEvent, which
+ * was only ever true after five o'clock — see partOfDay for what the card
+ * now calls it.
+ */
+export const todayEvent = (upcoming: Event[], todayIso: string): Event | undefined =>
   upcoming.find((e) => e.date === todayIso);
 
 export const nextUpcomingEvent = (upcoming: Event[], todayIso: string): Event | undefined =>

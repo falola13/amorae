@@ -17,6 +17,17 @@ export const togetherWrites = {
     // Updating is idempotent, creating is not, and this write does both.
     onlineOnly: true,
   }),
+  // Changing one thing about an event that already exists, from the event
+  // itself. Separate from saveEvent because that one also creates, which is
+  // what forces it online-only; a PATCH sets the fields it names to the
+  // values it carries, so landing twice lands the same event.
+  patchEvent: defineWrite({
+    mutationKey: ["events", "patch"],
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<EventInput> }) =>
+      api.updateEvent(id, patch),
+    invalidates: [keys.events],
+    idempotent: "sets the fields it names to the values it carries, however often it lands.",
+  }),
   deleteEvent: defineWrite({
     mutationKey: ["events", "delete"],
     mutationFn: (id: string) => api.deleteEvent(id),

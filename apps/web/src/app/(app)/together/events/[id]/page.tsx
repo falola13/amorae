@@ -8,10 +8,14 @@ import {
   useDeleteEvent,
   useEvent,
   useChecklist,
+  usePatchEvent,
 } from "@/features/together/hooks";
+import { REMINDER_OPTIONS } from "@/features/together/events";
+import { PickRow } from "@/components/ui/pick-row";
+import type { Event } from "@/lib/api/types";
+import type { EventInput } from "@/lib/api/schemas";
 import { time12, weekdayDate } from "@/lib/dates";
 import { routes } from "@/lib/routes";
-import { Icon, type IconName } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
 import { QueryState, inPage } from "@/components/ui/query-state";
 import {
@@ -27,29 +31,58 @@ import {
   TopBar,
 } from "@/components/ui/kit";
 
-function Meta({
-  icon,
-  text,
-  action,
-  href,
-}: {
-  icon: IconName;
-  text: string;
-  action?: string;
-  href?: string;
-}) {
+/**
+ * The when and where of an event, changed from the event itself.
+ *
+ * These were read-only lines with a "Change" link on the reminder alone, so
+ * tapping the time or the place did nothing at all — and a reminder took a
+ * round trip through the whole compose form to move by an hour. Each row is
+ * now the control, and each one saves on its own: the endpoint is a PATCH, so
+ * a row sends the single field it owns and leaves the rest of the event,
+ * checklist included, exactly where it was.
+ *
+ * Empty rows still show. "Add a time" is how you discover you can.
+ */
+function When({ event }: { event: Event }) {
+  const patch = usePatchEvent();
+  const set = (field: keyof EventInput) => (value: string) =>
+    patch.mutate({ id: event.id, patch: { [field]: value } });
+
   return (
-    <div className="flex min-h-[52px] items-center gap-3.5 border-b border-line">
-      <Icon name={icon} size={22} className="text-stone" />
-      <span className="grow text-[16px]">{text}</span>
-      {action && href ? (
-        <Link
-          href={href}
-          className="press flex h-11 items-center px-0.5 text-[15px] font-semibold text-plum no-underline"
-        >
-          {action}
-        </Link>
-      ) : null}
+    <div className="mt-5 flex flex-col border-t border-line">
+      <PickRow
+        icon="clock"
+        label="Starts"
+        value={event.start_time ?? ""}
+        type="time"
+        onChange={set("start_time")}
+        empty={event.start_time ? time12(event.start_time) : "Add a time"}
+      />
+      <PickRow
+        icon="clock"
+        label="Ends"
+        value={event.end_time ?? ""}
+        type="time"
+        onChange={set("end_time")}
+        empty={event.end_time ? time12(event.end_time) : "Add a time"}
+      />
+      <PickRow
+        icon="pin"
+        label="Location"
+        value={event.location ?? ""}
+        type="text"
+        onChange={set("location")}
+        placeholder="Add a place"
+      />
+      <PickRow
+        icon="bell"
+        label="Reminder"
+        value={event.reminder ?? ""}
+        options={REMINDER_OPTIONS}
+        onChange={set("reminder")}
+        placeholder="None"
+        last
+      />
     </div>
   );
 }
@@ -91,23 +124,7 @@ export default function EventDetail() {
               <Title size="lg" className="mt-2">
                 {e.title}
               </Title>
-              <div className="mt-5 flex flex-col border-t border-line">
-                {e.start_time ? (
-                  <Meta
-                    icon="clock"
-                    text={`${time12(e.start_time)}${e.end_time ? ` to ${time12(e.end_time)}` : ""}`}
-                  />
-                ) : null}
-                {e.location ? <Meta icon="pin" text={e.location} /> : null}
-                {e.reminder ? (
-                  <Meta
-                    icon="bell"
-                    text={`Reminder ${e.reminder}`}
-                    action="Change"
-                    href={routes.eventNew({ edit: e.id })}
-                  />
-                ) : null}
-              </div>
+              <When event={e} />
               {e.checklist.length ? (
                 <Section label="Before we go" className="mt-[22px]">
                   {e.checklist.map((c) => (
