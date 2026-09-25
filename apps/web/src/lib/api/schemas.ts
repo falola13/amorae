@@ -102,6 +102,8 @@ export const eventSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
   // Sent whole: an item left out is an item removed.
   checklist: z.array(z.string()).max(20).optional(),
+  // Omitted on a PATCH from someone who isn't the creator — the API keeps it as is.
+  kind: z.enum(["together", "mine"]).optional(),
 });
 
 export const goalSchema = z.object({

@@ -255,6 +255,8 @@ func (r *PostgresRepository) EndedEvents(ctx context.Context, now time.Time) ([]
 		  AND NOT e.done
 		  AND e.date BETWEEN ($1 AT TIME ZONE c.timezone)::date - 2
 		                 AND ($1 AT TIME ZONE c.timezone)::date
+		  -- A "mine" event is only ever its creator's to be asked about.
+		  AND (e.kind = 'together' OR e.created_by = u.id)
 	`, now)
 	if err != nil {
 		return nil, fmt.Errorf("finding events that are over: %w", err)

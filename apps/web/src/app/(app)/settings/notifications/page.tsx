@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { useCouple } from "@/features/couple/hooks";
+import { REMINDER_OPTIONS } from "@/features/together/events";
 import { usePrefs, useSavePrefs } from "@/features/settings/hooks";
 import { time12 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
@@ -126,8 +127,21 @@ export default function NotificationSettings() {
               />
               {row(p, "prayer_answered", `When ${partner} marks a prayer answered`, true)}
             </Section>
+            <Section label="Events" className="mt-[22px]">
+              {row(p, "event_reminders", "Reminders")}
+              {row(p, "event_followups", "Ask how it went")}
+              {row(p, "partner_events", `When ${partner} adds something for you both`)}
+              <PickRow
+                icon="bell"
+                label="Default reminder"
+                value={p.default_event_reminder}
+                options={REMINDER_OPTIONS}
+                onChange={(v: string) => save.mutate({ default_event_reminder: v })}
+                placeholder="None"
+                last
+              />
+            </Section>
             <Section label="Plans" className="mt-[22px]">
-              {row(p, "event_reminders", "Event reminders")}
               {row(p, "important_dates", "Important dates", true)}
             </Section>
             <Section label="Together" className="mt-[22px]">

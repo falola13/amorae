@@ -56,6 +56,47 @@ func TestApply_ReminderTime(t *testing.T) {
 	})
 }
 
+func TestApply_DefaultEventReminder(t *testing.T) {
+	valid := []string{
+		"", "at the time", "10 minutes before", "30 minutes before",
+		"1 hour before", "2 hours before", "the morning of", "1 day before",
+	}
+	for _, in := range valid {
+		if _, err := Defaults().Apply(Patch{DefaultEventReminder: &in}); err != nil {
+			t.Errorf("Apply(%q) = %v, want nil", in, err)
+		}
+	}
+
+	invalid := []string{"whenever", "5 minutes before", "1 week before"}
+	for _, in := range invalid {
+		_, err := Defaults().Apply(Patch{DefaultEventReminder: &in})
+		if err == nil {
+			t.Errorf("Apply(%q) was accepted", in)
+			continue
+		}
+		appErr, ok := err.(*apperr.Error)
+		if !ok || appErr.Fields["default_event_reminder"] == "" {
+			t.Errorf("Apply(%q) should report the problem under default_event_reminder, got %v", in, err)
+		}
+	}
+
+	t.Run("clearing it back to no default is allowed", func(t *testing.T) {
+		set := "1 hour before"
+		with, err := Defaults().Apply(Patch{DefaultEventReminder: &set})
+		if err != nil {
+			t.Fatalf("Apply: %v", err)
+		}
+		cleared := ""
+		got, err := with.Apply(Patch{DefaultEventReminder: &cleared})
+		if err != nil {
+			t.Fatalf("Apply: %v", err)
+		}
+		if got.DefaultEventReminder != "" {
+			t.Errorf("DefaultEventReminder = %q, want cleared", got.DefaultEventReminder)
+		}
+	})
+}
+
 func TestDefaults_AreMostlyOnButNotNoisy(t *testing.T) {
 	d := Defaults()
 	if !d.NewWeek || !d.Appreciation || !d.ImportantDates {
@@ -65,6 +106,13 @@ func TestDefaults_AreMostlyOnButNotNoisy(t *testing.T) {
 	// something that starts buzzing on its own.
 	if d.Goals || d.Challenges {
 		t.Error("goals and challenges should start off")
+	}
+	if !d.EventFollowups || !d.PartnerEvents {
+		t.Error("event_followups and partner_events should start on")
+	}
+	if d.DefaultEventReminder != "1 hour before" {
+		t.Errorf("default_event_reminder = %q, want %q, matching what the screen always offered",
+			d.DefaultEventReminder, "1 hour before")
 	}
 }
 

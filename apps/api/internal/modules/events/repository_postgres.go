@@ -41,7 +41,8 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 		SELECT e.id, e.couple_id, e.title, e.date,
 		       COALESCE(to_char(e.start_time, 'HH24:MI'), ''),
 		       COALESCE(to_char(e.end_time, 'HH24:MI'), ''),
-		       COALESCE(e.location, ''), COALESCE(e.reminder, ''), COALESCE(e.notes, ''), e.done
+		       COALESCE(e.location, ''), COALESCE(e.reminder, ''), COALESCE(e.notes, ''), e.done,
+		       e.created_by, e.kind
 		FROM events e `+where+`
 		ORDER BY e.date, e.start_time NULLS FIRST, e.created_at
 	`, args...)
@@ -54,7 +55,7 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 	for rows.Next() {
 		var e Event
 		if err := rows.Scan(&e.ID, &e.CoupleID, &e.Title, &e.Date, &e.StartTime, &e.EndTime,
-			&e.Location, &e.Reminder, &e.Notes, &e.Done); err != nil {
+			&e.Location, &e.Reminder, &e.Notes, &e.Done, &e.CreatedBy, &e.Kind); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scanning event: %w", err)
 		}
@@ -107,10 +108,11 @@ func (r *PostgresRepository) Create(ctx context.Context, e Event, at time.Time) 
 	}
 	err = r.db.InTx(ctx, func(ctx context.Context) error {
 		if _, err := r.db.Q(ctx).Exec(ctx, `
-			INSERT INTO events (id, couple_id, title, date, start_time, end_time, location, reminder, notes, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+			INSERT INTO events (id, couple_id, title, date, start_time, end_time, location, reminder, notes, created_by, kind, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
 		`, id, e.CoupleID, e.Title, e.Date, nullIfEmpty(e.StartTime), nullIfEmpty(e.EndTime),
-			nullIfEmpty(e.Location), nullIfEmpty(e.Reminder), nullIfEmpty(e.Notes), at); err != nil {
+			nullIfEmpty(e.Location), nullIfEmpty(e.Reminder), nullIfEmpty(e.Notes),
+			e.CreatedBy, e.Kind, at); err != nil {
 			return fmt.Errorf("creating event: %w", err)
 		}
 		return r.writeChecklist(ctx, id, e.Checklist, at)
@@ -127,10 +129,10 @@ func (r *PostgresRepository) Update(ctx context.Context, e Event, replaceCheckli
 		tag, err := r.db.Q(ctx).Exec(ctx, `
 			UPDATE events
 			SET title = $3, date = $4, start_time = $5, end_time = $6,
-			    location = $7, reminder = $8, notes = $9, updated_at = $10
+			    location = $7, reminder = $8, notes = $9, kind = $10, updated_at = $11
 			WHERE id = $1 AND couple_id = $2
 		`, e.ID, e.CoupleID, e.Title, e.Date, nullIfEmpty(e.StartTime), nullIfEmpty(e.EndTime),
-			nullIfEmpty(e.Location), nullIfEmpty(e.Reminder), nullIfEmpty(e.Notes), at)
+			nullIfEmpty(e.Location), nullIfEmpty(e.Reminder), nullIfEmpty(e.Notes), e.Kind, at)
 		if err != nil {
 			return fmt.Errorf("updating event: %w", err)
 		}

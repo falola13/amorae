@@ -7,6 +7,7 @@ import { Toaster } from "@/components/layout/toaster";
 import { prayerWrites } from "@/features/prayers/writes";
 import { settingsWrites } from "@/features/settings/writes";
 import { togetherWrites } from "@/features/together/writes";
+import { useKeyboardInset } from "@/lib/hooks/use-keyboard-inset";
 import { createQueryClient } from "@/lib/query/client";
 import { registerWrites, type AnyWriteDef } from "@/lib/query/mutations";
 
@@ -26,6 +27,7 @@ export function Providers({ children }: { children: ReactNode }) {
     registerWrites(qc, resumableWrites);
     return qc;
   });
+  useKeyboardInset();
   return (
     <QueryClientProvider client={client}>
       {children}

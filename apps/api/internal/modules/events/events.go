@@ -31,8 +31,16 @@ var (
 )
 
 type Event struct {
-	ID        uuid.UUID
-	CoupleID  uuid.UUID
+	ID       uuid.UUID
+	CoupleID uuid.UUID
+	// Who made it. Nil on events from before ownership existed, and on
+	// nothing created since (the app always sets it) — treated the same as
+	// "together" wherever it matters.
+	CreatedBy *uuid.UUID
+	// "together" (both partners see it and either may edit it, as before) or
+	// "mine" (its creator only — reads still reach both, DEC-16 is about
+	// seeing, not about touching).
+	Kind      string
 	Title     string
 	Date      time.Time
 	StartTime string // "19:00", or empty
@@ -43,6 +51,11 @@ type Event struct {
 	Done      bool
 	Checklist []ChecklistItem
 }
+
+const (
+	KindTogether = "together"
+	KindMine     = "mine"
+)
 
 type ChecklistItem struct {
 	ID       uuid.UUID
@@ -61,6 +74,7 @@ type Input struct {
 	Reminder  *string
 	Notes     *string
 	Checklist *[]string
+	Kind      *string
 }
 
 // Validate reports every invalid field at once. creating gates required
@@ -106,6 +120,19 @@ func (e Event) Validate(in Input, creating bool) (Event, error) {
 	e.Location = optionalText(in.Location, e.Location, maxLocationRunes, "location", fields)
 	e.Reminder = optionalText(in.Reminder, e.Reminder, maxReminderRunes, "reminder", fields)
 	e.Notes = optionalText(in.Notes, e.Notes, maxNotesRunes, "notes", fields)
+
+	if in.Kind != nil {
+		switch strings.TrimSpace(*in.Kind) {
+		case KindTogether, KindMine:
+			e.Kind = strings.TrimSpace(*in.Kind)
+		default:
+			fields["kind"] = "Choose together or just you."
+		}
+	} else if creating && e.Kind == "" {
+		// Nobody has to say "together" on the way in; it is what an event
+		// has always been.
+		e.Kind = KindTogether
+	}
 
 	if in.Checklist != nil {
 		items, err := validateChecklist(*in.Checklist)

@@ -261,6 +261,17 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 			Path:  "/together/goals",
 			Tag:   KindGoal,
 		}
+	case KindEventAdded:
+		// A "together" event a partner just made for the two of them; a
+		// "mine" event never reaches this candidate at all (RecentlyWritten
+		// only ever selects together ones), and neither does the creator.
+		wanted = c.Prefs.PartnerEvents
+		message = push.Message{
+			Title: c.AuthorName + " added something for you both",
+			Body:  c.Subject,
+			Path:  "/together/events/" + c.ItemID.String(),
+			Tag:   KindEventAdded,
+		}
 	case KindPrayerAnswered:
 		// No prayer content: private writing (FR-NOTF-005.AC1), unlike the
 		// event exception (AC2) — wrong here costs more than it saves.

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
 import { useWeek } from "@/features/prayers/hooks";
+import { eventOwnerLabel } from "@/features/together/events";
 import { useEvents, useMilestones } from "@/features/together/hooks";
 import { occursOn, yearsBy } from "@/features/together/milestones";
 import {
@@ -52,6 +53,8 @@ export default function Calendar() {
   const milestones = useMilestones();
   const week = useWeek();
   const couple = useCouple();
+  const meId = couple.data?.me.id;
+  const partnerName = couple.data?.partner?.display_name;
   const todayIso = iso(today());
 
   // A single anchor (not a week offset) keeps week/month toggling on the same date.
@@ -131,15 +134,18 @@ export default function Calendar() {
             const push = (d: string, it: Item) => byDay.set(d, [...(byDay.get(d) ?? []), it]);
 
             for (const e of eventsData)
-              if (!e.done)
+              if (!e.done) {
+                const owner = eventOwnerLabel(e, meId, partnerName);
+                const base = e.location ?? (e.reminder ? `Reminder ${e.reminder}` : "");
                 push(e.date, {
                   at: e.start_time ?? "",
                   rank: 1,
                   ...clock(e.start_time, e.end_time),
                   title: e.title,
-                  sub: e.location ?? (e.reminder ? `Reminder ${e.reminder}` : ""),
+                  sub: owner ? (base ? `${base} · ${owner}` : owner) : base,
                   href: routes.event(e.id),
                 });
+              }
 
             // Checks each visible day against each milestone (not each milestone's next occurrence) and only for ones with a reminder set.
             for (const d of days)

@@ -51,6 +51,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Android shrinks the page for the keyboard instead of sliding it over the
+  // bottom, so sheets and bottom buttons stay above it. iOS ignores this; see
+  // useKeyboardInset for the other half.
+  interactiveWidget: "resizes-content",
   // Per-scheme so the status bar/PWA chrome matches light vs dark.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: brand.colors.background },

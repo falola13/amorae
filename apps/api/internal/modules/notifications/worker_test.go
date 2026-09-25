@@ -851,6 +851,63 @@ func TestForWritten_Goals(t *testing.T) {
 	})
 }
 
+// TestForWritten_EventAdded covers the decision ForWritten makes once a
+// "together" event has already reached this pipeline (RecentlyWritten's SQL
+// is what keeps a "mine" event from ever becoming a candidate at all — see
+// worker_repository.go's events branch — so there is nothing to test here
+// about "mine": no WrittenCandidate is ever built for one).
+func TestForWritten_EventAdded(t *testing.T) {
+	author, partner := uuid.New(), uuid.New()
+	sent := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	base := WrittenCandidate{
+		UserID: partner, AuthorID: author, AuthorName: "Ada",
+		ItemID: uuid.New(), Subject: "Dinner at Terra",
+		Kind: KindEventAdded, WrittenAt: sent,
+		Prefs: Preferences{PartnerEvents: true},
+	}
+
+	t.Run("the partner hears about it, named", func(t *testing.T) {
+		n, ok := ForWritten(base, sent.Add(time.Second))
+		if !ok {
+			t.Fatal("nobody was told about a together event")
+		}
+		if n.Message.Title != "Ada added something for you both" {
+			t.Errorf("title = %q", n.Message.Title)
+		}
+		if n.Message.Body != "Dinner at Terra" {
+			t.Errorf("body = %q, should be the event's title", n.Message.Body)
+		}
+		if n.Message.Path != "/together/events/"+base.ItemID.String() {
+			t.Errorf("path = %q", n.Message.Path)
+		}
+		if n.Key != base.ItemID.String() {
+			t.Errorf("key = %q, want the event's own id so it sends once", n.Key)
+		}
+	})
+
+	t.Run("goes out at once, unlike appreciation's undo window", func(t *testing.T) {
+		if _, ok := ForWritten(base, sent.Add(time.Second)); !ok {
+			t.Error("it waited as if there were something to undo")
+		}
+	})
+
+	t.Run("not to whoever made it", func(t *testing.T) {
+		c := base
+		c.UserID = author
+		if _, ok := ForWritten(c, sent.Add(time.Second)); ok {
+			t.Error("the creator was told about their own event")
+		}
+	})
+
+	t.Run("not to somebody who turned partner events off", func(t *testing.T) {
+		c := base
+		c.Prefs.PartnerEvents = false
+		if _, ok := ForWritten(c, sent.Add(time.Second)); ok {
+			t.Error("a preference was ignored")
+		}
+	})
+}
+
 func TestForChallenge(t *testing.T) {
 	if _, err := time.LoadLocation("Africa/Lagos"); err != nil {
 		t.Skip("no timezone database here")

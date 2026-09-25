@@ -103,6 +103,8 @@ func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Tim
 		  AND COALESCE(e.reminder, '') <> ''
 		  AND e.date BETWEEN ($1 AT TIME ZONE c.timezone)::date - 2
 		                 AND ($1 AT TIME ZONE c.timezone)::date + 2
+		  -- A "mine" event's reminder is its creator's alone.
+		  AND (e.kind = 'together' OR e.created_by = u.id)
 	`, now)
 	if err != nil {
 		return nil, fmt.Errorf("finding events to remind about: %w", err)
@@ -164,17 +166,20 @@ func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDat
 func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Time) ([]WrittenCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		WITH written AS (
-			SELECT a.id, a.couple_id, a.from_id AS author_id, a.created_at, $2::text AS kind
+			SELECT a.id, a.couple_id, a.from_id AS author_id, a.created_at, $2::text AS kind,
+			       NULL::text AS subject
 			FROM appreciations a
 			WHERE a.created_at >= $1
 			UNION ALL
-			SELECT j.id, j.couple_id, j.author_id, j.created_at, $3::text AS kind
+			SELECT j.id, j.couple_id, j.author_id, j.created_at, $3::text AS kind,
+			       NULL::text AS subject
 			FROM journal_entries j
 			WHERE j.created_at >= $1
 			UNION ALL
 			-- A goal somebody put something towards. Only while it is still
 			-- going: nobody needs telling about a goal already finished.
-			SELECT gp.id, g.couple_id, gp.user_id, gp.logged_at, $4::text AS kind
+			SELECT gp.id, g.couple_id, gp.user_id, gp.logged_at, $4::text AS kind,
+			       NULL::text AS subject
 			FROM goal_progress gp
 			JOIN goals g ON g.id = gp.goal_id AND NOT g.done
 			WHERE gp.logged_at >= $1
@@ -183,10 +188,21 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			-- update rather than an insert, but it only ever goes from null
 			-- to a time — editing the note deliberately leaves it alone — so
 			-- it behaves like a creation here and cannot re-fire on an edit.
-			SELECT pp.id, pw.couple_id, pp.answered_by, pp.answered_at, $5::text AS kind
+			SELECT pp.id, pw.couple_id, pp.answered_by, pp.answered_at, $5::text AS kind,
+			       NULL::text AS subject
 			FROM prayer_points pp
 			JOIN prayer_weeks pw ON pw.id = pp.week_id
 			WHERE pp.answered_at >= $1 AND pp.answered_by IS NOT NULL
+			UNION ALL
+			-- A "together" event one partner just made for the two of them.
+			-- "mine" is excluded here, not just gated on the way out: it is
+			-- never this pipeline's news to carry. created_by IS NOT NULL
+			-- keeps out anything from before ownership existed, which has
+			-- nobody in particular to credit as having "added" it.
+			SELECT e.id, e.couple_id, e.created_by, e.created_at, $6::text AS kind,
+			       e.title AS subject
+			FROM events e
+			WHERE e.created_at >= $1 AND e.kind = 'together' AND e.created_by IS NOT NULL
 		)
 		SELECT u.id, written.author_id, author.display_name, written.id, written.kind,
 		       written.created_at,
@@ -195,7 +211,8 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		       -- something you opt into (FR-NOTF-006).
 		       COALESCE(p.goals, false),
 		       COALESCE(p.prayer_answered, true),
-		       COALESCE(g.title, '')
+		       COALESCE(p.partner_events, true),
+		       COALESCE(g.title, written.subject, '')
 		FROM written
 		LEFT JOIN goal_progress gpr ON gpr.id = written.id AND written.kind = $4
 		LEFT JOIN goals g ON g.id = gpr.goal_id
@@ -205,7 +222,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		JOIN users author ON author.id = written.author_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE u.id <> written.author_id
-	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered)
+	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered, KindEventAdded)
 	if err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
 	}
@@ -216,7 +233,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		var c WrittenCandidate
 		if err := rows.Scan(&c.UserID, &c.AuthorID, &c.AuthorName, &c.ItemID, &c.Kind,
 			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal, &c.Prefs.Goals,
-			&c.Prefs.PrayerAnswered, &c.Subject); err != nil {
+			&c.Prefs.PrayerAnswered, &c.Prefs.PartnerEvents, &c.Subject); err != nil {
 			return nil, fmt.Errorf("scanning something written: %w", err)
 		}
 		if c.Kind == KindAppreciation {

@@ -59,6 +59,9 @@ type eventDTO struct {
 	Notes     string         `json:"notes,omitempty"`
 	Checklist []checklistDTO `json:"checklist"`
 	Done      bool           `json:"done"`
+	Kind      string         `json:"kind"`
+	// Null on an event from before ownership existed.
+	CreatedBy *string `json:"created_by"`
 }
 
 func toDTO(e Event) eventDTO {
@@ -74,6 +77,11 @@ func toDTO(e Event) eventDTO {
 		// Always an array, never null, so a client can map over it.
 		Checklist: make([]checklistDTO, 0, len(e.Checklist)),
 		Done:      e.Done,
+		Kind:      e.Kind,
+	}
+	if e.CreatedBy != nil {
+		id := e.CreatedBy.String()
+		out.CreatedBy = &id
 	}
 	for _, item := range e.Checklist {
 		out.Checklist = append(out.Checklist, checklistDTO{
@@ -93,6 +101,7 @@ type inputRequest struct {
 	Reminder  *string   `json:"reminder"`
 	Notes     *string   `json:"notes"`
 	Checklist *[]string `json:"checklist"`
+	Kind      *string   `json:"kind"`
 }
 
 func (r inputRequest) input() Input { return Input(r) }
