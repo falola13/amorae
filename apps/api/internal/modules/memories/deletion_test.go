@@ -30,6 +30,14 @@ func (r *fakeRepo) Create(context.Context, Memory, time.Time) (uuid.UUID, error)
 	return r.m.ID, nil
 }
 
+func (r *fakeRepo) Update(_ context.Context, coupleID, id uuid.UUID, in Input, _ time.Time) error {
+	if r.deleted || coupleID != r.m.CoupleID || id != r.m.ID {
+		return ErrNotFound
+	}
+	r.m.Title, r.m.Date, r.m.Location, r.m.Note = in.Title, in.Date, in.Location, in.Note
+	return nil
+}
+
 func (r *fakeRepo) SetPhoto(_ context.Context, _, _ uuid.UUID, photoID string, _ time.Time) error {
 	if r.refuse != nil {
 		return r.refuse

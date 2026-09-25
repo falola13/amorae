@@ -15,6 +15,8 @@ import (
 type service interface {
 	List(ctx context.Context, userID uuid.UUID) ([]Entry, error)
 	Add(ctx context.Context, userID uuid.UUID, tag, text string) (Entry, error)
+	Update(ctx context.Context, userID, id uuid.UUID, tag, text string) (Entry, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 }
 
 type Handler struct {
@@ -28,6 +30,8 @@ func NewHandler(svc service) *Handler {
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /journal", http.HandlerFunc(h.list))
 	r.HandleAuthed("POST /journal", http.HandlerFunc(h.add))
+	r.HandleAuthed("PATCH /journal/{id}", http.HandlerFunc(h.update))
+	r.HandleAuthed("DELETE /journal/{id}", http.HandlerFunc(h.delete))
 }
 
 // The shape in apps/web/src/lib/api/types.ts.
@@ -89,6 +93,36 @@ func (h *Handler) add(w http.ResponseWriter, r *http.Request) {
 	httpx.Data(w, http.StatusCreated, toDTO(e))
 }
 
+func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := callerAndEntry(w, r)
+	if !ok {
+		return
+	}
+	var req addRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	e, err := h.svc.Update(r.Context(), userID, id, req.Tag, req.Text)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, toDTO(e))
+}
+
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := callerAndEntry(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(r.Context(), userID, id); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
+}
+
 func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	userID, ok := authctx.UserID(r.Context())
 	if !ok {
@@ -96,4 +130,17 @@ func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 		return uuid.UUID{}, false
 	}
 	return userID, true
+}
+
+func callerAndEntry(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return uuid.UUID{}, uuid.UUID{}, false
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		httpx.Error(w, r, ErrNotFound)
+		return uuid.UUID{}, uuid.UUID{}, false
+	}
+	return userID, id, true
 }

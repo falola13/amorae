@@ -16,6 +16,7 @@ import (
 type service interface {
 	List(ctx context.Context, userID uuid.UUID) ([]Memory, error)
 	Create(ctx context.Context, userID uuid.UUID, in Input) (Memory, error)
+	Update(ctx context.Context, userID, id uuid.UUID, in Input) (Memory, error)
 	PhotoTicket(ctx context.Context, userID, id uuid.UUID) (photos.Ticket, error)
 	AttachPhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error)
 	RemovePhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error)
@@ -34,6 +35,7 @@ func NewHandler(svc service) *Handler {
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /memories", http.HandlerFunc(h.list))
 	r.HandleAuthed("POST /memories", http.HandlerFunc(h.create))
+	r.HandleAuthed("PUT /memories/{id}", http.HandlerFunc(h.update))
 	// The browser uploads straight to Cloudinary; this only signs permission
 	// and then records that it happened (docs/API.md).
 	r.HandleAuthed("POST /memories/{id}/photo/ticket", http.HandlerFunc(h.photoTicket))
@@ -77,6 +79,20 @@ type createRequest struct {
 	HasPhoto bool `json:"has_photo"`
 }
 
+// input turns the wire shape into an Input, parsing the date if one was sent. Used by both create and update.
+func (req createRequest) input() (Input, error) {
+	in := Input{Title: req.Title, Location: req.Location, Note: req.Note}
+	if req.Date == "" {
+		return in, nil
+	}
+	date, err := time.Parse(time.DateOnly, req.Date)
+	if err != nil {
+		return Input{}, apperr.Validation(map[string]string{"date": "Pick a date."})
+	}
+	in.Date = date
+	return in, nil
+}
+
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	userID, ok := caller(w, r)
 	if !ok {
@@ -104,15 +120,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, r, err)
 		return
 	}
-
-	in := Input{Title: req.Title, Location: req.Location, Note: req.Note}
-	if req.Date != "" {
-		date, err := time.Parse(time.DateOnly, req.Date)
-		if err != nil {
-			httpx.Error(w, r, apperr.Validation(map[string]string{"date": "Pick a date."}))
-			return
-		}
-		in.Date = date
+	in, err := req.input()
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
 	}
 
 	m, err := h.svc.Create(r.Context(), userID, in)
@@ -121,6 +132,30 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.Data(w, http.StatusCreated, toDTO(m, h.svc.PhotoURL(m)))
+}
+
+func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := callerAndMemory(w, r)
+	if !ok {
+		return
+	}
+	var req createRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	in, err := req.input()
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	m, err := h.svc.Update(r.Context(), userID, id, in)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, toDTO(m, h.svc.PhotoURL(m)))
 }
 
 func (h *Handler) photoTicket(w http.ResponseWriter, r *http.Request) {
