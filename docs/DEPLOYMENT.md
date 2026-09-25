@@ -115,9 +115,23 @@ request, so nothing here has to stay awake.
    An application with its own connection pool does not need a pooler as
    well. Through one, pgx's cached prepared statements collide as server
    connections are handed between clients — `prepared statement name is
-   already in use`, intermittently, in production only. The code now drops to
-   an uncached exec mode when it detects a pooler, so the pooled URL is slow
-   rather than broken; the direct URL is still the right one.
+   already in use`, intermittently, in production only.
+
+   **Use the direct URL. The pooled one does not work.** An earlier note here
+   said the code dropped to an uncached exec mode so that the pooled URL was
+   "slow rather than broken". That was wrong, and believing it cost a second
+   outage on 2026-09-25: the mode it drops to sends two protocol exchanges,
+   and a transaction pooler may answer them from different servers, so a Bind
+   arrives at a backend holding somebody else's statement — `bind message
+   supplies 1 parameters, but prepared statement "" requires 3`. Session
+   lookup is one of those queries, so every signed-in request failed.
+
+   The API now warns at startup when it sees a pooler, because both times the
+   first sign of this was a 500 rather than a line in a log. Making the pooled
+   URL genuinely work is possible — single-exchange exec modes survive a
+   pooler, and they can carry a uuid array once it is passed as strings — but
+   it is not done, because the direct endpoint is the right answer for an
+   application that already pools.
 
    From your laptop:
 

@@ -49,28 +49,37 @@ func Connect(ctx context.Context, url string, maxConns int32) (*DB, error) {
 	// PgBouncer generally — hands the same server connection to different
 	// clients between statements, so a name one client prepared turns up
 	// already taken for the next: "prepared statement name is already in use"
-	// (SQLSTATE 08P01). It appears only when connections are reused, which
-	// means it works in testing and fails in production, occasionally.
+	// (SQLSTATE 08P01).
 	//
-	// DescribeExec asks the server what the parameters are and then executes,
-	// using unnamed statements — so nothing is cached under a name that
-	// another client can collide with, and pgx still learns each parameter's
-	// type.
-	//
-	// It must be DescribeExec and not Exec. Exec skips the asking, which
-	// leaves pgx guessing how to encode arguments from their Go types alone:
-	// fine for a string, impossible for a []uuid.UUID passed to `= ANY($1)`,
-	// where it gives up with "unable to encode ... for unknown type (OID 0)".
-	// That took the events screen down in production for the length of time
-	// it took somebody to read a log. The cost here is one extra round trip
-	// per query, which next to the database is worth less than a millisecond.
-	//
-	// An application with its own pool does not need a pooler as well, so the
-	// better answer is still the direct endpoint — this is so that choosing
-	// the other one is slower rather than broken.
+	// This helps and does not cure. Read the next comment before trusting it.
 	if isTransactionPooler(url, cfg.ConnConfig.Host) {
 		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
 	}
+
+	// DescribeExec is not safe behind a transaction pooler either, and saying
+	// otherwise here cost a second outage (2026-09-25). It sends two protocol
+	// exchanges — Parse+Describe+Sync, then Bind+Execute+Sync — and a pooler
+	// is free to hand those to different backends. The Bind then lands on a
+	// server whose unnamed statement belongs to somebody else's query:
+	// "bind message supplies 1 parameters, but prepared statement \"\" requires 3".
+	// Every signed-in request failed, because session lookup is one of them.
+	//
+	// The modes that survive a pooler send one exchange, and neither can
+	// encode a []uuid.UUID without asking the server what the parameter is.
+	// Measured against Postgres rather than reasoned about (see
+	// pooler_query_test.go):
+	//
+	//	Exec           + []uuid.UUID   unable to encode ... unknown type (OID 0)
+	//	SimpleProtocol + []uuid.UUID   the same
+	//	Exec           + []string      works
+	//	SimpleProtocol + []string      works
+	//
+	// So a pooler can be made to work, by using Exec and passing uuid arrays
+	// as strings at the six `= ANY($1)` call sites. That work is not done,
+	// because the answer for this application is the other URL: it has its
+	// own connection pool and does not need a second one. The line logged at
+	// startup says so, loudly, rather than leaving it to be discovered in
+	// production a third time.
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -86,6 +95,17 @@ func Connect(ctx context.Context, url string, maxConns int32) (*DB, error) {
 	}
 
 	return &DB{pool: pool}, nil
+}
+
+// IsTransactionPooler reports whether this URL goes through a transaction
+// pooler, for callers that want to say something about it before serving.
+// A URL that will not parse is not a pooler; Connect reports that properly.
+func IsTransactionPooler(url string) bool {
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return false
+	}
+	return isTransactionPooler(url, cfg.ConnConfig.Host)
 }
 
 // isTransactionPooler reports whether this connection goes through one,

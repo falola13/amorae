@@ -25,6 +25,7 @@ import (
 
 	"github.com/falola13/amorae/apps/api/internal/app"
 	"github.com/falola13/amorae/apps/api/internal/config"
+	"github.com/falola13/amorae/apps/api/internal/platform/database"
 	"github.com/falola13/amorae/apps/api/internal/platform/logger"
 	"github.com/falola13/amorae/apps/api/migrations"
 )
@@ -66,6 +67,16 @@ func run() error {
 		log.Warn(notice)
 	} else {
 		log.Info(notice)
+	}
+
+	// The same class of problem as the schema flag above: a configuration
+	// that is wrong in a way nothing says out loud, and that fails
+	// intermittently in production only. Twice now.
+	if database.IsTransactionPooler(cfg.DatabaseURL) {
+		log.Warn(`DATABASE_URL goes through a transaction pooler. pgx's protocol exchanges ` +
+			`can be split across backends there, which fails under connection reuse ` +
+			`(SQLSTATE 08P01) and so passes testing. Use the direct endpoint: the same ` +
+			`host without "-pooler" (docs/DEPLOYMENT.md)`)
 	}
 
 	if cfg.MigrateOnStart {
