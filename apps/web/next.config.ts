@@ -12,7 +12,14 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+// The one value that *should* be baked in: which deploy this bundle came from.
+// An open app compares it with /api/version to learn a newer deploy exists —
+// sw.js only changes when its VERSION is bumped by hand, so a new worker is
+// not a signal that the app changed.
+const buildId = process.env.VERCEL_GIT_COMMIT_SHA ?? `local-${Date.now()}`;
+
 const nextConfig: NextConfig = {
+  env: { NEXT_PUBLIC_BUILD_ID: buildId },
   // Required by the Dockerfile: produces .next/standalone, a minimal
   // server.js plus only the node_modules files each page actually needs.
   output: "standalone",
