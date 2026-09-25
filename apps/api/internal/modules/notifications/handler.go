@@ -43,6 +43,11 @@ type prefsDTO struct {
 	Goals          bool   `json:"goals"`
 	Challenges     bool   `json:"challenges"`
 	PrayerAnswered bool   `json:"prayer_answered"`
+	Together       bool   `json:"together"`
+	QuietFrom      string `json:"quiet_from"`
+	QuietTo        string `json:"quiet_to"`
+	DailyCap       int    `json:"daily_cap"`
+	MaxDailyCap    int    `json:"max_daily_cap"`
 }
 
 func toDTO(p Preferences) prefsDTO {
@@ -57,6 +62,11 @@ func toDTO(p Preferences) prefsDTO {
 		Goals:          p.Goals,
 		Challenges:     p.Challenges,
 		PrayerAnswered: p.PrayerAnswered,
+		Together:       p.Together,
+		QuietFrom:      p.QuietFrom,
+		QuietTo:        p.QuietTo,
+		DailyCap:       p.DailyCap,
+		MaxDailyCap:    maxDailyCap,
 	}
 }
 
@@ -73,6 +83,10 @@ type patchRequest struct {
 	Goals          *bool   `json:"goals"`
 	Challenges     *bool   `json:"challenges"`
 	PrayerAnswered *bool   `json:"prayer_answered"`
+	Together       *bool   `json:"together"`
+	QuietFrom      *string `json:"quiet_from"`
+	QuietTo        *string `json:"quiet_to"`
+	DailyCap       *int    `json:"daily_cap"`
 }
 
 // The browser's own PushSubscription.toJSON(), posted as it comes.

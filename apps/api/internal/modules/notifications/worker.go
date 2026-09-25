@@ -406,6 +406,9 @@ type WorkerRepository interface {
 	ImportantDates(ctx context.Context) ([]ImportantDateCandidate, error)
 	RecentlyWritten(ctx context.Context, since time.Time) ([]WrittenCandidate, error)
 	LiveChallenges(ctx context.Context) ([]ChallengeCandidate, error)
+	BothMarkedDays(ctx context.Context, since time.Time) ([]BothMarkedCandidate, error)
+	BothPrayedWeeks(ctx context.Context, now, since time.Time) ([]BothPrayedCandidate, error)
+	BudgetFor(ctx context.Context, userID uuid.UUID, now time.Time) (Budget, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
@@ -491,11 +494,53 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 		}
 	}
 
+	bothMarked, err := w.repo.BothMarkedDays(ctx, now.Add(-mutualGrace))
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range bothMarked {
+		if n, ok := ForBothMarked(c); ok {
+			due = append(due, n)
+		}
+	}
+
+	bothPrayed, err := w.repo.BothPrayedWeeks(ctx, now, now.Add(-mutualGrace))
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range bothPrayed {
+		if n, ok := ForBothPrayed(c); ok {
+			due = append(due, n)
+		}
+	}
+
+	// One budget per person per tick, so a tick cannot spend more than a day
+	// allows by asking the database the same question repeatedly.
+	budgets := map[uuid.UUID]Budget{}
+
 	sent := 0
 	for _, n := range due {
 		if ctx.Err() != nil {
 			return sent, ctx.Err()
 		}
+
+		budget, known := budgets[n.UserID]
+		if !known {
+			budget, err = w.repo.BudgetFor(ctx, n.UserID, now)
+			if err != nil {
+				w.log.Error("reading a notification budget", "user", n.UserID, "error", err)
+				continue
+			}
+			budgets[n.UserID] = budget
+		}
+		if send, keep := budget.Allows(n.Kind, now); !send {
+			// Nothing is recorded either way. A kept one is still due on the
+			// next tick, once the window opens or the day turns over; a
+			// perishable one stops being due by itself.
+			w.log.Info("holding a notification", "kind", n.Kind, "user", n.UserID, "keep", keep)
+			continue
+		}
+
 		ok, err := w.deliver(ctx, n, now)
 		if err != nil {
 			w.log.Error("sending a notification", "kind", n.Kind, "user", n.UserID, "error", err)
@@ -503,6 +548,8 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 		}
 		if ok {
 			sent++
+			budget.SentToday++
+			budgets[n.UserID] = budget
 		}
 	}
 	return sent, nil

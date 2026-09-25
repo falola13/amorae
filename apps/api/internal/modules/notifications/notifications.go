@@ -30,6 +30,14 @@ type Preferences struct {
 	Goals          bool
 	Challenges     bool
 	PrayerAnswered bool
+	// When the second of the two of you finishes something.
+	Together bool
+	// Quiet hours in the person's own zone, as HH:MM. Both empty means off;
+	// the window may wrap midnight.
+	QuietFrom string
+	QuietTo   string
+	// Most notifications in one local day. 0 means no limit.
+	DailyCap int
 }
 
 // Defaults are what someone gets before ever opening the screen. Goals and
@@ -46,8 +54,21 @@ func Defaults() Preferences {
 		Goals:          false,
 		Challenges:     false,
 		PrayerAnswered: true,
+		Together:       true,
+		QuietFrom:      "22:00",
+		QuietTo:        "07:00",
+		DailyCap:       defaultDailyCap,
 	}
 }
+
+// defaultDailyCap is what an unconfigured person gets. Six is enough for a
+// week starting, an event, and a few things a partner did, and not enough
+// for a day of them to become background noise.
+const defaultDailyCap = 6
+
+// maxDailyCap is the largest number the screen will accept. Higher than this
+// is the same as no limit, so the screen says so instead.
+const maxDailyCap = 20
 
 // Patch changes a subset of settings; a nil field is left alone.
 type Patch struct {
@@ -61,6 +82,10 @@ type Patch struct {
 	Goals          *bool
 	Challenges     *bool
 	PrayerAnswered *bool
+	Together       *bool
+	QuietFrom      *string
+	QuietTo        *string
+	DailyCap       *int
 }
 
 var clockTime = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -86,6 +111,46 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.Goals, patch.Goals)
 	setBool(&p.PrayerAnswered, patch.PrayerAnswered)
 	setBool(&p.Challenges, patch.Challenges)
+	setBool(&p.Together, patch.Together)
+
+	if patch.QuietFrom != nil || patch.QuietTo != nil {
+		from, to := p.QuietFrom, p.QuietTo
+		if patch.QuietFrom != nil {
+			from = strings.TrimSpace(*patch.QuietFrom)
+		}
+		if patch.QuietTo != nil {
+			to = strings.TrimSpace(*patch.QuietTo)
+		}
+		// One without the other is not a window, so it is refused rather
+		// than guessed at.
+		if (from == "") != (to == "") {
+			return Preferences{}, apperr.Validation(map[string]string{
+				"quiet_hours": "Set both a start and an end, or neither.",
+			})
+		}
+		for field, value := range map[string]string{"quiet_from": from, "quiet_to": to} {
+			if value != "" && !clockTime.MatchString(value) {
+				return Preferences{}, apperr.Validation(map[string]string{
+					field: "Use a time like 22:00.",
+				})
+			}
+		}
+		if from != "" && from == to {
+			return Preferences{}, apperr.Validation(map[string]string{
+				"quiet_hours": "Pick two different times.",
+			})
+		}
+		p.QuietFrom, p.QuietTo = from, to
+	}
+
+	if patch.DailyCap != nil {
+		if *patch.DailyCap < 0 || *patch.DailyCap > maxDailyCap {
+			return Preferences{}, apperr.Validation(map[string]string{
+				"daily_cap": fmt.Sprintf("Pick a number between 0 and %d.", maxDailyCap),
+			})
+		}
+		p.DailyCap = *patch.DailyCap
+	}
 	return p, nil
 }
 
@@ -223,6 +288,8 @@ const (
 	KindGoal           = "goal"
 	KindChallenge      = "challenge"
 	KindPrayerAnswered = "prayer_answered"
+	KindBothPrayed     = "both_prayed"
+	KindBothMarked     = "both_marked"
 )
 
 // OccursOn reports whether a date recurs on the given day (same month and

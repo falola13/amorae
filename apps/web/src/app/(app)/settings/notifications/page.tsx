@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useCouple } from "@/features/couple/hooks";
 import { usePrefs, useSavePrefs } from "@/features/settings/hooks";
+import { time12 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { usePush } from "@/lib/pwa/push";
 import type { NotificationPrefs } from "@/lib/api/types";
@@ -24,6 +25,20 @@ import { QueryState, inPage } from "@/components/ui/query-state";
 type BoolKey = {
   [K in keyof NotificationPrefs]: NotificationPrefs[K] extends boolean ? K : never;
 }[keyof NotificationPrefs];
+
+const capOptions = (max: number) => [
+  { value: "0", label: "No limit" },
+  ...Array.from({ length: max }, (_, i) => ({
+    value: String(i + 1),
+    label: `${i + 1} a day`,
+  })),
+];
+
+function quietSentence(p: NotificationPrefs): string {
+  const cap = p.daily_cap === 0 ? "As many as there are" : `At most ${p.daily_cap} a day`;
+  if (!p.quiet_from || !p.quiet_to) return `${cap}, at any hour.`;
+  return `${cap}, and none between ${time12(p.quiet_from)} and ${time12(p.quiet_to)}.`;
+}
 
 export default function NotificationSettings() {
   const prefs = usePrefs();
@@ -119,10 +134,36 @@ export default function NotificationSettings() {
               {row(p, "appreciation", `Appreciation from ${partner}`)}
               {row(p, "journal", "Journal entries")}
               {row(p, "goals", "Goal updates")}
-              {row(p, "challenges", "Challenge reminders", true)}
+              {row(p, "challenges", "Challenge reminders")}
+              {row(p, "together", "When you both finish something", true)}
+            </Section>
+            <Section label="How much" className="mt-[22px]">
+              <PickRow
+                icon="moon"
+                label="Quiet from"
+                value={p.quiet_from}
+                type="time"
+                onChange={(v: string) => v && save.mutate({ quiet_from: v })}
+              />
+              <PickRow
+                icon="clock"
+                label="Quiet until"
+                value={p.quiet_to}
+                type="time"
+                onChange={(v: string) => v && save.mutate({ quiet_to: v })}
+              />
+              <PickRow
+                icon="bell"
+                label="Most in a day"
+                value={String(p.daily_cap)}
+                options={capOptions(p.max_daily_cap)}
+                onChange={(v: string) => save.mutate({ daily_cap: Number(v) })}
+                last
+              />
             </Section>
             <Para size="support" className="mb-4 mt-4">
-              One prayer reminder a day, and one before anything you&rsquo;ve planned.
+              {quietSentence(p)} Anything that can wait waits; a reminder whose moment has passed is
+              dropped rather than saved up.
             </Para>
           </Main>
         )}

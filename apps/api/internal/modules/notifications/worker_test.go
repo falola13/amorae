@@ -140,14 +140,23 @@ type fakeRepo struct {
 	dates      []ImportantDateCandidate
 	written    []WrittenCandidate
 	challenges []ChallengeCandidate
-	subs       []Subscription
-	claimed    map[string]bool
-	released   []string
-	removed    []string
-	sentTo     []string
+	bothMarked []BothMarkedCandidate
+	bothPrayed []BothPrayedCandidate
+	// Zero means an unconfigured person, who gets the defaults.
+	budget   Budget
+	subs     []Subscription
+	claimed  map[string]bool
+	released []string
+	removed  []string
+	sentTo   []string
 }
 
-func newFakeRepo() *fakeRepo { return &fakeRepo{claimed: map[string]bool{}} }
+func newFakeRepo() *fakeRepo {
+	return &fakeRepo{
+		claimed: map[string]bool{},
+		budget:  Budget{Prefs: Preferences{DailyCap: 0}, Timezone: "UTC"},
+	}
+}
 
 func (f *fakeRepo) CurrentWeekCandidates(context.Context, time.Time) ([]Candidate, error) {
 	return f.candidates, nil
@@ -163,6 +172,15 @@ func (f *fakeRepo) RecentlyWritten(context.Context, time.Time) ([]WrittenCandida
 }
 func (f *fakeRepo) LiveChallenges(context.Context) ([]ChallengeCandidate, error) {
 	return f.challenges, nil
+}
+func (f *fakeRepo) BothMarkedDays(context.Context, time.Time) ([]BothMarkedCandidate, error) {
+	return f.bothMarked, nil
+}
+func (f *fakeRepo) BothPrayedWeeks(context.Context, time.Time, time.Time) ([]BothPrayedCandidate, error) {
+	return f.bothPrayed, nil
+}
+func (f *fakeRepo) BudgetFor(_ context.Context, _ uuid.UUID, _ time.Time) (Budget, error) {
+	return f.budget, nil
 }
 func (f *fakeRepo) ClaimSend(_ context.Context, userID uuid.UUID, kind, key string, _ time.Time) (bool, error) {
 	k := userID.String() + kind + key

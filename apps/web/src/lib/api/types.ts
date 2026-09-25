@@ -206,6 +206,15 @@ export interface NotificationPrefs {
   goals: boolean;
   challenges: boolean;
   prayer_answered: boolean;
+  /** When the second of you finishes something you are both doing. */
+  together: boolean;
+  /** HH:MM in your own zone; both empty means no quiet hours. */
+  quiet_from: string;
+  quiet_to: string;
+  /** Most notifications in one day. 0 means no limit. */
+  daily_cap: number;
+  /** The largest cap the API will accept; read-only. */
+  max_daily_cap: number;
 }
 
 /** One row of "where you're signed in" (GET /v1/sessions), for your own account. */
