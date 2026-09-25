@@ -192,7 +192,7 @@
     --color-edge: #6a6055;
     --color-faint: #3a342d;
     --color-photo: #2a251f;
-  --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.04'/></svg>");
+    --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.04'/></svg>");
     --color-plum: #e0b4cd;
     --color-plum-dark: #efd2e2;
     --color-plum-tint: #3c2634;
