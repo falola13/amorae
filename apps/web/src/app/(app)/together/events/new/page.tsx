@@ -151,8 +151,9 @@ function EventComposer({
         noValidate
       >
         <BareInput
-          label="What would you like to do together?"
-          placeholder="Date night"
+          // "together" in the question would be wrong for a just-me plan.
+          label={kind === "mine" ? "What’s the plan?" : "What would you like to do together?"}
+          placeholder={kind === "mine" ? "Dentist, a work dinner…" : "Date night"}
           autoFocus={!editId}
           className="h-11 text-title"
           aria-invalid={!!errors.title}
