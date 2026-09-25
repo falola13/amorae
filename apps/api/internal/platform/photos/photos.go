@@ -141,8 +141,11 @@ func (s *Store) Destroy(ctx context.Context, publicID string) error {
 		// Uploaded as authenticated, so deleted as authenticated: the
 		// delivery type is part of which asset this names.
 		Type: "authenticated",
-		// Drop the CDN's copies too, or the picture keeps being served from
-		// the edge after it stops existing at the origin.
+		// Ask for the CDN's copies to go as well. Cloudinary does this in
+		// its own time, so an edge can still answer with a cached picture
+		// for a while after the original has stopped existing — which is
+		// why this asks rather than waits. The address is unguessable and
+		// only ever handed to the two people it belongs to.
 		Invalidate: cldapi.Bool(true),
 	})
 	if err != nil {
@@ -159,7 +162,7 @@ func (s *Store) Destroy(ctx context.Context, publicID string) error {
 	return nil
 }
 
-// URL is a delivery address for an authenticated asset.
+// URL is a delivery address for an authenticated asset, at a given version.
 //
 // Authenticated assets cannot be fetched by guessing a URL: the path carries
 // a signature over the transformation and the name. This app hands one out
@@ -172,7 +175,16 @@ func (s *Store) Destroy(ctx context.Context, publicID string) error {
 //
 // f_auto and q_auto re-encode on delivery, which also drops whatever EXIF and
 // GPS the camera wrote into the original (Q-06 again).
-func (s *Store) URL(publicID string) (string, error) {
+//
+// The version is the `v123` in the path, and it is what makes replacing a
+// photo work. Every picture for a memory is stored under the same derived
+// name, so a replacement has the same address as the picture before it — and
+// the CDN, holding a copy of that address, went on serving the old one.
+// Changing a photo appeared to do nothing, and a photo removed and replaced
+// came back. Cloudinary ignores this value when finding the asset and the
+// signature does not cover it: its whole job is to be different when the
+// picture is different, so the edge has to go and ask.
+func (s *Store) URL(publicID string, version int64) (string, error) {
 	if s == nil {
 		return "", ErrNotConfigured
 	}
@@ -188,6 +200,7 @@ func (s *Store) URL(publicID string) (string, error) {
 	}
 	img.DeliveryType = cldapi.Authenticated
 	img.Transformation = "f_auto,q_auto"
+	img.Version = int(version)
 
 	out, err := img.String()
 	if err != nil {

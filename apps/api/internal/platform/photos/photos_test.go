@@ -64,7 +64,7 @@ func TestStore_NotConfiguredAnswersRatherThanPanics(t *testing.T) {
 	if _, err := s.Ticket("x", time.Now()); err != ErrNotConfigured {
 		t.Errorf("Ticket err = %v", err)
 	}
-	if _, err := s.URL("x"); err != ErrNotConfigured {
+	if _, err := s.URL("x", 1); err != ErrNotConfigured {
 		t.Errorf("URL err = %v", err)
 	}
 }
@@ -114,7 +114,7 @@ func TestTicket_SignsExactlyWhatTheBrowserSendsBack(t *testing.T) {
 
 func TestURL_IsSignedAndStripsCameraMetadata(t *testing.T) {
 	s := New("demo", "1234", "abcd")
-	got, err := s.URL("amorae/couple/memories/one")
+	got, err := s.URL("amorae/couple/memories/one", 1790300717)
 	if err != nil {
 		t.Fatalf("URL: %v", err)
 	}
@@ -128,5 +128,25 @@ func TestURL_IsSignedAndStripsCameraMetadata(t *testing.T) {
 	// (Q-06).
 	if !strings.Contains(got, "f_auto") {
 		t.Errorf("url = %q, want the re-encoding that strips metadata", got)
+	}
+	// Every photo for a memory is stored under the same derived name, so
+	// without this the CDN answers a replacement with the picture before it.
+	if !strings.Contains(got, "/v1790300717/") {
+		t.Errorf("url = %q, want the version that makes a new photo a new address", got)
+	}
+}
+
+func TestURL_ChangesWhenThePhotoDoes(t *testing.T) {
+	s := New("demo", "1234", "abcd")
+	before, err := s.URL("amorae/couple/memories/one", 1790300717)
+	if err != nil {
+		t.Fatalf("URL: %v", err)
+	}
+	after, err := s.URL("amorae/couple/memories/one", 1790300999)
+	if err != nil {
+		t.Fatalf("URL: %v", err)
+	}
+	if before == after {
+		t.Error("replacing a photo left the address alone, so the CDN would keep the old one")
 	}
 }

@@ -22,7 +22,7 @@ type Repository interface {
 // pretending.
 type Photos interface {
 	Ticket(publicID string, at time.Time) (photos.Ticket, error)
-	URL(publicID string) (string, error)
+	URL(publicID string, version int64) (string, error)
 	Destroy(ctx context.Context, publicID string) error
 }
 
@@ -148,7 +148,10 @@ func (s *Service) PhotoURL(m Memory) string {
 	if s.photos == nil || !m.HasPhoto() {
 		return ""
 	}
-	url, err := s.photos.URL(m.PhotoID)
+	// Versioned by when the memory last changed, which is when the photo was
+	// attached or replaced. Same picture, same address; new picture, new
+	// address, and nothing in between serves the old one.
+	url, err := s.photos.URL(m.PhotoID, m.UpdatedAt.Unix())
 	if err != nil {
 		return ""
 	}

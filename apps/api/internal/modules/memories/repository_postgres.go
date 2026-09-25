@@ -23,7 +23,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 // Every method takes a couple id, never a user id: another couple's memory is
 // simply not found (DEC-19).
 
-const columns = `id, couple_id, title, date, COALESCE(location, ''), COALESCE(note, ''), COALESCE(photo_id, '')`
+const columns = `id, couple_id, title, date, COALESCE(location, ''), COALESCE(note, ''), COALESCE(photo_id, ''), updated_at`
 
 // List is the couple's memories, newest first — the order an archive is read
 // in, and the order the screen wants before it groups them by month.
@@ -43,7 +43,7 @@ func (r *PostgresRepository) List(ctx context.Context, coupleID uuid.UUID) ([]Me
 	for rows.Next() {
 		var m Memory
 		if err := rows.Scan(&m.ID, &m.CoupleID, &m.Title, &m.Date,
-			&m.Location, &m.Note, &m.PhotoID); err != nil {
+			&m.Location, &m.Note, &m.PhotoID, &m.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning memory: %w", err)
 		}
 		out = append(out, m)
@@ -61,7 +61,7 @@ func (r *PostgresRepository) ByID(ctx context.Context, coupleID, id uuid.UUID) (
 		FROM memories
 		WHERE couple_id = $1 AND id = $2
 	`, coupleID, id).Scan(&m.ID, &m.CoupleID, &m.Title, &m.Date,
-		&m.Location, &m.Note, &m.PhotoID)
+		&m.Location, &m.Note, &m.PhotoID, &m.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Memory{}, ErrNotFound

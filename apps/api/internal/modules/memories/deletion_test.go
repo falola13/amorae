@@ -54,7 +54,7 @@ type fakePhotos struct {
 }
 
 func (p *fakePhotos) Ticket(string, time.Time) (photos.Ticket, error) { return photos.Ticket{}, nil }
-func (p *fakePhotos) URL(string) (string, error)                      { return "https://example.test/p", nil }
+func (p *fakePhotos) URL(string, int64) (string, error)               { return "https://example.test/p", nil }
 
 func (p *fakePhotos) Destroy(_ context.Context, publicID string) error {
 	if p.refuse != nil {
