@@ -3,8 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { errorBody } from "@/lib/api/envelope";
 
 // Scripture lookup, proxied rather than called from the browser so bible-api.com
-// never learns whose IP is praying about what. WEB is public domain, so the text
-// can be stored on a prayer point without a licence.
+// never learns whose IP is praying about what.
+
+// KJV: the phrasing this couple's churches actually use ("The LORD is my
+// shepherd", not WEB's "Yahweh"), and public domain, which is what makes the
+// text storable on a prayer point rather than merely displayable.
+const TRANSLATION = "kjv";
+const TRANSLATION_NAME = "King James Version";
 
 // Cached hard: the text of Romans 8:28 is not going to change.
 export const revalidate = 604800;
@@ -33,7 +38,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const target = `${SOURCE}/${encodeURIComponent(ref)}?translation=web`;
+  const target = `${SOURCE}/${encodeURIComponent(ref)}?translation=${TRANSLATION}`;
   let res: Response;
   try {
     res = await fetch(target, {
@@ -74,7 +79,7 @@ export async function GET(request: NextRequest) {
       reference: body.reference ?? ref,
       // Verses arrive with their line breaks; a prayer point wants a sentence.
       text: body.text.replace(/\s+/g, " ").trim(),
-      translation: body.translation_name ?? "World English Bible",
+      translation: body.translation_name ?? TRANSLATION_NAME,
     },
   });
 }
