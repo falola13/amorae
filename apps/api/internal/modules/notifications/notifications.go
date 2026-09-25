@@ -368,6 +368,16 @@ const (
 	KindEventAdded = "event_added"
 )
 
+// AllKinds is every kind there is. A kind missing from here is a kind no
+// test can reason about, so adding one means adding it here too — which
+// TestEveryKindHasBeenDecidedAbout then insists somebody has an opinion on.
+var AllKinds = []string{
+	KindNewWeek, KindWeekPublished, KindPrayerReminder, KindEventReminder,
+	KindImportantDate, KindAppreciation, KindJournal, KindGoal, KindChallenge,
+	KindPrayerAnswered, KindBothPrayed, KindBothMarked, KindMemoryOnThisDay,
+	KindEventOver, KindGoalCrossing, KindEventAdded, KindNudge,
+}
+
 // OccursOn reports whether a date recurs on the given day (same month and
 // day, any year); Feb 29 anniversaries fall back to Feb 28 in non-leap years.
 func OccursOn(date, day time.Time) bool {
