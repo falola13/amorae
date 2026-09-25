@@ -234,3 +234,44 @@ func (r *PostgresRepository) MemoriesOnThisDay(ctx context.Context) ([]MemoryAnn
 	}
 	return out, nil
 }
+
+// EndedEvents finds events that have just been and gone, so the two of them
+// can be asked whether it is worth keeping. Unlike the reminder query this
+// does not care whether a reminder was set: not wanting to be told before
+// says nothing about after.
+func (r *PostgresRepository) EndedEvents(ctx context.Context, now time.Time) ([]EventCandidate, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT u.id, e.id, e.title, c.timezone, e.date,
+		       COALESCE(to_char(e.start_time, 'HH24:MI'), ''),
+		       COALESCE(to_char(e.end_time, 'HH24:MI'), ''),
+		       COALESCE(e.reminder, ''),
+		       COALESCE(p.event_reminders, true)
+		FROM events e
+		JOIN couples c ON c.id = e.couple_id
+		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN notification_preferences p ON p.user_id = u.id
+		WHERE c.dissolved_at IS NULL
+		  AND NOT e.done
+		  AND e.date BETWEEN ($1 AT TIME ZONE c.timezone)::date - 2
+		                 AND ($1 AT TIME ZONE c.timezone)::date
+	`, now)
+	if err != nil {
+		return nil, fmt.Errorf("finding events that are over: %w", err)
+	}
+	defer rows.Close()
+
+	var out []EventCandidate
+	for rows.Next() {
+		var c EventCandidate
+		if err := rows.Scan(&c.UserID, &c.EventID, &c.Title, &c.Timezone, &c.Date,
+			&c.StartTime, &c.EndTime, &c.Reminder, &c.Prefs.EventReminders); err != nil {
+			return nil, fmt.Errorf("scanning an event that is over: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding events that are over: %w", err)
+	}
+	return out, nil
+}

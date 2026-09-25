@@ -364,6 +364,7 @@ type EventCandidate struct {
 	Date     time.Time
 	// "" when the event has no time — a whole day, not a moment.
 	StartTime string
+	EndTime   string
 	Reminder  string
 	Prefs     Preferences
 }
@@ -408,6 +409,7 @@ type WorkerRepository interface {
 	BothMarkedDays(ctx context.Context, since time.Time) ([]BothMarkedCandidate, error)
 	BothPrayedWeeks(ctx context.Context, now, since time.Time) ([]BothPrayedCandidate, error)
 	MemoriesOnThisDay(ctx context.Context) ([]MemoryAnniversaryCandidate, error)
+	EndedEvents(ctx context.Context, now time.Time) ([]EventCandidate, error)
 	BudgetFor(ctx context.Context, userID uuid.UUID, now time.Time) (Budget, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
@@ -510,6 +512,16 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	}
 	for _, c := range bothPrayed {
 		if n, ok := ForBothPrayed(c); ok {
+			due = append(due, n)
+		}
+	}
+
+	ended, err := w.repo.EndedEvents(ctx, now)
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range ended {
+		if n, ok := ForEventOver(c, now); ok {
 			due = append(due, n)
 		}
 	}
