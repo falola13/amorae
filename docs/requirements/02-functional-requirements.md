@@ -2408,8 +2408,8 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-PRAY-008 | G-02 | `GET /v1/prayers/weeks/:id` | UI only | Screen built; no endpoint to test against |
 | FR-PRAY-009 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
 | FR-PRAY-010 | G-02 | TBD — Blocked by Q-16 | Not started | None yet |
-| FR-PRAY-011 | G-02 | `PUT`/`DELETE /v1/prayers/points/:id/answered` | Implemented | Go unit tests; API round-trip and browser check 2026-09-25 |
-| FR-PRAY-012 | G-02 | `GET /v1/prayers/answered` | Implemented | Go unit tests; API round-trip and browser check 2026-09-25 |
+| FR-PRAY-011 | G-02 | `PUT`/`DELETE /v1/prayers/points/:id/answered` | Implemented | Go unit tests; full local round trip 2026-09-25 — mark, a note edit that leaves `answered_at` where it was, an over-long note refused rather than truncated, unmark, and the whole flow through the sheet. In production the schema is live and Prayers renders; marking one there is not yet exercised |
+| FR-PRAY-012 | G-02 | `GET /v1/prayers/answered` | Implemented | Go unit tests; list verified locally against the API and in the browser 2026-09-25, with and without notes. Production schema is live; the screen has not been opened there with data in it |
 | FR-EVT-001 | G-03 | `POST /v1/events` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-EVT-002 | G-03 | `GET /v1/events` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
 | FR-EVT-003 | G-03 | `PATCH /v1/events/:id` | Implemented | Go unit tests; 27-check API pass and browser check 2026-09-24 |
@@ -2433,7 +2433,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-APPR-003 | G-04 | `DELETE /v1/appreciations/:id` | Implemented | Go unit tests; API pass incl. the closed window, and the toast's Undo driven in the browser 2026-09-24 |
 | FR-MEM-001 | G-04 | `POST /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
 | FR-MEM-002 | G-04 | `GET /v1/memories` | Implemented | Go unit tests; 21-check API pass and browser check 2026-09-24 |
-| FR-MEM-003 | G-04 | `POST /v1/memories/{id}/photo/ticket`, `PUT`/`DELETE /v1/memories/{id}/photo` | Implemented | Go unit tests incl. a signature pinned to Cloudinary's published vector |
+| FR-MEM-003 | G-04 | `POST /v1/memories/{id}/photo/ticket`, `PUT`/`DELETE /v1/memories/{id}/photo` | Implemented | Go unit tests incl. a signature pinned to Cloudinary's published vector; verified in production 2026-09-25 — a real photo uploaded from a phone straight to Cloudinary and rendered back through its signed URL, which is the whole chain end to end |
 | FR-DATE-001 | G-04 | `POST /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |
 | FR-DATE-002 | G-04 | `GET /v1/milestones` | Implemented | Go unit tests; 20-check API pass and browser check 2026-09-24 |
 | FR-DATE-003 | G-04 | Worker (`ForImportantDates`) | Implemented | Go unit tests; worker run against the database 2026-09-24 |
@@ -2443,7 +2443,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-NOTF-004 | G-03 | `cmd/worker` — deletes on 404/410 from the push service | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-NOTF-005 | G-05 | — (notification copy) | Not started | None yet |
 | FR-NOTF-006 | G-03 | Onboarding and settings screens | Implemented | Browser check 2026-09-24: both paths explain before asking |
-| FR-NOTF-008 | G-03 | `cmd/worker` — `prayer_answered`, off the `RecentlyWritten` path | Implemented | Go unit tests incl. an FR-NOTF-005.AC1 assertion; worker discovery SQL run against Postgres 2026-09-25 |
+| FR-NOTF-008 | G-03 | `cmd/worker` — `prayer_answered`, off the `RecentlyWritten` path | Implemented | Go unit tests incl. an FR-NOTF-005.AC1 assertion; worker discovery SQL run against Postgres 2026-09-25, confirming it addresses the partner and not the marker, and that undoing the mark removes the candidate entirely. Delivery is unverified: no push of this kind has yet left the worker, because the database it was tested against had no subscriptions |
 | FR-NOTF-007 | G-03 | `cmd/worker` — hourly tick, `notification_sends` for exactly-once | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-PWA-001 | G-05 | — (web manifest) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-002 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
