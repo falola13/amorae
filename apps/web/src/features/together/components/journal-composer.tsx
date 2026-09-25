@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import type { z } from "zod";
 
+import { PartnerNotice } from "@/features/couple/components/partner-notice";
 import { useAddJournal, useDeleteJournal, useUpdateJournal } from "@/features/together/hooks";
 import { journalSchema } from "@/lib/api/schemas";
 import type { JournalEntry } from "@/lib/api/types";
@@ -117,6 +118,8 @@ export function JournalComposer({
           error={errors.text?.message}
           {...register("text")}
         />
+        {/* An edit isn't announced again; only a new entry is. */}
+        {entry ? null : <PartnerNotice />}
         <div className="flex flex-col gap-1">
           <Button type="submit" loading={add.isPending || update.isPending}>
             {entry ? "Save changes" : "Save to our journal"}

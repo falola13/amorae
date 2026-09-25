@@ -1,9 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Alert, Button, Field, Para, Sheet } from "@/components/ui/kit";
+import { ShowButton } from "@/components/ui/onboarding-bits";
 import { GENERIC_ERROR_MESSAGE } from "@/lib/api/envelope";
 import { isApiError } from "@/lib/api/errors";
 import {
@@ -27,6 +29,7 @@ export function DeleteAccountSheet({
   onDeleted: () => Promise<void> | void;
 }) {
   const del = useDeleteAccount();
+  const [show, setShow] = useState(false);
   const {
     register,
     handleSubmit,
@@ -81,11 +84,14 @@ export function DeleteAccountSheet({
           error={errors.confirm?.message}
           {...register("confirm")}
         />
+        {/* Every other password field can be shown; this one, before the one
+            step that can't be undone, least of all should be typed blind. */}
         <Field
           label="Current password"
-          type="password"
+          type={show ? "text" : "password"}
           autoComplete="current-password"
           error={errors.current_password?.message}
+          trailing={<ShowButton shown={show} onClick={() => setShow((s) => !s)} />}
           {...register("current_password")}
         />
         <div className="flex flex-col gap-1">

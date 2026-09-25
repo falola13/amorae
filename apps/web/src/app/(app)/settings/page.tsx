@@ -126,7 +126,8 @@ export default function SettingsPage() {
             value={install.standalone ? "Installed" : "Not yet"}
             href={routes.install}
           />
-          <SettingRow icon="lock" label="Privacy" value="Coming soon" chevron={false} last />
+          {/* Was a "Coming soon" row that went nowhere; the policy is what exists. */}
+          <SettingRow icon="lock" label="Privacy" href={routes.privacy} last />
         </Section>
         <Section label="Account" className="mt-[26px]">
           {me ? (

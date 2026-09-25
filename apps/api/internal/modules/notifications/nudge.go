@@ -30,35 +30,37 @@ var (
 		"They’ve had their notifications for today. Try again tomorrow.")
 )
 
-// Nudge tells the other partner that this one is thinking about them.
+// Nudge tells the other partner that this one is thinking about them, and
+// says how many of today's are left, so the sender learns the limit before
+// meeting it rather than on the refusal.
 //
 // Sent now rather than on the next tick: five minutes late is a different
 // thought. And refused rather than queued when it would land badly — being
 // told they are asleep is a kinder answer than a notification at 3am, or
 // than silence that looks like it worked.
-func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID) error {
+func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID) (int, error) {
 	partnerID, senderName, err := s.repo.NudgeTarget(ctx, senderID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if partnerID == uuid.Nil {
-		return ErrNoPartner
+		return 0, ErrNoPartner
 	}
 
 	now := s.now()
 	budget, err := s.repo.BudgetFor(ctx, partnerID, now)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	zone, zerr := time.LoadLocation(budget.Timezone)
 	if zerr != nil {
 		zone = time.UTC
 	}
 	if Quiet(budget.Prefs, zone, now) {
-		return ErrTheyAreResting
+		return 0, ErrTheyAreResting
 	}
 	if OverCap(budget.Prefs, budget.SentToday) {
-		return ErrTheyHaveHadEnough
+		return 0, ErrTheyHaveHadEnough
 	}
 
 	// The day's allowance, counted where the person receiving it is, since
@@ -66,10 +68,10 @@ func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID) error {
 	midnight := DayStart(zone, now)
 	spent, err := s.repo.CountSends(ctx, partnerID, KindNudge, midnight)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if spent >= nudgesPerDay {
-		return ErrNudgesSpent
+		return 0, ErrNudgesSpent
 	}
 
 	n := Notification{
@@ -86,7 +88,7 @@ func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID) error {
 	// Nothing listening is not a failure to report: the thought was sent,
 	// and whether a browser was subscribed is not the sender's business.
 	if _, err := Deliver(ctx, s.repo, s.sender, s.log, n, now); err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	return nudgesPerDay - (spent + 1), nil
 }

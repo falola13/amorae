@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { BareTextarea, Button, Sheet } from "@/components/ui/kit";
 import { useAnswer } from "@/features/prayers/hooks";
+import { PartnerNotice } from "@/features/couple/components/partner-notice";
 
 // Note is optional and never blocks the submit. Also reused to edit the note afterwards.
 export function AnswerSheet({
@@ -49,6 +50,7 @@ export function AnswerSheet({
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
+        {note === undefined ? <PartnerNotice /> : null}
         <div className="flex flex-col gap-1">
           <Button type="submit" icon="check" loading={answer.isPending}>
             {note === undefined ? "Mark as answered" : "Save"}

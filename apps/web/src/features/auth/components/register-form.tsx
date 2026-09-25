@@ -6,7 +6,7 @@ import { useState, type ReactNode } from "react";
 import { Controller, useForm, type Control } from "react-hook-form";
 
 import { Icon } from "@/components/icons";
-import { Alert, Button, Checkbox, Field } from "@/components/ui/kit";
+import { Alert, Button, Checkbox, Field, LinkButton } from "@/components/ui/kit";
 import { Bottom, ShowButton } from "@/components/ui/onboarding-bits";
 import { registerSchema, type RegisterInput } from "@/lib/api/schemas";
 import { routes } from "@/lib/routes";
@@ -106,6 +106,9 @@ export function RegisterForm() {
         <Button type="submit" loading={isSubmitting}>
           Continue
         </Button>
+        <LinkButton href={routes.login()} variant="text">
+          I already have an account
+        </LinkButton>
       </Bottom>
     </form>
   );
