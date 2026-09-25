@@ -90,6 +90,7 @@ func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Tim
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT u.id, e.id, e.title, c.timezone, e.date,
 		       COALESCE(to_char(e.start_time, 'HH24:MI'), ''),
+		       COALESCE(to_char(e.end_time, 'HH24:MI'), ''),
 		       e.reminder,
 		       COALESCE(p.event_reminders, true)
 		FROM events e
@@ -112,7 +113,7 @@ func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Tim
 	for rows.Next() {
 		var c EventCandidate
 		if err := rows.Scan(&c.UserID, &c.EventID, &c.Title, &c.Timezone, &c.Date,
-			&c.StartTime, &c.Reminder, &c.Prefs.EventReminders); err != nil {
+			&c.StartTime, &c.EndTime, &c.Reminder, &c.Prefs.EventReminders); err != nil {
 			return nil, fmt.Errorf("scanning event to remind about: %w", err)
 		}
 		out = append(out, c)

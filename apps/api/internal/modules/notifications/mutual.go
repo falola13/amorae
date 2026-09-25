@@ -3,6 +3,7 @@ package notifications
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/falola13/amorae/apps/api/internal/platform/push"
@@ -137,4 +138,45 @@ func yearsAgo(years int) string {
 	default:
 		return fmt.Sprintf("%d years ago today", years)
 	}
+}
+
+// eventOverGrace bounds how late the question may be asked. A day after is
+// still a fair question; a week after is somebody rummaging.
+const eventOverGrace = 24 * time.Hour
+
+// ForEventOver asks, once, whether an event that has just finished is worth
+// keeping. It leads to the event, where keeping it is already the first
+// thing offered once it is over.
+//
+// Not perishable: asked at eleven at night it waits until morning rather
+// than being dropped, because the question keeps.
+func ForEventOver(c EventCandidate, now time.Time) (Notification, bool) {
+	if !c.Prefs.EventReminders {
+		return Notification{}, false
+	}
+	zone, err := time.LoadLocation(c.Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	over := EventOverAt(c.Date, c.StartTime, c.EndTime, zone)
+	if now.Before(over) || !now.Before(over.Add(eventOverGrace)) {
+		return Notification{}, false
+	}
+
+	title := strings.TrimSpace(c.Title)
+	if title == "" {
+		title = "That thing you did"
+	}
+	return Notification{
+		UserID: c.UserID,
+		Kind:   KindEventOver,
+		// Once per event, ever.
+		Key: c.EventID.String(),
+		Message: push.Message{
+			Title: "How was it?",
+			Body:  title + " — keep it as a memory.",
+			Path:  "/together/events/" + c.EventID.String(),
+			Tag:   KindEventOver,
+		},
+	}, true
 }

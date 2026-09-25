@@ -218,6 +218,25 @@ func ReminderPassed(at string, zone *time.Location, now time.Time) (localDate st
 // "day before"); deliberately not the person's own evening prayer time.
 const reminderMorning = 8
 
+// eventLength is how long an event with a start but no end is taken to run,
+// for deciding when it is over. Long enough that nobody is asked how dinner
+// was while they are still eating it.
+const eventLength = 2 * time.Hour
+
+// EventOverAt is when an event has finished, in the couple's zone. An event
+// with no times at all is a whole day, so it is over the next morning rather
+// than at midnight — which is a time to be asleep, not to be asked anything.
+func EventOverAt(date time.Time, startTime, endTime string, zone *time.Location) time.Time {
+	day := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, zone)
+	if end, ok := startOf(day, endTime, zone); ok {
+		return end
+	}
+	if start, ok := startOf(day, startTime, zone); ok {
+		return start.Add(eventLength)
+	}
+	return time.Date(day.Year(), day.Month(), day.Day()+1, reminderMorning, 0, 0, 0, zone)
+}
+
 // eventReminderLead matches reminder phrases like "an hour before".
 var eventReminderLead = regexp.MustCompile(`^(\d{1,3}|a|an|the) (minute|hour|day)s? before$`)
 
@@ -296,6 +315,7 @@ const (
 	KindBothPrayed      = "both_prayed"
 	KindBothMarked      = "both_marked"
 	KindMemoryOnThisDay = "memory_on_this_day"
+	KindEventOver       = "event_over"
 )
 
 // OccursOn reports whether a date recurs on the given day (same month and
