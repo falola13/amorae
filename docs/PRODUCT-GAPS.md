@@ -55,7 +55,24 @@ This is the same class of bug DEC-30 settled for challenge marks: one shared
 flag where two people need one each. It was right there and it is still here.
 Cheap to change now; expensive once a year of reflections exists.
 
-### 3. Fifteen notification kinds, and a cap holding them back
+### 3. The cap arrived on rows nobody chose it for
+
+Migration 00024 set `daily_cap = 6` and back-filled quiet hours onto every
+existing row, in the same deploy that took the kinds from nine to fifteen. A
+live user acquired a ceiling they never asked for and lost event reminders to
+it within a day, with nothing on screen to say why.
+
+Fixed on the rule rather than the number: a notification the person arranged
+themselves — a reminder on an event they planned, the prayer reminder whose
+hour they set — is no longer subject to the cap or to quiet hours. A ceiling
+meant to stop the app becoming background noise should never eat the one thing
+somebody explicitly asked to be told.
+
+What remains capped is everything unbidden, which is what the cap was for. The
+retroactive default stands on that basis; if it still bites, lower it rather
+than turning kinds off.
+
+### 4. Fifteen notification kinds, and a cap holding them back
 
 Mine, added today. The ratio is better than it was — roughly five delight to
 seven obligation, where it used to be three to seven — but the total is
@@ -65,7 +82,7 @@ stream.
 I would not add a sixteenth without removing one. The measure is not whether
 the cap holds; it is whether you both still look at them.
 
-### 4. No email verification, which also leaks whether an address exists
+### 5. No email verification, which also leaks whether an address exists
 
 [Q-05]
 
@@ -73,7 +90,7 @@ There is no verification flow and no `email_verified` anywhere in the schema.
 Registration answers `409 email_taken`, so anyone can test an address against
 the service. One fix closes both.
 
-### 5. One API instance, enforced by nothing
+### 6. One API instance, enforced by nothing
 
 [DEC-11, Q-13]
 
@@ -81,25 +98,25 @@ The rate limiter is in memory. A second Render instance would silently double
 every limit rather than failing loudly. Fine at one instance, which is where
 you are; a trap the day anyone scales it, because nothing says so at runtime.
 
-### 6. No Content-Security-Policy on pages
+### 7. No Content-Security-Policy on pages
 
 [NFR-SEC-015] — only the service worker has one. Verified absent.
 
-### 7. CI checks nothing about formatting, vulnerabilities or dependencies
+### 8. CI checks nothing about formatting, vulnerabilities or dependencies
 
 [NFR-SEC-019] `ci.yml` has no `govulncheck`, no `npm audit`, no
 `prettier --check`, and there is no Dependabot config. Formatting drift proved
 real today: twelve files had accumulated, which is what a check that nobody
 runs looks like.
 
-### 8. Nothing reports errors
+### 9. Nothing reports errors
 
 [NFR-OBS-006, Q-14] When something breaks, the way you find out is your
 girlfriend telling you. That was true of every production fault today — the
 `photo_id` column, the prepared-statement collision, the `[]uuid.UUID` encode.
 Each surfaced as a screenshot in chat.
 
-### 9. Web tests are thin rather than absent
+### 10. Web tests are thin rather than absent
 
 34 tests across three files, against 21 passing Go packages. The untested parts
 are the logic-heavy ones: the offline write queue, optimistic updates and
