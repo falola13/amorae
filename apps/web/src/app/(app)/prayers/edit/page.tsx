@@ -2,8 +2,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
+import { lookupScripture, type LookupFailure, type Scripture } from "@/features/prayers/scripture";
 import type { z } from "zod";
 
 import { Main } from "@/components/layout/screen";
@@ -46,6 +47,8 @@ function EditPrayer() {
   const {
     register,
     handleSubmit,
+    setValue,
+    getValues,
     formState: { errors, isDirty },
   } = useForm<Form>({
     resolver: zodResolver(prayerPointSchema),
@@ -55,6 +58,39 @@ function EditPrayer() {
       : undefined,
     resetOptions: { keepDirtyValues: true },
   });
+
+  // The verse text is not a form field. Nobody types it — it arrives from the
+  // reference — so it lives here and rides along on save.
+  // undefined means "untouched, use whatever the point already has"; null
+  // means the person removed it. Avoids an effect just to copy a prop in.
+  const [verse, setVerse] = useState<Scripture | null | undefined>(undefined);
+  const [looking, setLooking] = useState(false);
+  const [failure, setFailure] = useState<LookupFailure | null>(null);
+
+  const saved = point?.verse
+    ? { reference: point.scripture ?? "", text: point.verse, translation: "" }
+    : null;
+  const shown = verse !== undefined ? verse : saved;
+
+  const look = async (ref: string) => {
+    const trimmed = ref.trim();
+    if (!trimmed) {
+      setVerse(null);
+      setFailure(null);
+      return;
+    }
+    setLooking(true);
+    setFailure(null);
+    const result = await lookupScripture(trimmed);
+    setLooking(false);
+    if (!result.ok) {
+      setFailure(result.failure);
+      return;
+    }
+    setVerse(result.scripture);
+    // The tidied reference, so "romans 8 28" settles as "Romans 8:28".
+    setValue("scripture", result.scripture.reference, { shouldDirty: true });
+  };
 
   return (
     <QueryState
@@ -98,6 +134,7 @@ function EditPrayer() {
             title: v.title,
             text: v.text,
             scripture: v.scripture || undefined,
+            verse: (v.scripture && shown?.text) || undefined,
             position: idx === -1 ? points.length : idx,
           };
           const next =
@@ -155,12 +192,60 @@ function EditPrayer() {
                 {...register("text")}
               />
               <div className="border-t border-line pt-[18px]">
+                {/* The reference is all anybody types. The words come from it,
+                    because a verse field nobody filled is why scripture has
+                    only ever shown as a bare reference. */}
                 <BareInput
                   label="Scripture, optional"
                   placeholder="Book, chapter and verse"
                   className="h-11 text-bodylg font-semibold text-plum"
-                  {...register("scripture")}
+                  {...register("scripture", {
+                    onBlur: (e) => {
+                      const next = e.target.value.trim();
+                      if (next && next !== shown?.reference) void look(next);
+                      if (!next) setVerse(null);
+                    },
+                  })}
                 />
+                {looking ? (
+                  <p className="m-0 pt-1 text-support text-stone">Looking it up&hellip;</p>
+                ) : null}
+                {failure ? (
+                  // Never an error state on the field: the reference is still
+                  // theirs, it still saves, and the words can be added later.
+                  <p className="m-0 pt-1 text-support text-stone">
+                    {failure.message}{" "}
+                    <button
+                      type="button"
+                      onClick={() => void look(getValues("scripture") ?? "")}
+                      className="press font-semibold text-plum underline"
+                    >
+                      Try again
+                    </button>
+                  </p>
+                ) : null}
+                {shown?.text && !looking ? (
+                  <div className="flex flex-col gap-1 pt-2.5">
+                    <p className="m-0 text-[15px] leading-[1.55] text-stone" data-selectable>
+                      {shown.text}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      {shown.translation ? (
+                        <span className="text-[13px] text-edge">{shown.translation}</span>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVerse(null);
+                          setFailure(null);
+                        }}
+                        className="press text-[13px] font-semibold text-plum"
+                      >
+                        Remove the words
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               {idx !== -1 ? (
                 <div className="border-t border-line pt-1.5">
