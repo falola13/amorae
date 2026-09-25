@@ -82,16 +82,17 @@ func TestBudget_Allows(t *testing.T) {
 		Timezone: "UTC",
 	}
 
-	// A nudge held until morning is a nudge about a moment that has gone, so
+	// A nudge about today held until morning is about a day that has gone, so
 	// it is dropped rather than queued; something a partner did is still
-	// worth reading at breakfast.
-	if send, keep, _ := quiet.Allows(KindPrayerReminder, at("23:00")); send || keep {
+	// worth reading at breakfast. Both are kinds the budget governs — the two
+	// reminders are asked for and never reach here (TestBudget_AsksAreNotCapped).
+	if send, keep, _ := quiet.Allows(KindChallenge, at("23:00")); send || keep {
 		t.Errorf("perishable during quiet hours: send=%v keep=%v", send, keep)
 	}
 	if send, keep, _ := quiet.Allows(KindAppreciation, at("23:00")); send || !keep {
 		t.Errorf("keepable during quiet hours: send=%v keep=%v", send, keep)
 	}
-	if send, _, _ := quiet.Allows(KindPrayerReminder, at("12:00")); !send {
+	if send, _, _ := quiet.Allows(KindChallenge, at("12:00")); !send {
 		t.Error("the middle of the day was treated as quiet hours")
 	}
 
@@ -211,4 +212,42 @@ func TestTick_HoldingDoesNotConsumeTheClaim(t *testing.T) {
 	if sent, err := morning.Tick(t.Context()); err != nil || sent != 1 {
 		t.Fatalf("sent %d after quiet hours (err %v)", sent, err)
 	}
+}
+
+// The bug this fixes: a cap of 6 arrived on rows nobody had chosen it for, in
+// the same deploy that took the kinds from nine to fifteen, and the first
+// thing it ate was an event reminder — the one notification whose whole job is
+// that you would otherwise miss something real.
+func TestBudget_AsksAreNotCapped(t *testing.T) {
+	full := Budget{
+		Prefs:     Preferences{QuietFrom: "22:00", QuietTo: "07:00", DailyCap: 6},
+		Timezone:  "UTC",
+		SentToday: 6,
+	}
+
+	for _, kind := range []string{KindEventReminder, KindPrayerReminder} {
+		t.Run("over the cap: "+kind, func(t *testing.T) {
+			if send, _, why := full.Allows(kind, at("12:00")); !send {
+				t.Errorf("held by %q — the person asked for this one", why)
+			}
+		})
+		// An eleven o'clock reminder for an eleven o'clock plan is wanted at
+		// eleven or not at all, so quiet hours do not hold it either.
+		t.Run("inside quiet hours: "+kind, func(t *testing.T) {
+			if send, _, why := full.Allows(kind, at("23:00")); !send {
+				t.Errorf("held by %q — they chose this hour", why)
+			}
+		})
+	}
+
+	t.Run("everything unbidden is still governed", func(t *testing.T) {
+		for _, kind := range []string{
+			KindAppreciation, KindBothMarked, KindMemoryOnThisDay,
+			KindGoalCrossing, KindEventOver, KindNudge,
+		} {
+			if send, _, _ := full.Allows(kind, at("12:00")); send {
+				t.Errorf("%s ignored the cap", kind)
+			}
+		}
+	})
 }

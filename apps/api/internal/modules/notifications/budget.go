@@ -16,6 +16,24 @@ func Perishable(kind string) bool {
 	}
 }
 
+// AskedFor reports whether this is a notification the person arranged
+// themselves, at a time they chose: a reminder on an event they planned, or
+// the daily prayer reminder whose hour they set.
+//
+// Those are not the app interrupting them, so neither the cap nor quiet hours
+// applies. A ceiling meant to stop the app becoming background noise should
+// never eat the one thing somebody explicitly asked to be told, and an
+// eleven o'clock reminder for an eleven o'clock plan is wanted at eleven or
+// not at all.
+func AskedFor(kind string) bool {
+	switch kind {
+	case KindEventReminder, KindPrayerReminder:
+		return true
+	default:
+		return false
+	}
+}
+
 // Quiet reports whether now falls inside a person's quiet hours, read in
 // their own zone. A window that wraps midnight is the normal case.
 func Quiet(p Preferences, zone *time.Location, now time.Time) bool {

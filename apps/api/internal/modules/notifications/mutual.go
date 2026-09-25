@@ -26,6 +26,8 @@ func (b Budget) Allows(kind string, now time.Time) (send bool, keep bool, why st
 		zone = time.UTC
 	}
 	switch {
+	case AskedFor(kind):
+		return true, true, ""
 	case Quiet(b.Prefs, zone, now):
 		return false, !Perishable(kind), "quiet_hours"
 	case OverCap(b.Prefs, b.SentToday):
@@ -156,7 +158,7 @@ const eventOverGrace = 24 * time.Hour
 // Not perishable: asked at eleven at night it waits until morning rather
 // than being dropped, because the question keeps.
 func ForEventOver(c EventCandidate, now time.Time) (Notification, bool) {
-	if !c.Prefs.EventReminders {
+	if !c.Prefs.EventFollowups {
 		return Notification{}, false
 	}
 	zone, err := time.LoadLocation(c.Timezone)
