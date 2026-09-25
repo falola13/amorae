@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useRef, useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { useDialog } from "@/lib/hooks/use-dialog";
 import { Spinner } from "./buttons";
@@ -149,6 +149,40 @@ function OpenSheet({ title, onClose, children, labelledBy, dirty = false }: Shee
   const [asking, setAsking] = useState(false);
   const dismiss = () => (dirty ? setAsking(true) : onClose());
   const dialogRef = useDialog(true, dismiss);
+
+  // The handle promised a swipe down and there wasn't one. The handle and the
+  // title are the grip: far enough, or quick enough, and it goes — through
+  // dismiss, so unsaved words still get asked about rather than lost.
+  const [drag, setDrag] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const from = useRef<{ y: number; t: number } | null>(null);
+  const grip = {
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      from.current = { y: e.clientY, t: e.timeStamp };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragging(true);
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (from.current) setDrag(Math.max(0, e.clientY - from.current.y));
+    },
+    onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => {
+      const f = from.current;
+      from.current = null;
+      setDragging(false);
+      setDrag(0);
+      if (!f) return;
+      const dy = Math.max(0, e.clientY - f.y);
+      const speed = dy / Math.max(1, e.timeStamp - f.t);
+      if (dy > 120 || (dy > 40 && speed > 0.6)) dismiss();
+    },
+    onPointerCancel: () => {
+      from.current = null;
+      setDragging(false);
+      setDrag(0);
+    },
+  };
+
   // Bottom sheet on a phone; centred dialog from `md`.
   return (
     <div className="fixed inset-0 z-40 md:flex md:items-center md:justify-center md:p-6">
@@ -164,30 +198,44 @@ function OpenSheet({ title, onClose, children, labelledBy, dirty = false }: Shee
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className="absolute inset-x-0 bottom-0 flex animate-sheet flex-col gap-4 rounded-t-sheet bg-bg px-6 pt-2.5 pb-safe md:static md:w-full md:max-w-[440px] md:rounded-card md:border md:border-line md:p-7"
+        // --kb is the keyboard iOS slides over the page (useKeyboardInset):
+        // sit on top of it, and scroll inside when there isn't room for all.
+        // `translate`, not `transform`: the entrance animation holds its last
+        // transform frame, and an animation beats an inline style.
+        style={{
+          translate: drag ? `0 ${drag}px` : undefined,
+          transition: dragging ? "none" : "translate 0.2s ease-out",
+        }}
+        className="absolute inset-x-0 bottom-[var(--kb,0px)] flex max-h-[calc(100dvh-var(--kb,0px)-24px)] animate-sheet flex-col gap-4 overflow-y-auto overscroll-contain rounded-t-sheet bg-bg px-6 pb-safe md:static md:max-h-[calc(100dvh-48px)] md:w-full md:max-w-[440px] md:rounded-card md:border md:border-line md:p-7"
       >
-        <div aria-hidden="true" className="h-1 w-9 self-center rounded-full bg-faint md:hidden" />
-        <h2
-          id={labelledBy}
-          className="m-0 mt-2 text-[24px] font-semibold leading-tight tracking-[-0.02em] md:mt-0"
-        >
-          {title}
-        </h2>
+        <div {...grip} className="-mx-6 flex touch-none flex-col px-6 pt-2.5 md:contents">
+          <div aria-hidden="true" className="h-1 w-9 self-center rounded-full bg-faint md:hidden" />
+          <h2
+            id={labelledBy}
+            className="m-0 mt-6 text-[24px] font-semibold leading-tight tracking-[-0.02em] md:mt-0"
+          >
+            {title}
+          </h2>
+        </div>
         {asking ? (
           <div
             role="alert"
             className="flex items-center justify-between gap-2 rounded-input bg-faint px-3.5 py-2 text-support font-semibold"
           >
             Discard what you typed?
-            <span className="flex gap-1">
+            <span className="flex shrink-0 gap-1">
               <button
                 type="button"
                 onClick={() => setAsking(false)}
-                className="press h-11 px-2.5 text-ink"
+                className="press h-11 whitespace-nowrap px-2.5 text-ink"
               >
                 Keep it
               </button>
-              <button type="button" onClick={onClose} className="press h-11 px-2.5 text-red">
+              <button
+                type="button"
+                onClick={onClose}
+                className="press h-11 whitespace-nowrap px-2.5 text-red"
+              >
                 Discard
               </button>
             </span>

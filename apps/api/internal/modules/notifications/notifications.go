@@ -36,6 +36,18 @@ type Preferences struct {
 	Memories bool
 	// Halfway, and done — not every contribution, which is Goals.
 	GoalMilestones bool
+	// Whether "how was it?" follows a finished event — its own switch now,
+	// but it used to ride on EventReminders, so a person who had turned
+	// reminders off keeps the same silence after this one splits away.
+	EventFollowups bool
+	// Whether a partner's own event ("mine", not "together") is announced
+	// to the other partner. Only ever about events somebody else made.
+	PartnerEvents bool
+	// What the create-event screen offers as already chosen. "1 hour
+	// before" out of the box, matching what the screen always offered
+	// before this was a preference; "" is a real choice — no default —
+	// once somebody picks it, not what an unconfigured person gets.
+	DefaultEventReminder string
 	// Quiet hours in the person's own zone, as HH:MM. Both empty means off;
 	// the window may wrap midnight.
 	QuietFrom string
@@ -48,22 +60,25 @@ type Preferences struct {
 // challenges default off since those are opt-in (FR-NOTF-006).
 func Defaults() Preferences {
 	return Preferences{
-		NewWeek:        true,
-		PrayerReminder: true,
-		ReminderTime:   "19:00",
-		EventReminders: true,
-		ImportantDates: true,
-		Appreciation:   true,
-		Journal:        true,
-		Goals:          false,
-		Challenges:     false,
-		PrayerAnswered: true,
-		Together:       true,
-		Memories:       true,
-		GoalMilestones: true,
-		QuietFrom:      "22:00",
-		QuietTo:        "07:00",
-		DailyCap:       defaultDailyCap,
+		NewWeek:              true,
+		PrayerReminder:       true,
+		ReminderTime:         "19:00",
+		EventReminders:       true,
+		ImportantDates:       true,
+		Appreciation:         true,
+		Journal:              true,
+		Goals:                false,
+		Challenges:           false,
+		PrayerAnswered:       true,
+		Together:             true,
+		Memories:             true,
+		GoalMilestones:       true,
+		EventFollowups:       true,
+		PartnerEvents:        true,
+		DefaultEventReminder: "1 hour before",
+		QuietFrom:            "22:00",
+		QuietTo:              "07:00",
+		DailyCap:             defaultDailyCap,
 	}
 }
 
@@ -78,22 +93,25 @@ const maxDailyCap = 20
 
 // Patch changes a subset of settings; a nil field is left alone.
 type Patch struct {
-	NewWeek        *bool
-	PrayerReminder *bool
-	ReminderTime   *string
-	EventReminders *bool
-	ImportantDates *bool
-	Appreciation   *bool
-	Journal        *bool
-	Goals          *bool
-	Challenges     *bool
-	PrayerAnswered *bool
-	Together       *bool
-	Memories       *bool
-	GoalMilestones *bool
-	QuietFrom      *string
-	QuietTo        *string
-	DailyCap       *int
+	NewWeek              *bool
+	PrayerReminder       *bool
+	ReminderTime         *string
+	EventReminders       *bool
+	ImportantDates       *bool
+	Appreciation         *bool
+	Journal              *bool
+	Goals                *bool
+	Challenges           *bool
+	PrayerAnswered       *bool
+	Together             *bool
+	Memories             *bool
+	GoalMilestones       *bool
+	QuietFrom            *string
+	QuietTo              *string
+	DailyCap             *int
+	EventFollowups       *bool
+	PartnerEvents        *bool
+	DefaultEventReminder *string
 }
 
 var clockTime = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -110,6 +128,15 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 		}
 		p.ReminderTime = t
 	}
+	if patch.DefaultEventReminder != nil {
+		v := strings.TrimSpace(*patch.DefaultEventReminder)
+		if !eventReminderOptions[v] {
+			return Preferences{}, apperr.Validation(map[string]string{
+				"default_event_reminder": "Pick one of the reminder options.",
+			})
+		}
+		p.DefaultEventReminder = v
+	}
 	setBool(&p.NewWeek, patch.NewWeek)
 	setBool(&p.PrayerReminder, patch.PrayerReminder)
 	setBool(&p.EventReminders, patch.EventReminders)
@@ -122,6 +149,8 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.Together, patch.Together)
 	setBool(&p.Memories, patch.Memories)
 	setBool(&p.GoalMilestones, patch.GoalMilestones)
+	setBool(&p.EventFollowups, patch.EventFollowups)
+	setBool(&p.PartnerEvents, patch.PartnerEvents)
 
 	if patch.QuietFrom != nil || patch.QuietTo != nil {
 		from, to := p.QuietFrom, p.QuietTo
@@ -168,6 +197,19 @@ func setBool(dst *bool, src *bool) {
 	if src != nil {
 		*dst = *src
 	}
+}
+
+// eventReminderOptions is the fixed set the create-event screen offers as a
+// default; "" is "no default", not a phrase to match against.
+var eventReminderOptions = map[string]bool{
+	"":                  true,
+	"at the time":       true,
+	"10 minutes before": true,
+	"30 minutes before": true,
+	"1 hour before":     true,
+	"2 hours before":    true,
+	"the morning of":    true,
+	"1 day before":      true,
 }
 
 // Subscription is one browser's push endpoint; the keys encrypt payloads
@@ -322,6 +364,8 @@ const (
 	KindMemoryOnThisDay = "memory_on_this_day"
 	KindEventOver       = "event_over"
 	KindGoalCrossing    = "goal_crossing"
+	// One partner's "together" event, told to the other. Never for "mine".
+	KindEventAdded = "event_added"
 )
 
 // OccursOn reports whether a date recurs on the given day (same month and

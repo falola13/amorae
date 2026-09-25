@@ -103,6 +103,10 @@ export interface Event {
   notes?: string;
   checklist: ChecklistItem[];
   done: boolean;
+  /** "together" (both of you) or "mine" (just one of you). */
+  kind: "together" | "mine";
+  /** Who made it. Absent (null) on events from before this was recorded. */
+  created_by: string | null;
 }
 
 export interface GoalProgress {
@@ -200,6 +204,12 @@ export interface NotificationPrefs {
   prayer_reminder: boolean;
   reminder_time: string;
   event_reminders: boolean;
+  /** A day or two after, ask how it went. */
+  event_followups: boolean;
+  /** When your partner adds a together event. */
+  partner_events: boolean;
+  /** One of REMINDER_OPTIONS' values (features/together/events.ts); "" is None. */
+  default_event_reminder: string;
   important_dates: boolean;
   appreciation: boolean;
   journal: boolean;

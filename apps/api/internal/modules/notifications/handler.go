@@ -35,66 +35,75 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 
 // The shape in apps/web/src/lib/api/types.ts.
 type prefsDTO struct {
-	NewWeek        bool   `json:"new_week"`
-	PrayerReminder bool   `json:"prayer_reminder"`
-	ReminderTime   string `json:"reminder_time"`
-	EventReminders bool   `json:"event_reminders"`
-	ImportantDates bool   `json:"important_dates"`
-	Appreciation   bool   `json:"appreciation"`
-	Journal        bool   `json:"journal"`
-	Goals          bool   `json:"goals"`
-	Challenges     bool   `json:"challenges"`
-	PrayerAnswered bool   `json:"prayer_answered"`
-	Together       bool   `json:"together"`
-	Memories       bool   `json:"memories"`
-	GoalMilestones bool   `json:"goal_milestones"`
-	QuietFrom      string `json:"quiet_from"`
-	QuietTo        string `json:"quiet_to"`
-	DailyCap       int    `json:"daily_cap"`
-	MaxDailyCap    int    `json:"max_daily_cap"`
+	NewWeek              bool   `json:"new_week"`
+	PrayerReminder       bool   `json:"prayer_reminder"`
+	ReminderTime         string `json:"reminder_time"`
+	EventReminders       bool   `json:"event_reminders"`
+	ImportantDates       bool   `json:"important_dates"`
+	Appreciation         bool   `json:"appreciation"`
+	Journal              bool   `json:"journal"`
+	Goals                bool   `json:"goals"`
+	Challenges           bool   `json:"challenges"`
+	PrayerAnswered       bool   `json:"prayer_answered"`
+	Together             bool   `json:"together"`
+	Memories             bool   `json:"memories"`
+	GoalMilestones       bool   `json:"goal_milestones"`
+	QuietFrom            string `json:"quiet_from"`
+	QuietTo              string `json:"quiet_to"`
+	DailyCap             int    `json:"daily_cap"`
+	MaxDailyCap          int    `json:"max_daily_cap"`
+	EventFollowups       bool   `json:"event_followups"`
+	PartnerEvents        bool   `json:"partner_events"`
+	DefaultEventReminder string `json:"default_event_reminder"`
 }
 
 func toDTO(p Preferences) prefsDTO {
 	return prefsDTO{
-		NewWeek:        p.NewWeek,
-		PrayerReminder: p.PrayerReminder,
-		ReminderTime:   p.ReminderTime,
-		EventReminders: p.EventReminders,
-		ImportantDates: p.ImportantDates,
-		Appreciation:   p.Appreciation,
-		Journal:        p.Journal,
-		Goals:          p.Goals,
-		Challenges:     p.Challenges,
-		PrayerAnswered: p.PrayerAnswered,
-		Together:       p.Together,
-		Memories:       p.Memories,
-		GoalMilestones: p.GoalMilestones,
-		QuietFrom:      p.QuietFrom,
-		QuietTo:        p.QuietTo,
-		DailyCap:       p.DailyCap,
-		MaxDailyCap:    maxDailyCap,
+		NewWeek:              p.NewWeek,
+		PrayerReminder:       p.PrayerReminder,
+		ReminderTime:         p.ReminderTime,
+		EventReminders:       p.EventReminders,
+		ImportantDates:       p.ImportantDates,
+		Appreciation:         p.Appreciation,
+		Journal:              p.Journal,
+		Goals:                p.Goals,
+		Challenges:           p.Challenges,
+		PrayerAnswered:       p.PrayerAnswered,
+		Together:             p.Together,
+		Memories:             p.Memories,
+		GoalMilestones:       p.GoalMilestones,
+		QuietFrom:            p.QuietFrom,
+		QuietTo:              p.QuietTo,
+		DailyCap:             p.DailyCap,
+		MaxDailyCap:          maxDailyCap,
+		EventFollowups:       p.EventFollowups,
+		PartnerEvents:        p.PartnerEvents,
+		DefaultEventReminder: p.DefaultEventReminder,
 	}
 }
 
 // Every field is a pointer: the client sends one switch at a time, and a
 // missing field means "leave it alone" rather than "turn it off".
 type patchRequest struct {
-	NewWeek        *bool   `json:"new_week"`
-	PrayerReminder *bool   `json:"prayer_reminder"`
-	ReminderTime   *string `json:"reminder_time"`
-	EventReminders *bool   `json:"event_reminders"`
-	ImportantDates *bool   `json:"important_dates"`
-	Appreciation   *bool   `json:"appreciation"`
-	Journal        *bool   `json:"journal"`
-	Goals          *bool   `json:"goals"`
-	Challenges     *bool   `json:"challenges"`
-	PrayerAnswered *bool   `json:"prayer_answered"`
-	Together       *bool   `json:"together"`
-	Memories       *bool   `json:"memories"`
-	GoalMilestones *bool   `json:"goal_milestones"`
-	QuietFrom      *string `json:"quiet_from"`
-	QuietTo        *string `json:"quiet_to"`
-	DailyCap       *int    `json:"daily_cap"`
+	NewWeek              *bool   `json:"new_week"`
+	PrayerReminder       *bool   `json:"prayer_reminder"`
+	ReminderTime         *string `json:"reminder_time"`
+	EventReminders       *bool   `json:"event_reminders"`
+	ImportantDates       *bool   `json:"important_dates"`
+	Appreciation         *bool   `json:"appreciation"`
+	Journal              *bool   `json:"journal"`
+	Goals                *bool   `json:"goals"`
+	Challenges           *bool   `json:"challenges"`
+	PrayerAnswered       *bool   `json:"prayer_answered"`
+	Together             *bool   `json:"together"`
+	Memories             *bool   `json:"memories"`
+	GoalMilestones       *bool   `json:"goal_milestones"`
+	QuietFrom            *string `json:"quiet_from"`
+	QuietTo              *string `json:"quiet_to"`
+	DailyCap             *int    `json:"daily_cap"`
+	EventFollowups       *bool   `json:"event_followups"`
+	PartnerEvents        *bool   `json:"partner_events"`
+	DefaultEventReminder *string `json:"default_event_reminder"`
 }
 
 // The browser's own PushSubscription.toJSON(), posted as it comes.

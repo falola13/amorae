@@ -182,6 +182,55 @@ func TestValidate_Checklist(t *testing.T) {
 	})
 }
 
+func TestValidate_Kind(t *testing.T) {
+	t.Run("creating without one defaults to together", func(t *testing.T) {
+		e, err := Event{}.Validate(Input{
+			Title: ptr("Dinner"), Date: ptr("2026-10-02"),
+		}, true)
+		if err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+		if e.Kind != KindTogether {
+			t.Errorf("kind = %q, want %q", e.Kind, KindTogether)
+		}
+	})
+
+	t.Run("mine is accepted on create", func(t *testing.T) {
+		e, err := Event{}.Validate(Input{
+			Title: ptr("Dentist"), Date: ptr("2026-10-02"), Kind: ptr("mine"),
+		}, true)
+		if err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+		if e.Kind != KindMine {
+			t.Errorf("kind = %q, want %q", e.Kind, KindMine)
+		}
+	})
+
+	t.Run("an edit that does not mention it leaves it alone", func(t *testing.T) {
+		existing := Event{Title: "x", Date: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC), Kind: KindMine}
+		e, err := existing.Validate(Input{Notes: ptr("bring the card")}, false)
+		if err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+		if e.Kind != KindMine {
+			t.Errorf("kind = %q, want it left alone", e.Kind)
+		}
+	})
+
+	t.Run("anything else is refused", func(t *testing.T) {
+		fields := fieldsOf(t, func() error {
+			_, err := Event{}.Validate(Input{
+				Title: ptr("x"), Date: ptr("2026-10-02"), Kind: ptr("us"),
+			}, true)
+			return err
+		}())
+		if fields["kind"] == "" {
+			t.Errorf("fields = %v, want kind", fields)
+		}
+	})
+}
+
 func TestValidate_ReportsEverythingAtOnce(t *testing.T) {
 	fields := fieldsOf(t, func() error {
 		_, err := Event{}.Validate(Input{

@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
 type Repository interface {
@@ -59,6 +61,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Event
 	if err != nil {
 		return Event{}, err
 	}
+	e.CreatedBy = &userID
 
 	id, err := s.repo.Create(ctx, e, s.now())
 	if err != nil {
@@ -79,6 +82,17 @@ func (s *Service) Update(ctx context.Context, userID, eventID uuid.UUID, in Inpu
 	if err != nil {
 		return Event{}, err
 	}
+	if !mayTouch(current, userID) {
+		return Event{}, ErrNotFound
+	}
+	// Who it is for is the one thing even a "together" event's other
+	// partner cannot reassign — everything else about it is theirs equally.
+	if in.Kind != nil && current.CreatedBy != nil && *current.CreatedBy != userID {
+		return Event{}, apperr.Validation(map[string]string{
+			"kind": "Only whoever made it can change who it's for.",
+		})
+	}
+
 	updated, err := current.Validate(in, false)
 	if err != nil {
 		return Event{}, err
@@ -94,6 +108,13 @@ func (s *Service) SetDone(ctx context.Context, userID, eventID uuid.UUID, done b
 	if err != nil {
 		return Event{}, err
 	}
+	current, err := s.repo.ByID(ctx, coupleID, eventID)
+	if err != nil {
+		return Event{}, err
+	}
+	if !mayTouch(current, userID) {
+		return Event{}, ErrNotFound
+	}
 	if err := s.repo.SetDone(ctx, coupleID, eventID, done, s.now()); err != nil {
 		return Event{}, err
 	}
@@ -104,6 +125,13 @@ func (s *Service) SetChecklistItem(ctx context.Context, userID, eventID, itemID 
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
 		return Event{}, err
+	}
+	current, err := s.repo.ByID(ctx, coupleID, eventID)
+	if err != nil {
+		return Event{}, err
+	}
+	if !mayTouch(current, userID) {
+		return Event{}, ErrNotFound
 	}
 	if err := s.repo.SetChecklistItem(ctx, coupleID, eventID, itemID, done, s.now()); err != nil {
 		return Event{}, err
@@ -116,5 +144,25 @@ func (s *Service) Delete(ctx context.Context, userID, eventID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	current, err := s.repo.ByID(ctx, coupleID, eventID)
+	if err != nil {
+		return err
+	}
+	if !mayTouch(current, userID) {
+		return ErrNotFound
+	}
 	return s.repo.Delete(ctx, coupleID, eventID)
+}
+
+// mayTouch reports whether this caller may edit, delete, complete or tick a
+// checklist item on this event. A "together" event is either partner's, as
+// it always was; a "mine" event is its creator's alone, and a "mine" event
+// with no creator on record (there is no such thing going forward, but
+// nothing stops one existing) is nobody's in particular, so it is treated
+// like "together" rather than locking both partners out.
+func mayTouch(e Event, userID uuid.UUID) bool {
+	if e.Kind != KindMine {
+		return true
+	}
+	return e.CreatedBy == nil || *e.CreatedBy == userID
 }

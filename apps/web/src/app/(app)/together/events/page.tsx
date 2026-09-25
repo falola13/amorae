@@ -1,5 +1,7 @@
 "use client";
 
+import { useCouple } from "@/features/couple/hooks";
+import { eventOwnerLabel } from "@/features/together/events";
 import { useEvents } from "@/features/together/hooks";
 import { iso, relativeDay, stillAhead, time12 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
@@ -19,6 +21,9 @@ import {
 
 export default function Events() {
   const events = useEvents();
+  const couple = useCouple();
+  const meId = couple.data?.me.id;
+  const partnerName = couple.data?.partner?.display_name;
   // Hides the bottom add-button when the empty state already shows one.
   const hasAny = (events.data?.length ?? 0) > 0;
   const todayIso = iso(today());
@@ -61,33 +66,38 @@ export default function Events() {
               <>
                 {up.length ? (
                   <Section label="Coming up" className="mt-5">
-                    {up.map((e) => (
-                      <DateRow
-                        key={e.id}
-                        date={e.date}
-                        title={e.title}
-                        sub={`${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}${e.date === todayIso && e.location ? ` · ${e.location}` : ""}`}
-                        href={routes.event(e.id)}
-                      />
-                    ))}
+                    {up.map((e) => {
+                      const owner = eventOwnerLabel(e, meId, partnerName);
+                      return (
+                        <DateRow
+                          key={e.id}
+                          date={e.date}
+                          title={e.title}
+                          sub={`${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}${e.date === todayIso && e.location ? ` · ${e.location}` : ""}${owner ? ` · ${owner}` : ""}`}
+                          href={routes.event(e.id)}
+                        />
+                      );
+                    })}
                   </Section>
                 ) : null}
                 {past.length ? (
                   <Section label="Earlier" className="mb-4 mt-6">
-                    {past.map((e) => (
-                      <DateRow
-                        key={e.id}
-                        date={e.date}
-                        title={e.title}
-                        sub={
-                          e.done
-                            ? "Done together"
-                            : `${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}`
-                        }
-                        past
-                        href={routes.event(e.id)}
-                      />
-                    ))}
+                    {past.map((e) => {
+                      const owner = eventOwnerLabel(e, meId, partnerName);
+                      const base = e.done
+                        ? "Done together"
+                        : `${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}`;
+                      return (
+                        <DateRow
+                          key={e.id}
+                          date={e.date}
+                          title={e.title}
+                          sub={owner ? `${base} · ${owner}` : base}
+                          past
+                          href={routes.event(e.id)}
+                        />
+                      );
+                    })}
                   </Section>
                 ) : null}
               </>

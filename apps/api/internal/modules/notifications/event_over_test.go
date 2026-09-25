@@ -40,7 +40,7 @@ func endedEvent(start, end string) EventCandidate {
 	return EventCandidate{
 		UserID: uuid.New(), EventID: uuid.New(), Title: "Dinner at Terra",
 		Timezone: "UTC", Date: day("2026-09-25"), StartTime: start, EndTime: end,
-		Prefs: Preferences{EventReminders: true},
+		Prefs: Preferences{EventFollowups: true},
 	}
 }
 
@@ -81,11 +81,21 @@ func TestForEventOver(t *testing.T) {
 		}
 	})
 
-	t.Run("not to somebody who turned event notifications off", func(t *testing.T) {
+	t.Run("not to somebody who turned event follow-ups off", func(t *testing.T) {
 		off := c
-		off.Prefs.EventReminders = false
+		off.Prefs.EventFollowups = false
 		if _, ok := ForEventOver(off, at("22:05")); ok {
 			t.Error("it was sent anyway")
+		}
+	})
+
+	// It rides on a switch of its own now, not on event_reminders — turning
+	// reminders off should not silence "how was it?" too.
+	t.Run("not tied to the reminder switch", func(t *testing.T) {
+		reminderOnly := c
+		reminderOnly.Prefs = Preferences{EventReminders: true, EventFollowups: false}
+		if _, ok := ForEventOver(reminderOnly, at("22:05")); ok {
+			t.Error("event_reminders alone was enough to send it")
 		}
 	})
 
