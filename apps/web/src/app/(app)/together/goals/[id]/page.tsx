@@ -1,5 +1,6 @@
 "use client";
 
+import { PartnerNotice } from "@/features/couple/components/partner-notice";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -177,6 +178,7 @@ export default function GoalDetail() {
                     error={errors.amount?.message}
                     {...register("amount")}
                   />
+                  <PartnerNotice />
                   <div className="flex flex-col gap-1">
                     <Button type="submit" loading={add.isPending}>
                       Add it

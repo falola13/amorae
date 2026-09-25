@@ -86,5 +86,6 @@ export const togetherApi = {
     http.post<Milestone>("/milestones", m, withKey(key)).then((r) => r.data),
   deleteMilestone: (id: string) => http.delete(apiPath`/milestones/${id}`).then(() => undefined),
 
-  nudge: () => http.post("/nudge", {}).then(() => undefined),
+  // How many more may be sent today, so the limit shows before it's reached.
+  nudge: () => http.post<{ left: number }>("/nudge", {}).then((r) => r.data),
 };

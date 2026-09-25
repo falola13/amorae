@@ -49,8 +49,12 @@ func TestNudge(t *testing.T) {
 	t.Run("it reaches the other one, and says who from", func(t *testing.T) {
 		sender := &fakeSender{}
 		svc, _ := newNudgeService(t, sender)
-		if err := svc.Nudge(ctx, uuid.New()); err != nil {
+		left, err := svc.Nudge(ctx, uuid.New())
+		if err != nil {
 			t.Fatalf("nudge: %v", err)
+		}
+		if left != nudgesPerDay-1 {
+			t.Errorf("left = %d, want %d", left, nudgesPerDay-1)
 		}
 		if len(sender.sent) != 1 {
 			t.Fatalf("%d sent, want 1", len(sender.sent))
@@ -68,7 +72,7 @@ func TestNudge(t *testing.T) {
 		sender := &fakeSender{}
 		svc, repo := newNudgeService(t, sender)
 		repo.counts[KindNudge] = nudgesPerDay
-		if err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrNudgesSpent) {
+		if _, err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrNudgesSpent) {
 			t.Errorf("err = %v, want the day's allowance to be spent", err)
 		}
 		if len(sender.sent) != 0 {
@@ -86,7 +90,7 @@ func TestNudge(t *testing.T) {
 			Timezone: "UTC",
 		}
 		svc.now = func() time.Time { return at("23:30") }
-		if err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrTheyAreResting) {
+		if _, err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrTheyAreResting) {
 			t.Errorf("err = %v, want their quiet hours", err)
 		}
 		if len(sender.sent) != 0 {
@@ -98,7 +102,7 @@ func TestNudge(t *testing.T) {
 		sender := &fakeSender{}
 		svc, repo := newNudgeService(t, sender)
 		repo.fakeRepo.budget = Budget{Prefs: Preferences{DailyCap: 2}, Timezone: "UTC", SentToday: 2}
-		if err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrTheyHaveHadEnough) {
+		if _, err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrTheyHaveHadEnough) {
 			t.Errorf("err = %v, want their cap", err)
 		}
 	})
@@ -107,7 +111,7 @@ func TestNudge(t *testing.T) {
 		sender := &fakeSender{}
 		svc, repo := newNudgeService(t, sender)
 		repo.partner = uuid.Nil
-		if err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrNoPartner) {
+		if _, err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrNoPartner) {
 			t.Errorf("err = %v, want no partner", err)
 		}
 	})
@@ -118,7 +122,7 @@ func TestNudge(t *testing.T) {
 		sender := &fakeSender{}
 		svc, repo := newNudgeService(t, sender)
 		repo.fakeRepo.subs = nil
-		if err := svc.Nudge(ctx, uuid.New()); err != nil {
+		if _, err := svc.Nudge(ctx, uuid.New()); err != nil {
 			t.Errorf("err = %v, want no complaint", err)
 		}
 	})

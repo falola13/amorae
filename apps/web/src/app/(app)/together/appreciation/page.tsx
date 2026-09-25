@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import type { z } from "zod";
 
 import { useCouple } from "@/features/couple/hooks";
+import { PartnerNotice } from "@/features/couple/components/partner-notice";
 import {
   useAppreciations,
   useSendAppreciation,
@@ -17,7 +18,6 @@ import { iso, relativeDay } from "@/lib/dates";
 import { useOnline } from "@/lib/query/offline";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
-import { Icon } from "@/components/icons";
 import { BareTextarea, ComposeBar, Micro, Toast, cx } from "@/components/ui/kit";
 
 type AppreciationFormInput = z.infer<typeof appreciationSchema>;
@@ -87,10 +87,7 @@ export default function Appreciation() {
           error={errors.text?.message}
           {...register("text")}
         />
-        <div className="flex items-center gap-2 text-support text-stone">
-          <Icon name="bell" size={16} />
-          {partner} will get one quiet notification.
-        </div>
+        <PartnerNotice />
         <button type="submit" className="sr-only">
           Send
         </button>
@@ -120,7 +117,8 @@ export default function Appreciation() {
       {/* Undo is online-only (see features/together/writes.ts), so it's hidden while offline rather than offered and failed. */}
       {sentId ? (
         <Toast
-          message={`Sent to ${partner}`}
+          // Say why there's no Undo, rather than the button just not being there.
+          message={online ? `Sent to ${partner}` : "Sent. Undo needs a connection."}
           action={online ? "Undo" : undefined}
           onAction={() => {
             undo.mutate(sentId);

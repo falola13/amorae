@@ -333,7 +333,12 @@ function Nudge({ partner }: { partner: string }) {
         loading={nudge.isPending}
         onClick={() =>
           nudge.mutate(undefined, {
-            onSuccess: () => setSaid(`${first} will know you were thinking of them.`),
+            onSuccess: ({ left }) =>
+              setSaid(
+                `${first} will know you were thinking of them. ${
+                  left === 0 ? "That was today’s last." : `${left} more today.`
+                }`,
+              ),
             onError: (e) => setSaid(readableMessage(e)),
           })
         }

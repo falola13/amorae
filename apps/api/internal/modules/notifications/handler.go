@@ -15,7 +15,7 @@ type service interface {
 	Get(ctx context.Context, userID uuid.UUID) (Preferences, error)
 	Update(ctx context.Context, userID uuid.UUID, patch Patch) (Preferences, error)
 	Subscribe(ctx context.Context, userID uuid.UUID, endpoint, p256dh, auth string) error
-	Nudge(ctx context.Context, senderID uuid.UUID) error
+	Nudge(ctx context.Context, senderID uuid.UUID) (int, error)
 }
 
 type Handler struct {
@@ -161,14 +161,20 @@ func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return userID, true
 }
 
+// How many more the sender may send today, counted where the partner is.
+type nudgeDTO struct {
+	Left int `json:"left"`
+}
+
 func (h *Handler) nudge(w http.ResponseWriter, r *http.Request) {
 	userID, ok := caller(w, r)
 	if !ok {
 		return
 	}
-	if err := h.svc.Nudge(r.Context(), userID); err != nil {
+	left, err := h.svc.Nudge(r.Context(), userID)
+	if err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
-	httpx.NoContent(w)
+	httpx.Data(w, http.StatusOK, nudgeDTO{Left: left})
 }

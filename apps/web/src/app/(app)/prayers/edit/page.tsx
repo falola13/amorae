@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { lookupScripture, type LookupFailure, type Scripture } from "@/features/prayers/scripture";
 import type { z } from "zod";
@@ -22,6 +22,7 @@ import { QueryState, inPage } from "@/components/ui/query-state";
 import { useCouple } from "@/features/couple/hooks";
 import { useSavePoints, useWeek } from "@/features/prayers/hooks";
 import { prayerPointSchema } from "@/lib/api/schemas";
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
 import { routes } from "@/lib/routes";
 import type { PrayerPoint } from "@/lib/api/types";
 
@@ -50,6 +51,8 @@ function EditPrayer() {
     handleSubmit,
     setValue,
     getValues,
+    reset,
+    watch,
     formState: { errors, isDirty },
   } = useForm<Form>({
     resolver: zodResolver(prayerPointSchema),
@@ -69,6 +72,43 @@ function EditPrayer() {
   const [failure, setFailure] = useState<LookupFailure | null>(null);
   // One tap on the trash used to delete the prayer outright, notes and verse with it.
   const [confirming, setConfirming] = useState(false);
+
+  // What's typed is kept on the phone as it's typed, and offered back on the
+  // way in: a locked phone or a reclaimed tab used to take the draft with it.
+  const draftKey = `prayer:${id ?? "new"}`;
+  const [restored, setRestored] = useState(false);
+  const checked = useRef(false);
+  useEffect(() => {
+    const sub = watch((v, { type }) => {
+      if (type === "change") writeDraft(draftKey, v);
+    });
+    return () => sub.unsubscribe();
+  }, [watch, draftKey]);
+  useEffect(() => {
+    // Once the point (if any) has loaded, so the draft lands on top of it.
+    if (checked.current || !week.isSuccess) return;
+    checked.current = true;
+    const draft = readDraft<Form>(draftKey);
+    if (!draft) return;
+    const current = getValues();
+    const keys = ["title", "text", "scripture"] as const;
+    if (keys.every((k) => (draft[k] ?? "") === (current[k] ?? ""))) return;
+    for (const k of keys) setValue(k, draft[k] ?? "", { shouldDirty: true });
+    setRestored(true);
+  }, [week.isSuccess, draftKey, getValues, setValue]);
+  const leave = () => {
+    clearDraft(draftKey);
+    router.replace(routes.prayersSet);
+  };
+  const startOver = () => {
+    clearDraft(draftKey);
+    reset(
+      point
+        ? { title: point.title, text: point.text, scripture: point.scripture ?? "" }
+        : { title: "", text: "", scripture: "" },
+    );
+    setRestored(false);
+  };
 
   const saved = point?.verse
     ? { reference: point.scripture ?? "", text: point.verse, translation: "" }
@@ -131,33 +171,38 @@ function EditPrayer() {
           );
         }
 
-        const onSubmit = (v: Form) => {
+        const onSubmit = async (v: Form) => {
+          // The lookup runs on blur, and tapping Done straight from the field
+          // skips it — the reference saved with no words. Look it up here too;
+          // a failure still saves the reference, as it always has.
+          let scripture = v.scripture?.trim() || undefined;
+          let words = shown?.text;
+          // verse === null: they removed the words on purpose; don't bring them back.
+          if (scripture && verse !== null && scripture !== shown?.reference) {
+            const found = await lookupScripture(scripture);
+            words = found.ok ? found.scripture.text : undefined;
+            if (found.ok) scripture = found.scripture.reference;
+          }
           const p: PrayerPoint = {
             id: id ?? "",
             title: v.title,
             text: v.text,
-            scripture: v.scripture || undefined,
-            verse: (v.scripture && shown?.text) || undefined,
+            scripture,
+            verse: (scripture && words) || undefined,
             position: idx === -1 ? points.length : idx,
           };
           const next =
             idx === -1 ? [...points, p] : points.map((x) => (x.id === id ? { ...x, ...p } : x));
-          save.mutate(next, {
-            onSuccess: () => router.replace(routes.prayersSet),
-            onQueued: () => router.replace(routes.prayersSet),
-          });
+          save.mutate(next, { onSuccess: leave, onQueued: leave });
         };
         const remove = () =>
           save.mutate(
             points.filter((x) => x.id !== id),
-            {
-              onSuccess: () => router.replace(routes.prayersSet),
-              onQueued: () => router.replace(routes.prayersSet),
-            },
+            { onSuccess: leave, onQueued: leave },
           );
         const done = () => {
           if (!isDirty && idx !== -1) {
-            router.replace(routes.prayersSet);
+            leave();
             return;
           }
           void handleSubmit(onSubmit)();
@@ -166,7 +211,7 @@ function EditPrayer() {
         return (
           <>
             <ComposeBar
-              cancelHref={routes.prayersSet}
+              onCancel={leave}
               label={idx === -1 ? "New prayer" : `Prayer ${idx + 1} of ${points.length}`}
               done="Done"
               onDone={done}
@@ -178,6 +223,18 @@ function EditPrayer() {
               className="flex grow flex-col gap-[22px] px-6 pt-5"
               noValidate
             >
+              {restored ? (
+                <p role="status" className="m-0 text-support text-stone">
+                  Picked up where you left off.{" "}
+                  <button
+                    type="button"
+                    onClick={startOver}
+                    className="press font-semibold text-plum underline"
+                  >
+                    Start over
+                  </button>
+                </p>
+              ) : null}
               <div>
                 <BareInput
                   label="Title"

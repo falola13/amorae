@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
-// The template's landing route. Home is "/" now.
+// Not dead: the first manifest opened the app at /dashboard, and iOS keeps the
+// start URL an app was installed with. Deleting this would open those to a 404.
 export default function DashboardPage() {
   redirect("/");
 }
