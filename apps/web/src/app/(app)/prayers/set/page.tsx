@@ -11,7 +11,7 @@ import { routes } from "@/lib/routes";
 import type { PrayerPoint } from "@/lib/api/types";
 import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
-import { Button, LinkButton, Micro, Para, Sheet, Skeleton } from "@/components/ui/kit";
+import { Button, cx, LinkButton, Micro, Para, Sheet, Skeleton } from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
 
 const MAX = 10;
@@ -165,7 +165,21 @@ export default function SetPrayers() {
                   return (
                     <li
                       key={p.id}
-                      className="flex min-h-[72px] items-center gap-3 border-b border-line"
+                      // A held row lifts onto its own surface and follows the
+                      // finger. Without this the gesture had no middle: you
+                      // pressed, nothing happened, and then the list either
+                      // jumped or did not.
+                      className={cx(
+                        "flex min-h-[72px] items-center gap-3 border-b border-line",
+                        drag.held?.index === i
+                          ? "relative z-10 rounded-btn border-transparent bg-surface"
+                          : "transition-transform duration-150",
+                      )}
+                      style={
+                        drag.held?.index === i
+                          ? { transform: `translateY(${drag.held.offset}px)` }
+                          : undefined
+                      }
                     >
                       <span className="tabular w-[22px] self-start pt-[17px] text-[13px] font-semibold text-stone">
                         {String(i + 1).padStart(2, "0")}

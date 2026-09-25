@@ -16,7 +16,6 @@ import {
   Title,
 } from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
-import { isApiError } from "@/lib/api/errors";
 import { isAbsence } from "@/lib/api/envelope";
 import { useCouple } from "@/features/couple/hooks";
 import { setterWord } from "@/features/prayers/derive";
@@ -26,6 +25,7 @@ import { useEvents, useGoals } from "@/features/together/hooks";
 import type { PrayerWeek } from "@/lib/api/types";
 import {
   activeGoal,
+  isAlone,
   lastWeekSummary,
   nextUpcomingEvent,
   plannedCount,
@@ -49,8 +49,6 @@ import { today } from "@/lib/today";
 export function HomeScreen() {
   const couple = useCouple();
   const week = useWeek();
-  // Not a failure: there is no week until there are two of them.
-  const waitingForPartner = isApiError(week.error) && week.error.code === "waiting_for_partner";
   const events = useEvents();
   const goals = useGoals();
   // A source that broke, as opposed to one with nothing in it. Worth telling
@@ -83,6 +81,9 @@ export function HomeScreen() {
 
   const me = coupleData.me;
   const partner = coupleData.partner?.display_name ?? "your partner";
+  // Not a failure: there is no week until there are two of them, and until
+  // then the week is never even asked for (see isAlone).
+  const alone = isAlone(Boolean(coupleData.partner), week.error);
   const upcoming = upcomingEvents(events.data ?? [], today());
   const todays = todayEvent(upcoming, todayIso);
   const nextEvent = nextUpcomingEvent(upcoming, todayIso);
@@ -183,7 +184,7 @@ export function HomeScreen() {
           <h1 className="m-0 mt-2 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
             <span className="font-medium text-stone">{greeting(now)},</span>
             <br />
-            {me.display_name} &amp; {partner}
+            {alone ? me.display_name : `${me.display_name} & ${partner}`}
           </h1>
         </div>
         <Link
@@ -194,6 +195,27 @@ export function HomeScreen() {
           <Icon name="plus" size={24} />
         </Link>
       </div>
+
+      {/* Alone, this is the only thing on the screen worth doing, so it is
+          the only thing offered. Everything Amorae has — the week, the plans,
+          what gets kept — is built for two people, and a home screen that
+          listed those as empty rows would be describing an app that does not
+          work yet rather than one waiting for somebody. */}
+      {alone ? (
+        <div className="mt-6 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
+          <Micro tone="plum">Just you, so far</Micro>
+          <h2 className="m-0 mt-2 text-[21px] font-semibold tracking-[-0.015em]">
+            Amorae is for two.
+          </h2>
+          <Para className="mt-1.5">
+            The week&rsquo;s prayers, the plans, the things you keep &mdash; none of it starts until{" "}
+            {partner} is here too.
+          </Para>
+          <LinkButton href={routes.invite} className="mt-4">
+            Invite them
+          </LinkButton>
+        </div>
+      ) : null}
 
       {/* Today's plan and this week sit side by side from `lg`, where a
           single column would leave the right half of the screen empty. With
@@ -219,84 +241,83 @@ export function HomeScreen() {
           </Link>
         ) : null}
 
-        <Section
-          label="This week"
-          className="mt-6 lg:mt-0 lg:flex-1"
-          trailing={
-            planned !== null ? (
-              <span className="text-[13px] text-stone">
-                {planned} {planned === 1 ? "thing" : "things"} planned
-              </span>
-            ) : undefined
-          }
-        >
-          {/* Before a partner joins there is no week and cannot be one: praying
+        {/* A heading with nothing under it is worse than no heading: it
+            reads as something that failed to load. Alone and with nothing
+            planned, there is genuinely nothing to put here, so the section
+            does not appear at all. */}
+        {alone && !eventsBroke && !goalsBroke && !nextEvent && !goal ? null : (
+          <Section
+            label="This week"
+            className="mt-6 lg:mt-0 lg:flex-1"
+            trailing={
+              planned !== null ? (
+                <span className="text-[13px] text-stone">
+                  {planned} {planned === 1 ? "thing" : "things"} planned
+                </span>
+              ) : undefined
+            }
+          >
+            {/* Before a partner joins there is no week and cannot be one: praying
               together alternates between two people, so one person has no turn
               to take. The API says exactly that (409 waiting_for_partner) and
               nothing here listened, so the very first thing a new account saw
               on its own home screen was a card saying this could not be
               loaded. It loaded fine. There was simply nothing to load yet. */}
-          {waitingForPartner ? (
-            <Row
-              icon="book"
-              title="Weekly prayer"
-              sub="Starts when your partner joins"
-              href={routes.invite}
-            />
-          ) : (
-            <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
-              {(wk) => (
-                <Row
-                  icon="book"
-                  title="Weekly prayer"
-                  sub={`Set by ${setterWord(wk, me.id, partner)} · you’ve prayed ${wk.my_completed.length} of ${wk.points.length}`}
-                  href={routes.prayers}
-                >
-                  <Segments
-                    total={wk.points.length}
-                    done={wk.my_completed.length}
-                    height={4}
-                    className="mb-0.5 mt-1.5 w-24"
-                  />
-                </Row>
-              )}
-            </QueryState>
-          )}
-          {eventsBroke ? (
-            <Row
-              icon="alert"
-              title="Plans didn’t load"
-              sub="Open events to try again"
-              href={routes.events}
-            />
-          ) : nextEvent ? (
-            <Row
-              icon="calendar"
-              title={nextEvent.title}
-              sub={`${relativeDay(nextEvent.date, todayIso)}${nextEvent.start_time ? `, ${time12(nextEvent.start_time)}` : ""}`}
-              href={routes.event(nextEvent.id)}
-            />
-          ) : null}
-          {goalsBroke ? (
-            <Row
-              icon="alert"
-              title="Goals didn’t load"
-              sub="Open goals to try again"
-              href={routes.goals}
-            />
-          ) : goal ? (
-            <Row
-              icon="target"
-              title={goal.goal.title}
-              sub={
-                goal.goal.unit === "naira"
-                  ? `${naira(goal.total)} so far`
-                  : `${goal.total} of ${goal.goal.target} ${goal.goal.unit_label ?? ""}`
-              }
-              href={routes.goal(goal.goal.id)}
-            />
-          ) : null}
-        </Section>
+            {alone ? null : (
+              <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
+                {(wk) => (
+                  <Row
+                    icon="book"
+                    title="Weekly prayer"
+                    sub={`Set by ${setterWord(wk, me.id, partner)} · you’ve prayed ${wk.my_completed.length} of ${wk.points.length}`}
+                    href={routes.prayers}
+                  >
+                    <Segments
+                      total={wk.points.length}
+                      done={wk.my_completed.length}
+                      height={4}
+                      className="mb-0.5 mt-1.5 w-24"
+                    />
+                  </Row>
+                )}
+              </QueryState>
+            )}
+            {eventsBroke ? (
+              <Row
+                icon="alert"
+                title="Plans didn’t load"
+                sub="Open events to try again"
+                href={routes.events}
+              />
+            ) : nextEvent ? (
+              <Row
+                icon="calendar"
+                title={nextEvent.title}
+                sub={`${relativeDay(nextEvent.date, todayIso)}${nextEvent.start_time ? `, ${time12(nextEvent.start_time)}` : ""}`}
+                href={routes.event(nextEvent.id)}
+              />
+            ) : null}
+            {goalsBroke ? (
+              <Row
+                icon="alert"
+                title="Goals didn’t load"
+                sub="Open goals to try again"
+                href={routes.goals}
+              />
+            ) : goal ? (
+              <Row
+                icon="target"
+                title={goal.goal.title}
+                sub={
+                  goal.goal.unit === "naira"
+                    ? `${naira(goal.total)} so far`
+                    : `${goal.total} of ${goal.goal.target} ${goal.goal.unit_label ?? ""}`
+                }
+                href={routes.goal(goal.goal.id)}
+              />
+            ) : null}
+          </Section>
+        )}
       </div>
 
       {w ? (

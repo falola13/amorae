@@ -1,6 +1,21 @@
 import { sumOf } from "@/features/together/goals";
 import type { Event, Goal, NotificationPrefs, PrayerWeek } from "@/lib/api/types";
+import { isApiError } from "@/lib/api/errors";
 import { stillAhead, time12 } from "@/lib/dates";
+
+/**
+ * Whether this account is still one person.
+ *
+ * There are two ways of learning the same thing and the screen needs both.
+ * The API says it plainly — 409 waiting_for_partner — when a week is asked
+ * for. But the week is never asked for until a partner exists, because the
+ * query is disabled until then, so a lone account produces no error to read.
+ * A screen that waited for one sat on its loading skeleton forever, which is
+ * exactly what the first person to sign up saw: a greeting, the words "This
+ * week", and a grey bar that never resolved into anything.
+ */
+export const isAlone = (hasPartner: boolean, weekError: unknown): boolean =>
+  !hasPartner || (isApiError(weekError) && weekError.code === "waiting_for_partner");
 
 /** Events not yet done and not yet over, earliest first. */
 export const upcomingEvents = (events: Event[], now: Date): Event[] =>
