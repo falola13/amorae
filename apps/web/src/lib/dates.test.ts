@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import { addMonths, iso, monthGrid, parse, partOfDay, sameMonth, time12 } from "./dates";
 
 describe("partOfDay", () => {
-  // The card used to say "Tonight" over everything happening today, so an
-  // 8:30 breakfast read "TONIGHT · 8:30 am".
   it("calls the morning the morning", () => {
     expect(partOfDay("08:30")).toBe("This morning");
     expect(partOfDay("00:05")).toBe("This morning");
@@ -55,7 +53,6 @@ describe("monthGrid", () => {
     expect(parse(grid[0]).getDay()).toBe(0);
     expect(grid).toContain("2026-09-01");
     expect(grid).toContain("2026-09-30");
-    // and it spills into the neighbouring months, which is what makes it a grid
     expect(grid[0] < "2026-09-01").toBe(true);
     expect(grid[grid.length - 1] > "2026-09-30").toBe(true);
   });

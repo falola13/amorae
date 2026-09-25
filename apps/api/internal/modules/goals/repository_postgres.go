@@ -18,8 +18,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Every method takes a couple id, never a user id: a goal of somebody else's
-// couple is simply not found (DEC-19).
+// Every method takes a couple id, never a user id; a goal outside it is simply not found (DEC-19).
 
 func (r *PostgresRepository) List(ctx context.Context, coupleID uuid.UUID) ([]Goal, error) {
 	return r.load(ctx, `WHERE g.couple_id = $1`, coupleID)
@@ -130,8 +129,7 @@ func (r *PostgresRepository) Update(ctx context.Context, g Goal, at time.Time) e
 	return nil
 }
 
-// AddProgress appends to the log. It is scoped through the goal to the
-// couple, so an id from somebody else's goal finds nothing to add to.
+// AddProgress is scoped through the goal to the couple; an id from another goal finds nothing to add to.
 func (r *PostgresRepository) AddProgress(ctx context.Context, coupleID, goalID, userID uuid.UUID, amount int64, on time.Time) error {
 	id, err := uuid.NewV7()
 	if err != nil {

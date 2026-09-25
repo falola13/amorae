@@ -5,9 +5,7 @@ import { RetryLink } from "./retry-link";
 
 export const metadata: Metadata = { title: "Offline", robots: { index: false } };
 
-// Precached by public/sw.js and shown when a page can't be reached at all.
-// Static and free of user data: the worker stores one copy for everyone.
-// Bump VERSION in public/sw.js when this changes.
+// Precached by public/sw.js; bump VERSION there when this changes.
 export default function OfflinePage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col items-center justify-center gap-6 px-6 text-center">

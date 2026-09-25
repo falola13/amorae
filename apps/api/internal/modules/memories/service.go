@@ -17,16 +17,13 @@ type Repository interface {
 	Delete(ctx context.Context, coupleID, id uuid.UUID) error
 }
 
-// Photos is what this module needs of picture storage. Nil when Cloudinary is
-// not configured, and the handler answers accordingly rather than the service
-// pretending.
+// Photos may be nil when Cloudinary isn't configured; see PhotosAvailable.
 type Photos interface {
 	Ticket(publicID string, at time.Time) (photos.Ticket, error)
 	URL(publicID string, version int64) (string, error)
 	Destroy(ctx context.Context, publicID string) error
 }
 
-// Couples answers the one question this module asks of pairing.
 type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
@@ -42,12 +39,10 @@ func NewService(repo Repository, couples Couples, pics Photos, now func() time.T
 	return &Service{repo: repo, couples: couples, photos: pics, now: now}
 }
 
-// PhotosAvailable reports whether pictures can be attached at all.
 func (s *Service) PhotosAvailable() bool { return s.photos != nil }
 
-// PhotoTicket is permission to upload one file, to one name this server
-// chooses, for the next hour. The memory must exist and be this couple's —
-// checked here, so a ticket is never issued for somebody else's memory.
+// PhotoTicket permits one upload, to a server-chosen name, for one hour; the
+// memory must exist and belong to this couple.
 func (s *Service) PhotoTicket(ctx context.Context, userID, id uuid.UUID) (photos.Ticket, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -62,9 +57,7 @@ func (s *Service) PhotoTicket(ctx context.Context, userID, id uuid.UUID) (photos
 	return s.photos.Ticket(photos.PublicID(coupleID, id), s.now())
 }
 
-// AttachPhoto records that the upload happened. It takes no id from the
-// request: the only name a ticket could have written to is the one derived
-// here, so there is nothing for a client to choose.
+// AttachPhoto takes no id from the request: the only name a ticket could write to is server-derived.
 func (s *Service) AttachPhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -79,8 +72,8 @@ func (s *Service) AttachPhoto(ctx context.Context, userID, id uuid.UUID) (Memory
 	return s.repo.ByID(ctx, coupleID, id)
 }
 
-// RemovePhoto deletes the file before clearing the pointer, so a refusal at
-// Cloudinary leaves the photo visible rather than claiming it is gone.
+// RemovePhoto deletes the file before clearing the pointer, so a Cloudinary
+// failure leaves the photo visible rather than falsely gone.
 func (s *Service) RemovePhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -99,8 +92,7 @@ func (s *Service) RemovePhoto(ctx context.Context, userID, id uuid.UUID) (Memory
 	return s.repo.ByID(ctx, coupleID, id)
 }
 
-// Delete removes a moment and its picture. The photo goes first: the row
-// holds the only reference to it.
+// Delete removes the photo first: the row holds the only reference to it.
 func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -123,13 +115,8 @@ func (s *Service) destroyPhoto(ctx context.Context, m Memory) error {
 	return s.photos.Destroy(ctx, m.PhotoID)
 }
 
-// PhotoURL is a delivery address for one memory's picture, or "" if it has
-// none.
-//
-// It needs no couple and no user: the memory only reached this point through
-// a couple-scoped query, so being able to name it is already the permission.
-// Generated per request rather than stored, so the address lives as long as
-// the response and no longer.
+// PhotoURL needs no couple/user check: reaching this point via a
+// couple-scoped query is already the permission. Generated per request, not stored.
 func (s *Service) PhotoURL(m Memory) string {
 	if s.photos == nil || !m.HasPhoto() {
 		return ""
@@ -151,8 +138,7 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Memory, error) 
 	return s.repo.List(ctx, coupleID)
 }
 
-// Create keeps a moment. Either partner may, and it belongs to them both
-// (DEC-16) — an archive with an author beside each entry is a feed.
+// Create: either partner may, and it belongs to them both (DEC-16).
 func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Memory, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {

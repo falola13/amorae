@@ -5,17 +5,7 @@ import { useState } from "react";
 import { BareTextarea, Button, Sheet } from "@/components/ui/kit";
 import { useAnswer } from "@/features/prayers/hooks";
 
-/**
- * Marking a prayer answered, and saying how.
- *
- * The note is optional and the button does not wait for it. Sometimes the
- * answer is the whole story — he got the job — and requiring a sentence first
- * would turn the gladdest action in the app into a piece of homework. The
- * field is offered, not demanded.
- *
- * The same sheet edits the note afterwards, because what you write in the
- * first ten seconds is rarely what you would write a week later.
- */
+// Note is optional and never blocks the submit. Also reused to edit the note afterwards.
 export function AnswerSheet({
   open,
   onClose,
@@ -31,10 +21,7 @@ export function AnswerSheet({
   note?: string;
 }) {
   const answer = useAnswer();
-  // Seeded once, at mount. The parent only renders this while it is open and
-  // <Sheet> is null when closed, so every opening is a fresh mount with the
-  // note as it stands — which is what an effect here would have been faking,
-  // at the cost of a cascading render.
+  // Seeded once at mount — the sheet unmounts when closed, so every open is a fresh mount with the current note.
   const [text, setText] = useState(note ?? "");
 
   const submit = (e: React.FormEvent) => {

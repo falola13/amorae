@@ -48,10 +48,7 @@ function GoalRow({ g }: { g: Goal }) {
 
 export default function Goals() {
   const goals = useGoals();
-  // The empty state already offers this, centred, with a line saying what
-  // it is for. Showing the bar as well put two buttons for the same thing
-  // on one screen, one under the other. The bar is for when there is a
-  // list to add to.
+  // Hides the bottom add-button when the empty state already shows one.
   const hasAny = (goals.data?.length ?? 0) > 0;
   return (
     <>

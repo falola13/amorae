@@ -1,6 +1,5 @@
 // Package migrations embeds the SQL files in this directory into the
-// compiled binary, so cmd/migrate (and dbtest) don't need the source tree
-// or a migrations folder shipped alongside the container image.
+// compiled binary, so cmd/migrate (and dbtest) don't need them on disk.
 package migrations
 
 import "embed"

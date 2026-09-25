@@ -142,12 +142,9 @@ export function Sheet({
   children: ReactNode;
   labelledBy: string;
 }) {
-  // Escape, focus trap, focus return and the background scroll lock.
   const dialogRef = useDialog(open, onClose);
   if (!open) return null;
-  // A sheet from the bottom edge on a phone, where the thumb is; a centred
-  // dialog from `md`, where a full-width sheet on a large screen would be a
-  // long way from where the eye already is.
+  // Bottom sheet on a phone; centred dialog from `md`.
   return (
     <div className="fixed inset-0 z-40 md:flex md:items-center md:justify-center md:p-6">
       <button
@@ -186,8 +183,7 @@ export function Toast({
   action?: string;
   onAction?: () => void;
 }) {
-  // Above the tab bar on a phone; from `md` there is no tab bar, so it sits
-  // centred near the bottom edge at a readable width.
+  // Above the tab bar on a phone; centred near the bottom edge from `md`.
   return (
     <div
       role="status"

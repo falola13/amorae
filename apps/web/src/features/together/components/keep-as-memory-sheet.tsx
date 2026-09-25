@@ -7,20 +7,7 @@ import { useAddMemory, useCompleteEvent } from "@/features/together/hooks";
 import type { Event } from "@/lib/api/types";
 import { longDate } from "@/lib/dates";
 
-/**
- * Keeping a finished event.
- *
- * The button that opened onto this used to say "Save a moment from it" and
- * then navigate to the memories list — the whole list, with nothing carried
- * over. You were told the app would do something and then handed a blank
- * screen and the job of retyping what it already knew: the title, the day, the
- * place. This does the thing the button always said it did.
- *
- * Everything is prefilled and only the note is asked for, because the note is
- * the only part the event cannot supply. Marking the event done comes with it:
- * keeping something is the clearest way of saying it happened, and asking
- * twice would be asking somebody to file a form about their own evening.
- */
+// Everything is prefilled except the note, which the event can't supply. Marking the event done rides along.
 export function KeepAsMemorySheet({
   event: e,
   open,
@@ -48,9 +35,7 @@ export function KeepAsMemorySheet({
       },
       {
         onSuccess: () => {
-          // Only after the memory is safely stored. If this fails the event
-          // stays open, which is recoverable; the other order would quietly
-          // close an event whose memory never landed.
+          // Only after the memory is stored — the other order could close the event while it never landed.
           if (!e.done) complete.mutate({ id: e.id, done: true });
           onClose();
           onKept?.();

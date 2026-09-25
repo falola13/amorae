@@ -24,8 +24,6 @@ func fieldsOf(t *testing.T, err error) map[string]string {
 }
 
 func TestTotal_IsTheSumOfWhatWasLogged(t *testing.T) {
-	// Not a stored counter: a column and a log that disagree is a bug
-	// waiting to happen (BR-GOAL-01).
 	g := Goal{Progress: []Progress{{Amount: 50000}, {Amount: 25000}, {Amount: 10000}}}
 	if got := g.Total(); got != 85000 {
 		t.Errorf("Total() = %d, want 85000", got)
@@ -165,8 +163,6 @@ func TestValidateAmount(t *testing.T) {
 	if err := ValidateAmount(5000); err != nil {
 		t.Errorf("ValidateAmount(5000) = %v", err)
 	}
-	// A correction is how somebody fixes a number they typed wrong; deleting
-	// the entry would lose the fact that it happened.
 	if err := ValidateAmount(-5000); err != nil {
 		t.Errorf("a correction was refused: %v", err)
 	}

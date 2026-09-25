@@ -1,7 +1,5 @@
-// Package auth owns authentication use cases: registering, logging in and
-// out, and resolving a bearer token back to a user id. It imports user (for
-// the User entity and its validation) but user never imports auth — see
-// internal/platform/authctx for why that direction doesn't create a cycle.
+// Package auth owns authentication use cases. It imports user but user never
+// imports auth — see internal/platform/authctx for why that avoids a cycle.
 package auth
 
 import (
@@ -20,11 +18,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-// UserRepository lists only Create and GetByEmail — what auth's use cases
-// actually call — even though the concrete postgres repository behind it
-// also implements GetByID and Update for user.Service. Each consumer
-// declares its own narrow interface (ISP); there's still exactly one
-// implementation.
+// UserRepository lists only what auth's use cases call; the concrete
+// postgres repository also implements more, for user.Service (ISP).
 type UserRepository interface {
 	Create(ctx context.Context, u user.User) (user.User, error)
 	GetByEmail(ctx context.Context, email string) (user.User, error)
@@ -63,22 +58,20 @@ type Mailer interface {
 	Send(ctx context.Context, to, subject, body string) error
 }
 
-// Events counts product events for metrics. Counts only, never content.
+// Events counts product events for metrics — counts only, never content.
 type Events interface {
 	SignedUp()
 }
 
-// PolicyVersions are the Terms, Privacy and faith-content versions recorded
-// with each consent at sign-up.
+// PolicyVersions are recorded with each consent at sign-up.
 type PolicyVersions struct {
 	Terms   string
 	Privacy string
 	Faith   string
 }
 
-// Options holds the collaborators only some use cases need. Consents and
-// Events default to no-ops; Resets and Mailer are required for password
-// reset and fail that use case, not the whole service, when missing.
+// Options holds collaborators only some use cases need. Consents and Events
+// default to no-ops; missing Resets/Mailer fails only password reset.
 type Options struct {
 	Resets   PasswordResetRepository
 	Mailer   Mailer
@@ -96,7 +89,6 @@ type noEvents struct{}
 
 func (noEvents) SignedUp() {}
 
-// How long a password-reset link works.
 const resetTTL = time.Hour
 
 type PasswordHasher interface {
@@ -104,14 +96,12 @@ type PasswordHasher interface {
 	Compare(hash, password string) error
 }
 
-// TxRunner is what Register needs to create a user and a session
-// atomically. *database.DB satisfies this directly — no adapter needed.
+// TxRunner lets Register create a user and session atomically.
 type TxRunner interface {
 	InTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-// AttemptLimiter caps login attempts per account, so a password can't be
-// guessed by brute force even from many IPs. ratelimit.Limiter satisfies it.
+// AttemptLimiter caps login attempts per account against brute force, even from many IPs.
 type AttemptLimiter interface {
 	Allow(key string) (allowed bool, retryAfter time.Duration)
 }
@@ -121,10 +111,8 @@ var (
 	ErrUnauthenticated    = apperr.Unauthenticated("unauthenticated", "Authentication required.")
 )
 
-// The password rule, shared with the web app (apps/web/src/lib/api/schemas.ts):
-// at least 10 characters, counted as Unicode characters (so an emoji is one,
-// as a person would count it), and at most 72 bytes, because bcrypt ignores
-// everything after 72 bytes and a password must never be silently truncated.
+// Shared with apps/web/src/lib/api/schemas.ts. Max is bytes, not chars:
+// bcrypt silently ignores anything past 72 bytes.
 const (
 	minPasswordChars = 10
 	maxPasswordBytes = 72
@@ -161,9 +149,8 @@ type Service struct {
 	policies PolicyVersions
 	events   Events
 
-	// dummyHash is compared against on every failed login where the email
-	// doesn't exist, so that path costs the same bcrypt work as a wrong
-	// password on a real account — see Login.
+	// Compared against on unknown-email logins so that path costs the same
+	// bcrypt work as a wrong password (timing side-channel).
 	dummyHash string
 }
 
@@ -212,8 +199,7 @@ type RegisterInput struct {
 	Email       string `json:"email"`
 	Password    string `json:"password"`
 	DisplayName string `json:"display_name"`
-	// FR-AUTH-010 and 011: both must be true to register. FaithConsent is
-	// separate and optional (FR-AUTH-012); the Terms never imply it.
+	// FR-AUTH-010/011: both required. FaithConsent is separate, optional (FR-AUTH-012).
 	AgeConfirmed  bool `json:"age_confirmed"`
 	AcceptedTerms bool `json:"accepted_terms"`
 	FaithConsent  bool `json:"faith_consent"`
@@ -234,9 +220,8 @@ type AuthResult struct {
 	User      user.User `json:"user"`
 }
 
-// Register validates the input, hashes the password, and creates the user
-// and their first session in one transaction — a user should never exist
-// without a way to log in, and vice versa.
+// Register creates the user and their first session in one transaction: a
+// user should never exist without a way to log in.
 func (s *Service) Register(ctx context.Context, input RegisterInput) (AuthResult, error) {
 	fields := map[string]string{}
 	if problem := passwordProblem(input.Password); problem != "" {
@@ -302,14 +287,13 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (AuthResult
 	return AuthResult{Token: token, ExpiresAt: session.ExpiresAt, User: u}, nil
 }
 
-// recordConsents writes what the person agreed to at sign-up, inside the
-// transaction that creates them, so an account never exists without its
-// record of consent (FR-AUTH-011.AC2).
+// recordConsents runs inside the transaction that creates the account
+// (FR-AUTH-011.AC2).
 func (s *Service) recordConsents(ctx context.Context, userID uuid.UUID, faith bool) error {
 	kinds := map[string]string{
 		ConsentTerms:   s.policies.Terms,
 		ConsentPrivacy: s.policies.Privacy,
-		// The Terms set the minimum age, so the age check is versioned with them.
+		// Age check is versioned with the Terms, which set the minimum age.
 		ConsentAge18: s.policies.Terms,
 	}
 	if faith {
@@ -329,16 +313,14 @@ func (s *Service) recordConsents(ctx context.Context, userID uuid.UUID, faith bo
 	return nil
 }
 
-// Login never reveals whether an email is registered: an unknown email and
-// a wrong password both return ErrInvalidCredentials, and both do the same
-// amount of bcrypt work first (see dummyHash), so neither the response nor
-// its timing leaks which case occurred.
+// Login never reveals whether an email is registered: unknown email and
+// wrong password both return ErrInvalidCredentials with equal bcrypt work
+// (see dummyHash), so neither response nor timing leaks which occurred.
 func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, error) {
 	email := user.NormalizeEmail(input.Email)
 
-	// Checked before any database or bcrypt work, so a blocked guess costs
-	// nothing. The key is the email as typed, registered or not, so hitting
-	// the limit reveals nothing about which accounts exist.
+	// Checked before DB/bcrypt work; keyed on email as typed either way, so
+	// hitting the limit reveals nothing about which accounts exist.
 	if ok, retryAfter := s.attempts.Allow("login:" + email); !ok {
 		return AuthResult{}, apperr.RateLimited(retryAfter)
 	}
@@ -378,18 +360,14 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 		return s.sessions.Create(ctx, session)
 	})
 	if err != nil {
-		// The transaction rolled back, so the session doesn't exist: handing
-		// out the token anyway would "log in" a user whose every request 401s.
 		return AuthResult{}, err
 	}
 
 	return AuthResult{Token: token, ExpiresAt: session.ExpiresAt, User: u}, nil
 }
 
-// Authenticate resolves a bearer token to the user id that owns it. A
-// missing session and an expired one produce the identical error — telling
-// them apart isn't useful to a caller and would just be another way to
-// leak information about what did or didn't exist.
+// Authenticate resolves a bearer token to its owner's user id. A missing
+// session and an expired one produce the identical error.
 func (s *Service) Authenticate(ctx context.Context, token string) (uuid.UUID, error) {
 	hash := hashToken(token)
 
@@ -403,21 +381,17 @@ func (s *Service) Authenticate(ctx context.Context, token string) (uuid.UUID, er
 
 	now := s.now()
 	if !now.Before(session.ExpiresAt) {
-		_ = s.sessions.Delete(ctx, hash) // best-effort; an expired session must never authenticate regardless
+		_ = s.sessions.Delete(ctx, hash) // best-effort; must never authenticate regardless
 		return uuid.UUID{}, ErrUnauthenticated
 	}
 
-	// Best-effort, and at most hourly (see TouchLastUsed): "last used" is for
-	// recognising a session in the list, not an audit trail, and it must never
-	// be the reason an otherwise valid request fails.
+	// Best-effort: must never be the reason a valid request fails.
 	_ = s.sessions.TouchLastUsed(ctx, hash, now, now.Add(-lastUsedResolution))
 
 	return session.UserID, nil
 }
 
-// ListSessions is "where you're signed in", for the caller's own account. The
-// session making the request is marked, so it's obvious which row not to worry
-// about. currentToken is the bearer token of that request.
+// ListSessions marks the session making the request via currentToken.
 func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID, currentToken string) ([]SessionView, error) {
 	sessions, err := s.sessions.ListByUser(ctx, userID, s.now())
 	if err != nil {
@@ -438,9 +412,7 @@ func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID, currentTok
 	return views, nil
 }
 
-// SignOutOtherSessions ends every session except the one asking, and reports
-// how many ended. The caller stays signed in: someone securing their account
-// from a phone they still hold shouldn't be logged out by it.
+// SignOutOtherSessions keeps the caller signed in.
 func (s *Service) SignOutOtherSessions(ctx context.Context, userID uuid.UUID, currentToken string) (int, error) {
 	return s.sessions.DeleteOthers(ctx, userID, hashToken(currentToken))
 }
@@ -454,11 +426,8 @@ type ChangeEmailInput struct {
 // in, and web clients treat any 401 as "session expired, log out".
 var errWrongCurrentPassword = apperr.Validation(map[string]string{"current_password": "That password isn’t right."})
 
-// ChangeEmail moves the account to a new email, after re-checking the
-// current password. The email is the account's identity (it's what login
-// asks for), so a stolen session alone must not be enough to take it over.
-// Attempts share the per-account login limit, so the password can't be
-// guessed through this endpoint either.
+// ChangeEmail re-checks the current password so a stolen session alone can't
+// take over the account's login identity; rate-limited against guessing.
 func (s *Service) ChangeEmail(ctx context.Context, userID uuid.UUID, input ChangeEmailInput) (user.User, error) {
 	if ok, retryAfter := s.attempts.Allow("reauth:" + userID.String()); !ok {
 		return user.User{}, apperr.RateLimited(retryAfter)
@@ -500,9 +469,8 @@ type ChangePasswordInput struct {
 	NewPassword     string
 }
 
-// ChangePassword re-checks the current password, stores the new one, and
-// ends every other session (FR-ACCT-004.AC1): if the password was changed
-// because it leaked, whoever used it is signed out. The caller stays in.
+// ChangePassword ends every other session (FR-ACCT-004.AC1) so a leaked
+// password can't keep another holder signed in; the caller stays in.
 func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, currentToken string, input ChangePasswordInput) error {
 	if ok, retryAfter := s.attempts.Allow("reauth:" + userID.String()); !ok {
 		return apperr.RateLimited(retryAfter)
@@ -540,9 +508,8 @@ func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, currentT
 	})
 }
 
-// DeleteAccount removes the account after re-checking the password
-// (FR-ACCT-005.AC2). Sessions, membership and invitations go with the user
-// through the cascade; see user.PostgresRepository.DeleteMe for the couple.
+// DeleteAccount re-checks the password (FR-ACCT-005.AC2); see
+// user.PostgresRepository.DeleteMe for the cascade.
 func (s *Service) DeleteAccount(ctx context.Context, userID uuid.UUID, currentPassword string) error {
 	if ok, retryAfter := s.attempts.Allow("reauth:" + userID.String()); !ok {
 		return apperr.RateLimited(retryAfter)
@@ -563,9 +530,8 @@ func (s *Service) DeleteAccount(ctx context.Context, userID uuid.UUID, currentPa
 
 var errResetUnavailable = apperr.Internal(errors.New("password reset is not configured"))
 
-// ForgotPassword emails a one-hour reset link if the account exists, and
-// answers the same way either way (FR-AUTH-008.AC1), so the endpoint can't
-// be used to find out which emails are registered.
+// ForgotPassword answers identically whether or not the account exists
+// (FR-AUTH-008.AC1), so it can't be used to enumerate registered emails.
 func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	if s.resets == nil || s.mailer == nil {
 		return errResetUnavailable
@@ -605,8 +571,8 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	return nil
 }
 
-// ResetPassword sets a new password from a reset link and signs out every
-// device (FR-AUTH-008.AC2). The link is used up in the same transaction.
+// ResetPassword signs out every device (FR-AUTH-008.AC2); the link is
+// consumed in the same transaction.
 func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) error {
 	if s.resets == nil {
 		return errResetUnavailable
@@ -644,9 +610,7 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 	})
 }
 
-// Logout deletes the session for token. Deleting a row that doesn't exist
-// isn't an error for SQL, which is what makes this idempotent for free —
-// no special-casing "already logged out" is needed.
+// Logout is idempotent: deleting a nonexistent row isn't a SQL error.
 func (s *Service) Logout(ctx context.Context, token string) error {
 	return s.sessions.Delete(ctx, hashToken(token))
 }

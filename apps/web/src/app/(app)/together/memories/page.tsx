@@ -29,28 +29,6 @@ import {
   TopBar,
 } from "@/components/ui/kit";
 
-/**
- * A memory's picture, at the shape it was taken in.
- *
- * An earlier pass cropped every photo to a height chosen by its position, to
- * give the page an album's rhythm. That is the wrong way round: it crops a
- * couple's own photographs — faces included — to suit a layout. Letting each
- * one keep its aspect gives the same varied rhythm, except the variation is
- * theirs rather than imposed. The cap is only so a panorama cannot take over
- * the screen.
- *
- * The placeholder is now only the degraded case — a memory that says it has a
- * photo whose URL we could not build, which happens when Cloudinary is not
- * configured. It deliberately ignores the album height: there is nothing to
- * look at, and a tall empty block is a worse answer than a short one.
- */
-/**
- * A month, as a running head rather than a floating label.
- *
- * The rule is what makes it a heading: a label alone in space is read as one
- * more line of text, and an archive that runs for years needs the eye to catch
- * where one month stops. Print has done it this way for five hundred years.
- */
 function RunningHead({ children }: { children: string }) {
   return (
     <div className="flex items-center gap-3 pt-1">
@@ -63,9 +41,7 @@ function RunningHead({ children }: { children: string }) {
 function Photo({ label, src }: { label: string; src?: string }) {
   if (src) {
     return (
-      // Cloudinary already delivers this with f_auto,q_auto from its own CDN.
-      // Sending it through Vercel's optimiser too would add a hop and, on
-      // Hobby, a bill, to re-do work that is already done.
+      // Cloudinary already serves an optimised image; next/image would just add a redundant hop.
       // eslint-disable-next-line @next/next/no-img-element -- already optimised at the CDN
       <img
         src={src}
@@ -180,11 +156,6 @@ function MomentActions({ memory, onClose }: { memory: Memory | null; onClose: ()
   );
 }
 
-/**
- * The line under the end-mark. It states a fact — how much is kept, and how far
- * back it goes — because the bottom of an archive is worth a sentence and is
- * not worth a slogan.
- */
 function keptLine(count: number, oldest: string) {
   const moments = count === 1 ? "One moment" : `${count} moments`;
   return `${moments} kept, back to ${monthName(oldest)} ${oldest.slice(0, 4)}.`;
@@ -192,17 +163,11 @@ function keptLine(count: number, oldest: string) {
 
 export default function Memories() {
   const memories = useMemories();
-  // The empty state already offers this, centred, with a line saying what
-  // it is for. Showing the bar as well put two buttons for the same thing
-  // on one screen, one under the other. The bar is for when there is a
-  // list to add to.
+  // Hides the bottom add-button when the empty state already shows one.
   const hasAny = (memories.data?.length ?? 0) > 0;
   const [open, setOpen] = useState(false);
   const [acting, setActing] = useState<Memory | null>(null);
-  // Said once, at the top, after a save where the moment was kept and the
-  // picture was not. It stays until it is dismissed: it names something still
-  // to be done, and a toast that disappears would be exactly the wrong shape
-  // for that.
+  // Persists (no auto-dismiss) since it flags a photo that still needs re-uploading.
   const [photoFailed, setPhotoFailed] = useState(false);
   return (
     <>

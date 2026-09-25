@@ -9,11 +9,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-// Repository is declared here, by the consumer (Service), not by whatever
-// implements it — that's what lets repository_postgres.go depend on this
-// package instead of the other way around. It only lists what Service
-// actually calls; Create lives on the concrete type for auth's benefit, not
-// here (see the ISP note on auth.UserRepository).
+// Repository lists only what Service calls; Create lives on the concrete
+// type instead, for auth's use (see PostgresRepository's ISP note).
 type Repository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (User, error)
 	Update(ctx context.Context, u User) (User, error)
@@ -32,9 +29,8 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (User, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-// UpdateProfileInput holds the non-sensitive profile fields. Email is not
-// here on purpose: changing it needs the current password, so it's its own
-// use case (auth.Service.ChangeEmail).
+// Email is intentionally absent: changing it needs the current password
+// (auth.Service.ChangeEmail).
 type UpdateProfileInput struct {
 	DisplayName string `json:"display_name"`
 	// Timezone is optional: empty leaves it unchanged.
@@ -75,8 +71,7 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateP
 	return s.repo.Update(ctx, u)
 }
 
-// collectFields merges a validation error's field messages into fields, so
-// every invalid field is reported at once. Any other error is returned as is.
+// collectFields merges a validation error's fields so multiple invalid fields are reported together.
 func collectFields(fields map[string]string, err error) error {
 	if err == nil {
 		return nil

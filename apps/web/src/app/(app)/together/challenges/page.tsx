@@ -29,8 +29,7 @@ export default function Challenges() {
   const couple = useCouple();
   const partner = couple.data?.partner?.display_name ?? "They";
 
-  // A couple with nothing going has no challenge to fetch, so the 404 is the
-  // answer rather than a failure: offer them one instead of an error.
+  // No active challenge is a 404, not an error state — offer to start one.
   if (isApiError(ch.error) && ch.error.code === "challenge_not_found") {
     return <StartAChallenge />;
   }
@@ -47,8 +46,7 @@ export default function Challenges() {
         }
       >
         {(c) => {
-          // "Today" is the first day this person has not answered — their
-          // partner may be on a different one, and that is fine.
+          // Each partner's "today" is their own first unanswered day, independent of the other's.
           const todayDay = c.days.find((d) => !d.done && !d.skipped);
           const finished = !todayDay;
           return (
@@ -94,9 +92,7 @@ export default function Challenges() {
                             {d.text}
                           </span>
                         </span>
-                        {/* Theirs, beside yours. Seeing is not the same as
-                            being able to change (DEC-30), so this is a label
-                            and never a control. */}
+                        {/* Label only, never a control — you can see the partner's status but not change it (DEC-30). */}
                         {d.partner_done ? (
                           <span className="text-[12px] font-semibold text-stone">
                             {partner} did
@@ -142,10 +138,6 @@ export default function Challenges() {
   );
 }
 
-/**
- * What to show a couple who have not started one. The catalogue is curated
- * and short, so it is a list to read rather than a thing to search.
- */
 function StartAChallenge() {
   const templates = useChallengeTemplates();
   const start = useStartChallenge();

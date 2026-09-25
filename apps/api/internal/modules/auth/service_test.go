@@ -16,10 +16,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/ratelimit"
 )
 
-// This file lives in package auth (not auth_test) because fakeSessionRepo
-// needs to return errSessionNotFound — the unexported sentinel Service
-// checks for — to correctly simulate "no such session" the way the real
-// postgres repository does.
+// This file lives in package auth (not auth_test): fakeSessionRepo needs to
+// return the unexported errSessionNotFound sentinel Service checks for.
 
 type fakeUserRepo struct {
 	byEmail map[string]user.User
@@ -108,8 +106,7 @@ func (f *fakeSessionRepo) Create(_ context.Context, s Session) error {
 	return nil
 }
 
-// allowAll is an AttemptLimiter that never limits, for tests about
-// everything except rate limiting.
+// allowAll is an AttemptLimiter that never limits.
 type allowAll struct{}
 
 func (allowAll) Allow(string) (bool, time.Duration) { return true, 0 }
@@ -186,8 +183,8 @@ func (fakeTxRunner) InTx(ctx context.Context, fn func(ctx context.Context) error
 	return fn(ctx)
 }
 
-// spyHasher wraps a real hasher and counts Compare calls, so a test can
-// assert that Login did the bcrypt work even when the email doesn't exist.
+// spyHasher counts Compare calls so a test can assert Login did bcrypt work
+// even when the email doesn't exist.
 type spyHasher struct {
 	inner        PasswordHasher
 	compareCalls int
@@ -494,7 +491,6 @@ func TestService_Login_RateLimitedPerAccountBeforeBcrypt(t *testing.T) {
 		t.Error("a rate-limited attempt still ran bcrypt; the limit must be checked first")
 	}
 
-	// Another account is unaffected.
 	_, err = svc.Login(context.Background(), LoginInput{Email: "other@example.com", Password: "guess"})
 	if appErr, _ := apperr.As(err); appErr != nil && appErr.Kind == apperr.KindRateLimited {
 		t.Fatal("one account's limit blocked a different account")

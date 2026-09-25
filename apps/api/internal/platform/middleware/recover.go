@@ -10,10 +10,9 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/logger"
 )
 
-// Recover turns a panic anywhere below it into a logged stack trace and a
-// well-formed 500, instead of net/http's bare dropped connection. It sits
-// inside RequestID and Logging (see app.New) so the panic's log line and
-// the error body both carry the request id, and the 500 is still access-logged.
+// Recover turns a panic into a logged stack trace and a well-formed 500,
+// instead of net/http's bare dropped connection. Sits inside RequestID and
+// Logging (see app.New) so the panic and 500 are both logged with the request id.
 func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -21,8 +20,7 @@ func Recover(next http.Handler) http.Handler {
 			if rec == nil {
 				return
 			}
-			// http.ErrAbortHandler is net/http's deliberate "abort this
-			// response" signal, not a bug. Let the server handle it as intended.
+			// ErrAbortHandler is net/http's deliberate abort signal, not a bug.
 			if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 				panic(rec)
 			}

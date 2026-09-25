@@ -20,9 +20,8 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// PreferencesFor is what this person has chosen, and whether they have ever
-// chosen anything. Someone who has never opened the screen has no row, which
-// is not an error — the service answers with the defaults.
+// PreferencesFor returns this person's saved preferences. No row is not an
+// error; the service supplies the defaults.
 func (r *PostgresRepository) PreferencesFor(ctx context.Context, userID uuid.UUID) (Preferences, bool, error) {
 	var p Preferences
 	var reminder time.Time
@@ -44,9 +43,8 @@ func (r *PostgresRepository) PreferencesFor(ctx context.Context, userID uuid.UUI
 	return p, true, nil
 }
 
-// SavePreferences writes the whole set for one person. The service has
-// already laid the patch over what was there, so this stores a complete
-// picture rather than trying to merge in SQL.
+// SavePreferences writes the whole row; the service has already merged the
+// patch, so no partial update happens here.
 func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UUID, p Preferences, at time.Time) error {
 	if _, err := r.db.Q(ctx).Exec(ctx, `
 		INSERT INTO notification_preferences
@@ -74,10 +72,8 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 	return nil
 }
 
-// Subscribe records a browser, or moves it to this user if it was somebody
-// else's. A shared or handed-on device is the reason for that last part: the
-// endpoint identifies the browser, and whoever is signed in now is who its
-// notifications belong to.
+// Subscribe upserts by endpoint, reassigning it to this user if it belonged
+// to someone else (shared or handed-on devices).
 func (r *PostgresRepository) Subscribe(ctx context.Context, sub Subscription, at time.Time) error {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -121,8 +117,8 @@ func (r *PostgresRepository) SubscriptionsFor(ctx context.Context, userID uuid.U
 	return subs, nil
 }
 
-// Unsubscribe forgets a browser. The worker calls it when a push service says
-// the subscription is gone (FR-NOTF-004); nothing else should need it.
+// Unsubscribe forgets a browser; called by the worker when a push service
+// reports it gone (FR-NOTF-004).
 func (r *PostgresRepository) Unsubscribe(ctx context.Context, endpoint string) error {
 	if _, err := r.db.Q(ctx).Exec(ctx,
 		`DELETE FROM push_subscriptions WHERE endpoint = $1`, endpoint); err != nil {

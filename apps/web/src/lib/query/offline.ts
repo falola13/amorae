@@ -3,8 +3,7 @@
 import { onlineManager, useMutationState, type MutationKey } from "@tanstack/react-query";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-// Offline status, read from React Query itself rather than a second store,
-// so the UI and the paused-mutation machinery can never disagree.
+// Read from React Query itself, not a second store, so the UI and the paused-mutation machinery can't disagree.
 
 const subscribe = (onChange: () => void) => onlineManager.subscribe(onChange);
 
@@ -31,11 +30,8 @@ export function usePausedCount(): number {
 
 const SYNCED_NOTICE_MS = 3500;
 
-/**
- * How many paused changes were just sent after reconnecting, for a short
- * "synced" notice; null the rest of the time. If one then fails, the
- * QueryClient's error toast says so.
- */
+/** Count of paused changes just sent after reconnecting, for a "synced" notice;
+ *  null otherwise. A later failure surfaces via the QueryClient's own error toast. */
 export function useSyncedCount(): number | null {
   const paused = useMutationState({ filters: { predicate: (m) => m.state.isPaused } }).length;
   const online = useOnline();

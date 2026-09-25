@@ -6,18 +6,13 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * What a modal dialog owes the keyboard, in one place: Escape closes it, Tab
- * stays inside it, focus starts on the first control, and on close it goes
- * back to whatever opened it — otherwise a keyboard or screen-reader user is
- * left behind the dialog, or dumped at the top of the page.
- *
- * Returns the ref to put on the dialog element (give it `tabIndex={-1}` so it
- * can hold focus when it has no controls of its own).
+ * Modal keyboard behavior: Escape closes, Tab is trapped inside, focus starts
+ * on the first control and returns to the opener on close. Put the returned
+ * ref on the dialog element with `tabIndex={-1}`.
  */
 export function useDialog(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
-  // Kept in a ref so a new inline onClose each render doesn't re-run the
-  // effect below, which would steal focus back on every keystroke.
+  // Ref so a new inline onClose each render doesn't re-run the effect and steal focus back.
   const close = useRef(onClose);
   useEffect(() => {
     close.current = onClose;

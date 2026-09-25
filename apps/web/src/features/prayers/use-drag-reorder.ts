@@ -8,25 +8,8 @@ import type { PrayerPoint } from "@/lib/api/types";
 /** The row being held, and how far it has been dragged since its last swap. */
 export type Held = { index: number; offset: number };
 
-/**
- * Reorder handlers for the setter's prayer list.
- *
- * The first version of this worked and looked broken, which is worse than
- * broken. It moved a row only after 60px of travel — on a 73px row, most of
- * a row's height — and drew nothing at all in the meantime. So the handle
- * took your finger, gave no sign it had, and then either jumped or did not.
- * Everybody who tried it concluded the grip was decorative.
- *
- * Two changes, both about the middle of the gesture rather than its ends.
- * The row now follows the finger from the first pixel, so the grab is visible
- * before anything has moved. And it swaps at half a row rather than a fixed
- * 60px, measured from the row itself, so the swap happens exactly when the
- * row has covered half its neighbour — which is where the eye expects it.
- *
- * A pointer drag still commits once, on release: one drag is one save, never
- * one per step. A keyboard move has no release to batch against, so it
- * commits immediately.
- */
+// Reorder handlers for the setter's prayer list. Swaps at half a row of travel; a pointer drag
+// commits once on release, a keyboard move commits immediately.
 export function useDragReorder(
   source: PrayerPoint[] | null,
   onCommit: (next: PrayerPoint[]) => void,
@@ -54,8 +37,7 @@ export function useDragReorder(
   };
 
   const onPointerDown = (i: number, e: ReactPointerEvent) => {
-    // currentTarget, not target: the press usually lands on the icon's path,
-    // and capturing there worked only by accident of bubbling.
+    // currentTarget, not target — the press usually lands on the icon's inner path.
     const handle = e.currentTarget as HTMLElement;
     const step = handle.closest("li")?.getBoundingClientRect().height ?? 72;
     drag.current = { from: i, y: e.clientY, step };
@@ -74,16 +56,13 @@ export function useDragReorder(
       if (next) {
         setLocal(next);
         dirty.current = next;
-        // The row has taken its neighbour's place, so the finger is level
-        // with it again: new baseline, no offset.
+        // Row took its neighbour's place; finger is level again, so reset the baseline.
         drag.current = { ...d, from: to, y: e.clientY };
         setHeld({ index: to, offset: 0 });
         return;
       }
     }
-    // At the ends of the list there is nowhere to swap to, and the row
-    // follows anyway — the resistance is what says "this is as far as it
-    // goes", which a row that simply ignored you would not.
+    // At list ends there's nowhere to swap; the row still follows, showing resistance rather than nothing.
     setHeld({ index: d.from, offset: dy });
   };
 

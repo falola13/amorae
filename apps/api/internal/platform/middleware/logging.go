@@ -8,9 +8,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/logger"
 )
 
-// Logging writes one line per request after it completes, using whatever
-// logger RequestID already put in context (so the line carries request_id
-// without this middleware needing to know about that key itself).
+// Logging writes one line per request after it completes, using the logger
+// RequestID already put in context, so the line carries request_id.
 func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -21,9 +20,7 @@ func Logging(next http.Handler) http.Handler {
 		logger.FromContext(r.Context()).Info("http_request",
 			"method", r.Method,
 			"path", r.URL.Path,
-			// As resolved by ClientIP (the visitor, not the BFF), so a
-			// rate-limited or abusive caller can be traced in the logs.
-			"client_ip", httpx.ClientIP(r.Context()),
+			"client_ip", httpx.ClientIP(r.Context()), // the visitor, resolved by ClientIP
 			"status", sw.Status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"bytes", sw.Bytes,

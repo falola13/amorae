@@ -26,8 +26,7 @@ import { routes } from "@/lib/routes";
 import { useInstall } from "@/lib/pwa/install";
 
 export default function SettingsPage() {
-  // Settings is about you, so it reads the account rather than the couple:
-  // it has to work before you have a space and after you leave one.
+  // Reads the account rather than the couple, so it works before pairing and after leaving one.
   const me = useMe().data;
   const couple = useCouple();
   const ended = useEndedCouples();
@@ -37,22 +36,17 @@ export default function SettingsPage() {
   const [confirm, setConfirm] = useState<"logout" | "delete" | null>(null);
   const paired = Boolean(couple.data);
   const partner = couple.data?.partner?.display_name;
-  // A space that has ended is still here for a while. It goes near the top,
-  // not buried under the account rows: it is on a clock.
+  // Surfaced near the top since it's time-limited (auto-deletes).
   const pastSpace = ended.data?.[0];
-  // Changes still waiting for the connection are dropped on logout (they
-  // belong to this user, on this device), so the confirmation says so.
+  // Unsynced local changes are dropped on logout, so the confirmation warns about it.
   const unsynced = usePausedCount();
   const logout = async () => {
     clearSignedInState(qc);
     await logoutAction();
   };
-  // Each section stands alone: if notification settings can't load, the
-  // profile, the app section and, above all, "Log out" still work.
   return (
     <>
-      {/* Without a couple there is no tab bar, so this screen carries its
-          own way back to where the app wants you next. */}
+      {/* No tab bar without a couple, so this screen needs its own way back. */}
       {paired ? null : <TopBar back="Your space" backHref={routes.couple()} />}
       <Main>
         <div className="pt-1.5">

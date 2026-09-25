@@ -29,10 +29,8 @@ export const prayerWrites = {
     invalidates: [keys.week, keys.history],
     idempotent: "publishing a week that is already published changes nothing.",
   }),
-  // Marking a prayer answered is the gladdest thing the app does, so it
-  // should not be the slowest. The note is sent with the mark rather than
-  // after it: two round trips would mean a moment where the prayer is
-  // answered but the reason why is missing.
+  // Note is sent with the mark, not after — two round trips would leave a moment where it's answered
+  // but the reason is missing.
   answer: defineWrite({
     mutationKey: ["prayers", "answer"],
     mutationFn: ({ pointId, note }: { pointId: string; note: string }) =>

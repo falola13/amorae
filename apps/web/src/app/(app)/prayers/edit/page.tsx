@@ -33,7 +33,6 @@ export default function EditPrayerPage() {
   );
 }
 
-/** Feels like writing a note, not filling a form: bare fields, big type. */
 function EditPrayer() {
   const params = useSearchParams();
   const id = params.get("id");
@@ -42,10 +41,7 @@ function EditPrayer() {
   const partner = couple.data?.partner?.display_name ?? "Your partner";
   const save = useSavePoints();
   const router = useRouter();
-  // The point's own values, handed to the form directly. An effect calling
-  // reset() on every week.data change would also fire on a background
-  // refetch — queries refetch when the window regains focus — and overwrite
-  // whatever the person had typed. keepDirtyValues leaves edited fields alone.
+  // keepDirtyValues prevents a background refetch (e.g. on window focus) from overwriting unsaved edits.
   const point = week.data?.points.find((x) => x.id === id);
   const {
     register,
@@ -74,9 +70,7 @@ function EditPrayer() {
         const points = w.points;
         const idx = points.findIndex((x) => x.id === id);
 
-        // The list hides the link to a prayer the partner has prayed, but a
-        // back button or an old tab can still land here. Saying so beats
-        // letting them retype it and meet a 409 at the end.
+        // Reachable via back button/old tab even though the list hides this link once the partner has prayed it.
         if (idx !== -1 && id && w.partner_completed.includes(id)) {
           return (
             <Main>

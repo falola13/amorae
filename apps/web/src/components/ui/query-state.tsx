@@ -13,20 +13,9 @@ type DataOf<Q> = Q extends UseQueryResult<infer D, unknown> ? D : never;
 type DataTuple<Qs extends readonly AnyQuery[]> = { [K in keyof Qs]: DataOf<Qs[K]> };
 
 /**
- * The one place a screen decides between loading, failed and ready, so no
- * page can leave a failed request as a skeleton that spins forever.
- *
- *   <QueryState queries={[goal, couple]}>
- *     {(g, c) => <GoalDetail goal={g} partner={c.partner} />}
- *   </QueryState>
- *
- * A failure takes only this component's space, never the screen: wrap each
- * independent part of a page in its own QueryState so the rest keeps working.
- * Keep the page chrome (TopBar, Main, title) outside. When the QueryState is
- * the whole page body (its children render their own <Main>), pass
- * frame={inPage} so the notice sits in the page like everything else.
- * Cached data always wins: a background refetch that fails keeps showing
- * what was loaded.
+ * Central loading/error/ready switch for a set of queries; each failure only
+ * takes this component's space, not the whole screen. Cached data always wins
+ * over a failed background refetch.
  */
 export function QueryState<const Qs extends readonly AnyQuery[]>({
   queries,

@@ -7,19 +7,9 @@ import { AnimatedMark } from "@/components/icons";
 /** After this long, say so, rather than breathing at someone indefinitely. */
 const SLOW_MS = 8000;
 
-/**
- * The opening screen, shown while the couple loads. The mark draws itself, then
- * the wordmark and tagline lift in — about a second in total, finishing before
- * most loads do.
- *
- * The waiting indicator is deliberately late: it fades in at 1.2s, once the
- * opening has played, so a fast load is just the animation and a slow one
- * grows a progress line on its own. After SLOW_MS it says plainly that this is
- * taking longer than usual.
- *
- * Motion tokens live in globals.css; `prefers-reduced-motion` turns them all
- * off and the composition, indicator included, simply appears.
- */
+/** Opening screen while the couple loads. The waiting indicator fades in at
+ *  1.2s, so it only shows on slow loads; prefers-reduced-motion just shows
+ *  the finished composition (tokens in globals.css). */
 export function SplashView({ label = "Opening your space" }: { label?: string }) {
   const [slow, setSlow] = useState(false);
   useEffect(() => {

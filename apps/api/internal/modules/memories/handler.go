@@ -49,12 +49,9 @@ type memoryDTO struct {
 	Date     string `json:"date"`
 	Location string `json:"location,omitempty"`
 	Note     string `json:"note,omitempty"`
-	// Always sent: the screen branches on it to decide whether to leave room
-	// for a picture, and an absent field would have to mean false anyway.
-	// Derived from whether there is a photo, not stored beside it.
+	// Always sent (derived, not stored) — an absent field would have to mean false anyway.
 	HasPhoto bool `json:"has_photo"`
-	// A signed, unguessable delivery address, generated for this request and
-	// only for a member of this couple. Absent when there is no photo.
+	// Signed, unguessable, generated per request; absent when there is no photo.
 	PhotoURL string `json:"photo_url,omitempty"`
 }
 
@@ -75,10 +72,8 @@ type createRequest struct {
 	Date     string `json:"date"`
 	Location string `json:"location"`
 	Note     string `json:"note"`
-	// Accepted and ignored. The client posts the whole Memory shape it holds,
-	// has_photo included, and httpx.Decode refuses a field it has never heard
-	// of — so leaving this out would turn every save into invalid_json.
-	// Whether a photo exists is the server's to say (FR-MEM-003).
+	// Accepted and ignored: httpx.Decode rejects unknown fields and the client
+	// always sends has_photo. Server-derived (FR-MEM-003).
 	HasPhoto bool `json:"has_photo"`
 }
 
@@ -146,8 +141,7 @@ func (h *Handler) attachPhoto(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// No body on purpose: the only name the ticket could have written to is
-	// the one the server derives, so there is nothing to send.
+	// No body on purpose: the ticket's name is server-derived, so there is nothing to send.
 	m, err := h.svc.AttachPhoto(r.Context(), userID, id)
 	if err != nil {
 		httpx.Error(w, r, err)

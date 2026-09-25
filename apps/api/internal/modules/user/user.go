@@ -1,7 +1,5 @@
-// Package user owns the User entity, its validation rules, and the use
-// cases (via Service) that operate on it. Nothing in this package imports
-// net/http or pgx — those belong to handler.go and repository_postgres.go
-// respectively, keeping this file readable as "what is a valid user" alone.
+// Package user owns the User entity and its validation rules; net/http and
+// pgx concerns live in handler.go and repository_postgres.go.
 package user
 
 import (
@@ -17,9 +15,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-// Sentinel errors every layer above the repository checks for by identity
-// (errors.Is / apperr.As), so a 409 vs 404 is decided once, here, rather
-// than re-derived from a raw driver error at each call site.
+// Sentinel errors checked by identity (errors.Is/apperr.As) so the HTTP
+// status is decided once, here.
 var (
 	ErrNotFound   = apperr.NotFound("user_not_found", "User not found.")
 	ErrEmailTaken = apperr.Conflict("email_taken", "An account with this email already exists.")
@@ -27,10 +24,8 @@ var (
 
 const maxDisplayNameRunes = 50
 
-// User is never encoded directly into an HTTP response — handler.go maps it
-// to a DTO instead — but PasswordHash still carries json:"-" as a second
-// line of defense: if a future change ever marshals a User by mistake, the
-// hash can't leak through it.
+// PasswordHash carries json:"-" as defense in depth in case a future change
+// marshals User directly instead of via DTO.
 type User struct {
 	ID           uuid.UUID  `json:"id"`
 	Email        string     `json:"email"`
@@ -45,9 +40,7 @@ type User struct {
 // DefaultTimezone matches the users.timezone column default.
 const DefaultTimezone = "UTC"
 
-// New validates email and displayName and constructs a User ready to
-// persist. passwordHash is taken as-is — hashing the plaintext password is
-// auth's job, not user's, since user has no opinion on hashing algorithms.
+// New validates email and displayName; passwordHash is taken as-is (hashing is auth's job).
 func New(email, displayName, passwordHash string, now time.Time) (User, error) {
 	email = NormalizeEmail(email)
 	displayName = strings.TrimSpace(displayName)
@@ -89,9 +82,8 @@ func ValidateEmail(email string) (string, error) {
 	return email, nil
 }
 
-// ValidateTimezone accepts an IANA zone name ("Africa/Lagos"). The zone
-// database is embedded (the time/tzdata import), so validation doesn't depend
-// on the host having one: the distroless runtime image, for example.
+// ValidateTimezone accepts an IANA zone name ("Africa/Lagos"); the embedded
+// tzdata means this works even without zone data on the host (e.g. distroless).
 func ValidateTimezone(tz string) (string, error) {
 	tz = strings.TrimSpace(tz)
 	if _, err := time.LoadLocation(tz); err != nil || tz == "" || tz == "Local" {
@@ -106,11 +98,8 @@ func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-// validEmail requires both a length under the common 254-byte mail limit
-// and that mail.ParseAddress reads the string back as exactly the bare
-// address given — that second check is what rejects "Name <a@b.com>" and
-// similar forms ParseAddress otherwise accepts, since a display name has
-// no meaning in this field.
+// validEmail also rejects "Name <a@b.com>" forms that mail.ParseAddress
+// otherwise accepts, by requiring the parsed address equal the input exactly.
 func validEmail(email string) bool {
 	if email == "" || len(email) > 254 {
 		return false
@@ -122,9 +111,7 @@ func validEmail(email string) bool {
 	return addr.Address == email
 }
 
-// ValidateDisplayName is exposed so UpdateProfile can re-run just this rule
-// without going through New (which also requires an email and a password
-// hash that a profile update doesn't have).
+// ValidateDisplayName is exposed so UpdateProfile can re-run just this rule without going through New.
 func ValidateDisplayName(displayName string) (string, error) {
 	displayName = strings.TrimSpace(displayName)
 	if n := utf8.RuneCountInString(displayName); n < 1 || n > maxDisplayNameRunes {

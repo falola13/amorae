@@ -12,11 +12,7 @@ import { changePasswordSchema, type ChangePasswordInput } from "@/lib/api/schema
 import { notify } from "@/lib/store/toast";
 import { useChangePassword } from "../hooks";
 
-/**
- * The API signs out every other device when the password changes, so a
- * password changed because it leaked also ends whoever was using it. This
- * device stays signed in.
- */
+// API signs out every other device on password change; this device stays signed in.
 export function ChangePasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const change = useChangePassword();
   const [show, setShow] = useState(false);

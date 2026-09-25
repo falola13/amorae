@@ -11,8 +11,7 @@ export async function getSessionToken(): Promise<string | undefined> {
   return store.get(COOKIE_NAME)?.value;
 }
 
-// Called from Server Actions only — cookies() can't be mutated during
-// Server Component rendering (see Next's cookies() docs).
+// Server Actions only — cookies() can't be mutated during Server Component rendering.
 export async function setSession(token: string, expiresAt: string): Promise<void> {
   const store = await cookies();
   store.set(COOKIE_NAME, token, {

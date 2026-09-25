@@ -42,11 +42,7 @@ export function PrayerSession({
         >
           <Icon name="x" size={22} />
         </Link>
-        {/*
-          Progress strip. Prayed = plum, not yet = edge: both at least 3:1 against
-          the paper background and against each other (WCAG 1.4.11). The current
-          point is taller, so it's marked by shape, not colour alone.
-        */}
+        {/* Both colors are ≥3:1 contrast (WCAG 1.4.11); current point is also marked by shape, not color alone. */}
         <div aria-hidden="true" className="flex w-32 items-center gap-1">
           {w.points.map((x, k) => (
             <div
@@ -85,8 +81,7 @@ export function PrayerSession({
           {p.title}
         </h1>
         {p.text ? (
-          // From `md` the prayer body uses the reading token: further from the
-          // eye on a tablet or laptop, so it wants the larger size.
+          // From `md`, body uses the larger reading size — further from the eye on tablet/laptop.
           <p className="m-0 text-[19px] leading-[1.6] md:text-reading" data-selectable>
             {p.text}
           </p>

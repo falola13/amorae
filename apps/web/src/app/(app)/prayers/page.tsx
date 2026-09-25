@@ -24,8 +24,7 @@ export default function PrayersPage() {
   const couple = useCouple();
   const pending = usePendingCompletions();
 
-  // Before a partner joins there is no week to wait for, and saying so is
-  // kinder than letting the screen fail at them.
+  // No week exists before a partner joins, so show that state explicitly rather than letting the query fail.
   if (couple.data && !couple.data.partner) {
     return (
       <Main>

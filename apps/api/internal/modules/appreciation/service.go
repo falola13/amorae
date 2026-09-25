@@ -15,7 +15,6 @@ type Repository interface {
 	Delete(ctx context.Context, coupleID, id uuid.UUID) error
 }
 
-// Couples answers the one question this module asks of pairing.
 type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
@@ -30,8 +29,7 @@ func NewService(repo Repository, couples Couples, now func() time.Time) *Service
 	return &Service{repo: repo, couples: couples, now: now}
 }
 
-// List is every note either of them has sent, newest first. Both see all of
-// them: a note one of them cannot read is not a note they were sent.
+// List returns every note either of them sent, newest first; both partners see all of them.
 func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Appreciation, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -57,12 +55,8 @@ func (s *Service) Send(ctx context.Context, userID uuid.UUID, text string) (Appr
 	}, s.now())
 }
 
-// Undo takes a note back, if it is theirs and the window is still open
-// (FR-APPR-003.AC4).
-//
-// Undoing one that is already gone is not an error: a client that retries
-// after a dropped response should find the world as it wanted it, and the
-// second delete leaves exactly the same nothing behind.
+// Undo takes back an owned note within the window (FR-APPR-003.AC4).
+// Already-gone is not an error, so a retried request is idempotent.
 func (s *Service) Undo(ctx context.Context, userID, id uuid.UUID) error {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {

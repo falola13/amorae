@@ -36,8 +36,6 @@ func post(h *TickHandler, auth string) *httptest.ResponseRecorder {
 }
 
 func TestNewTickHandler_OffWithoutASecret(t *testing.T) {
-	// A deploy that forgets TICK_SECRET should end up with no endpoint, not
-	// an open one.
 	for _, secret := range []string{"", "   "} {
 		if h := NewTickHandler(nil, secret, quietLog()); h != nil {
 			t.Errorf("secret %q produced a handler", secret)
@@ -63,8 +61,7 @@ func TestTick_Authorisation(t *testing.T) {
 	})
 
 	t.Run("anything else is simply not there", func(t *testing.T) {
-		// 404 rather than 401: a caller without the secret should not learn
-		// that this endpoint exists at all.
+		// 404, not 401: a caller without the secret shouldn't learn this exists.
 		for _, auth := range []string{"", "Bearer wrong", "Bearer ", testSecret + "x"} {
 			if w := post(h, auth); w.Code != http.StatusNotFound {
 				t.Errorf("auth %q: status = %d, want 404", auth, w.Code)
@@ -97,8 +94,6 @@ func (s *slowRepo) CurrentWeekCandidates(context.Context, time.Time) ([]Candidat
 }
 
 func TestTick_DoesNotOverlapItself(t *testing.T) {
-	// Claim rows make an overlap harmless, but two passes competing for the
-	// same connections turns one slow tick into several.
 	repo := &slowRepo{fakeRepo: newFakeRepo(), entered: make(chan struct{}), release: make(chan struct{})}
 	h := tickFor(t, repo)
 

@@ -11,17 +11,12 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
 )
 
-// service is declared here, by the handler that consumes it, so this file
-// depends on a two-method interface rather than the concrete *Service —
-// handler_test.go implements this with a fake instead of standing up a
-// database.
 type service interface {
 	Get(ctx context.Context, id uuid.UUID) (User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateProfileInput) (User, error)
 }
 
-// Handler is transport only: decode the request, call the service, map the
-// result to a DTO, respond. Every business rule lives in Service instead.
+// Handler is transport only; business rules live in Service.
 type Handler struct {
 	svc service
 }
@@ -52,9 +47,8 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 	httpx.Data(w, http.StatusOK, ToDTO(u))
 }
 
-// Email is deliberately absent: changing it needs the current password, so
-// it has its own endpoint (PUT /users/me/email, in the auth module). Sending
-// "email" here is rejected as an unknown field.
+// Email is deliberately absent: changing it needs the current password, via
+// PUT /users/me/email in auth; sending "email" here is rejected as unknown.
 type updateMeRequest struct {
 	DisplayName string `json:"display_name"`
 	Timezone    string `json:"timezone"`

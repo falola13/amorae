@@ -15,7 +15,6 @@ type Repository interface {
 	Leave(ctx context.Context, coupleID uuid.UUID) error
 }
 
-// Couples answers the one question this module asks of pairing.
 type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
@@ -30,9 +29,8 @@ func NewService(repo Repository, couples Couples, now func() time.Time) *Service
 	return &Service{repo: repo, couples: couples, now: now}
 }
 
-// Viewer is a challenge as one partner sees it: their own marks, and their
-// partner's alongside. Both see both, as with prayer completion — seeing is
-// not the same as being able to change.
+// Viewer is a challenge as one partner sees it: their marks and their
+// partner's alongside — visible, not editable by the other.
 type Viewer struct {
 	Challenge
 	Me      uuid.UUID

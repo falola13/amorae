@@ -5,8 +5,7 @@ import { LegalDocument, LegalSection } from "../legal-document";
 
 export const metadata: Metadata = { title: "Privacy Policy" };
 
-// Every statement here describes what the code actually does. When the code
-// changes (a new kind of data, a new provider), change this page in the same PR.
+// Keep in sync with the code in the same PR when data handling changes.
 export default function PrivacyPage() {
   return (
     <LegalDocument

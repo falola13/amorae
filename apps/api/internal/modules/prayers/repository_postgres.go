@@ -20,21 +20,13 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Every method here takes a couple id, never a user id. Turning "who is
-// calling" into "which couple" is the couples module's join, and two modules
-// owning the same join is two modules that will disagree about it one day.
+// Every method here takes a couple id, never a user id — "who is calling"
+// to "which couple" is the couples module's join.
 
 // EnsureWeek returns the id of the couple's week beginning weekStart,
 // creating it with `setter` as its setter if it is not there yet.
-//
-// Named for the guarantee rather than the action, because the guarantee is
-// the point: this runs on every read of the current week, and two readers in
-// the same instant must end up with one week between them, not two.
-// UNIQUE (couple_id, week_start) is what enforces that — the insert that
-// loses is a no-op, not an error.
-//
-// The setter is passed in rather than worked out here: whose turn it is is a
-// rule (SetterFor), and rules do not live in a repository.
+// UNIQUE (couple_id, week_start) makes concurrent calls race-safe — the
+// insert that loses is a no-op, not an error.
 func (r *PostgresRepository) EnsureWeek(
 	ctx context.Context, coupleID uuid.UUID, weekStart time.Time, setter uuid.UUID, at time.Time,
 ) (uuid.UUID, error) {
@@ -57,8 +49,7 @@ func (r *PostgresRepository) EnsureWeek(
 		return uuid.UUID{}, fmt.Errorf("creating prayer week: %w", err)
 	}
 
-	// DO NOTHING returns no row, so "no rows" here means somebody else got
-	// there first — a success, not a failure. Read theirs.
+	// DO NOTHING returns no row: "no rows" means somebody else won the race.
 	if err := r.db.Q(ctx).QueryRow(ctx, `
 		SELECT id FROM prayer_weeks WHERE couple_id = $1 AND week_start = $2
 	`, coupleID, weekStart).Scan(&weekID); err != nil {
@@ -68,13 +59,7 @@ func (r *PostgresRepository) EnsureWeek(
 }
 
 // Record is a stored week plus the parts of its state that belong to one
-// person rather than to the couple: who has completed which points, and what
-// each of them wrote about the week.
-//
-// Week itself stays exactly as the rules see it. CanEditPoints takes
-// partnerHasCompleted as an argument instead of reading it off the week, and
-// that separation is worth keeping — it is why the rules can be tested
-// without any of this.
+// person rather than the couple: completions and reflections.
 type Record struct {
 	Week
 	// user id -> the points that user has completed.
@@ -84,11 +69,7 @@ type Record struct {
 }
 
 // PrayedByOthers is the set of point ids somebody other than `except` has
-// prayed — the question CanEditPoints asks, in the words it asks it.
-//
-// Their own completions are left out on purpose: the setter fixing the
-// wording of something only they have prayed changes nothing for anybody
-// else.
+// prayed — the input CanEditPoints needs.
 func (rec Record) PrayedByOthers(except uuid.UUID) map[uuid.UUID]bool {
 	var out map[uuid.UUID]bool
 	for userID, points := range rec.Completed {
@@ -105,12 +86,10 @@ func (rec Record) PrayedByOthers(except uuid.UUID) map[uuid.UUID]bool {
 	return out
 }
 
-// WeekByID loads one week of this couple's, in full.
 func (r *PostgresRepository) WeekByID(ctx context.Context, coupleID, weekID uuid.UUID) (Record, error) {
 	return r.one(ctx, `WHERE w.couple_id = $1 AND w.id = $2`, coupleID, weekID)
 }
 
-// WeekStarting loads the couple's week beginning on weekStart.
 func (r *PostgresRepository) WeekStarting(ctx context.Context, coupleID uuid.UUID, weekStart time.Time) (Record, error) {
 	return r.one(ctx, `WHERE w.couple_id = $1 AND w.week_start = $2`, coupleID, weekStart)
 }
@@ -131,14 +110,8 @@ func (r *PostgresRepository) one(ctx context.Context, where string, args ...any)
 	return records[0], nil
 }
 
-// load reads whole weeks — points, completions and reflections included — in
-// a fixed four queries, whether it returns one week or a year of them.
-//
-// The obvious version asks for the weeks, then loops asking for each week's
-// points, then loops again for its completions. That is fine for one week and
-// a hundred round trips for a history screen. Instead each child table is
-// fetched once for every week in the result (`= ANY($1)`) and the pieces are
-// stitched together here, in memory, where it costs nothing.
+// load reads whole weeks — points, completions and reflections — in a fixed
+// four queries regardless of result size, rather than N+1 per week.
 func (r *PostgresRepository) load(ctx context.Context, where string, args ...any) ([]Record, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT w.id, w.couple_id, w.week_start, w.setter_user_id, w.status, w.published_at
@@ -214,7 +187,6 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 		return nil, fmt.Errorf("loading prayer points: %w", err)
 	}
 
-	// Completions, reached through the points we just read.
 	completionRows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT c.point_id, c.user_id
 		FROM prayer_completions c
@@ -261,8 +233,8 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 	return records, nil
 }
 
-// FirstWeekStart is the couple's earliest prayer week, which anchors the
-// setter rotation. ok is false before they have had any week at all.
+// FirstWeekStart anchors the setter rotation; ok is false before the couple
+// has had any week.
 func (r *PostgresRepository) FirstWeekStart(ctx context.Context, coupleID uuid.UUID) (time.Time, bool, error) {
 	var first *time.Time
 	if err := r.db.Q(ctx).QueryRow(ctx, `
@@ -294,15 +266,11 @@ func (r *PostgresRepository) WeekOfPoint(ctx context.Context, coupleID, pointID 
 	return weekID, nil
 }
 
-// ReplacePoints makes the week's points exactly `points`, in the order given.
-//
-// Existing points are matched by id and kept, so a reorder does not throw
-// away the completions hanging off them. A point the setter has dropped is
-// deleted, and its completions cascade with it — which is right: the thing
-// people were praying for is gone.
-//
-// An id the client sends that this week does not already have is ignored
-// rather than honoured. Primary keys are the server's to choose.
+// ReplacePoints makes the week's points exactly `points`, in the order
+// given. Existing points are matched by id and kept (so completions
+// survive a reorder); a dropped point is deleted, cascading its
+// completions. An id the week doesn't already own is ignored, not honoured
+// — primary keys are the server's to choose.
 func (r *PostgresRepository) ReplacePoints(ctx context.Context, weekID uuid.UUID, points []Point, at time.Time) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
 		existing, err := r.pointIDsOf(ctx, weekID)
@@ -310,9 +278,8 @@ func (r *PostgresRepository) ReplacePoints(ctx context.Context, weekID uuid.UUID
 			return err
 		}
 
-		// Move every current position out of range first. UNIQUE
-		// (week_id, position) is checked statement by statement, so swapping
-		// two points would collide half way through without this.
+		// Move every position out of range first: UNIQUE (week_id, position)
+		// is checked statement by statement, so swapping two would collide.
 		if _, err := r.db.Q(ctx).Exec(ctx, `
 			UPDATE prayer_points SET position = -position - 1 WHERE week_id = $1
 		`, weekID); err != nil {
@@ -378,9 +345,7 @@ func (r *PostgresRepository) pointIDsOf(ctx context.Context, weekID uuid.UUID) (
 	return ids, nil
 }
 
-// Publish shares the week. Publishing one that is already published is a
-// no-op rather than an error: the client may retry, and the second attempt
-// should find the world as it wanted it.
+// Publish shares the week. Publishing an already-published week is a no-op.
 func (r *PostgresRepository) Publish(ctx context.Context, weekID uuid.UUID, at time.Time) error {
 	if _, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE prayer_weeks
@@ -393,8 +358,7 @@ func (r *PostgresRepository) Publish(ctx context.Context, weekID uuid.UUID, at t
 }
 
 // SetCompletion marks or unmarks one point for one person. Marking twice is
-// the same as marking once — the primary key says so, which is also what
-// makes the offline queue safe to replay.
+// a no-op, which is what makes the offline queue safe to replay.
 func (r *PostgresRepository) SetCompletion(ctx context.Context, pointID, userID uuid.UUID, done bool, at time.Time) error {
 	if !done {
 		if _, err := r.db.Q(ctx).Exec(ctx, `
@@ -414,12 +378,8 @@ func (r *PostgresRepository) SetCompletion(ctx context.Context, pointID, userID 
 	return nil
 }
 
-// SetReflection stores one person's words about a week, replacing whatever
-// they wrote before. An empty body removes it.
-// SetAnswered records — or takes back — the fact that a prayer was answered.
-//
-// Unanswering clears the note too. Keeping it would leave a sentence about
-// something that, as far as the app is now concerned, never happened.
+// SetAnswered records — or takes back — the fact that a prayer was
+// answered. Unanswering clears the note too, since it no longer applies.
 func (r *PostgresRepository) SetAnswered(
 	ctx context.Context, pointID, userID uuid.UUID, answered bool, note string, at time.Time,
 ) error {
@@ -434,9 +394,8 @@ func (r *PostgresRepository) SetAnswered(
 		}
 		return nil
 	}
-	// COALESCE keeps the original moment when this is a re-save of the note,
-	// so editing what you wrote does not re-date the answer — or, through the
-	// worker, tell your partner about it twice.
+	// COALESCE keeps the original answered_at on a re-save, so editing the
+	// note doesn't re-date the answer.
 	_, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE prayer_points
 		SET answered_at = COALESCE(answered_at, $3), answered_by = $2,
@@ -449,7 +408,7 @@ func (r *PostgresRepository) SetAnswered(
 	return nil
 }
 
-// Answered is every answered prayer a couple has, newest answer first.
+// Answered is every answered prayer a couple has, newest first.
 func (r *PostgresRepository) Answered(ctx context.Context, coupleID uuid.UUID) ([]Answered, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT p.id, p.position, p.title, p.body, COALESCE(p.scripture, ''), COALESCE(p.verse, ''),
@@ -505,8 +464,7 @@ func (r *PostgresRepository) SetReflection(ctx context.Context, weekID, userID u
 	return nil
 }
 
-// The columns are nullable and the domain uses empty strings, so an unset
-// scripture has to become NULL rather than an empty string in the database.
+// nullIfEmpty converts domain empty string to SQL NULL for nullable columns.
 func nullIfEmpty(s string) *string {
 	if s == "" {
 		return nil

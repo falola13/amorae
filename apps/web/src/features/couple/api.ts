@@ -21,8 +21,7 @@ export const coupleApi = {
   updateCouple: (patch: { name?: string; relationship_start_date?: string; timezone?: string }) =>
     http.patch<Couple>("/couples/me", patch).then((r) => r.data),
   updateRole: (role: string) => http.patch<Couple>("/couples/role", { role }).then((r) => r.data),
-  // Leaving ends the couple for both partners and answers with what is left:
-  // the ended couple, readable until its window closes.
+  // Ends the couple for both partners; answers with the ended couple, readable until its window closes.
   leaveCouple: () => http.delete<EndedCouple[]>("/couples/me").then((r) => r.data),
   endedCouples: () => http.get<EndedCouple[]>("/couples/archived").then((r) => r.data),
   onboarding: (patch: Partial<Couple["onboarding"]>) =>

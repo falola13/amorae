@@ -19,16 +19,12 @@ export default function CreateCouplePage() {
   const create = useCreateCouple();
   const couple = useCouple();
   const me = useMe();
-  // Someone who just ended a space lands here, because they are in no couple.
-  // Without this they would see "start a space" and no sign of where theirs
-  // went, while it is still sitting there on a clock.
+  // Surfaces the past space link here, since ending a space also lands you on this screen.
   const ended = useEndedCouples();
   const pastSpace = ended.data?.[0];
   const qc = useQueryClient();
 
-  // Coming back here with a space already made (the browser's back button, a
-  // bookmark, a second tab) used to offer "Create our space" again, which the
-  // API rightly refuses. Send the person where they actually are instead.
+  // Redirects away if a couple already exists (back button, bookmark, second tab), since the API refuses to create a second one.
   const paired = Boolean(couple.data?.partner);
   const hasCouple = Boolean(couple.data);
   useEffect(() => {
@@ -39,9 +35,7 @@ export default function CreateCouplePage() {
   return (
     <>
       <SafeTop />
-      {/* No way back: this is the first step after signing up, and "back" used
-          to mean the register screen — a dead end for an account that now
-          exists. Signing out is the honest escape. */}
+      {/* No back navigation: this is the first step after signup, so logging out is the only way out. */}
       <TopBar />
       <div className="flex grow flex-col gap-5 px-6 pt-3">
         <div className="flex flex-col gap-2">
@@ -60,10 +54,7 @@ export default function CreateCouplePage() {
             title="A prayer week every Sunday"
             text="You’ll set the first week. After that it alternates."
           />
-          {/* The real zone, not a hardcoded one: this is the creator's own,
-              which seeds the couple's. Changing it lives in the space itself
-              once there is a space to change (DEC-27), so there is no button
-              here promising something that cannot happen yet. */}
+          {/* Seeds the couple's timezone from the creator's own; changeable later in the space itself (DEC-27). */}
           <Fact
             icon="globe"
             title={zoneLabel(me.data?.timezone ?? "UTC")}

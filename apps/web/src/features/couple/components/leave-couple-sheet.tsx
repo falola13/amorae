@@ -9,15 +9,7 @@ import { isApiError } from "@/lib/api/errors";
 import { routes } from "@/lib/routes";
 import { useLeaveCouple } from "../hooks";
 
-/**
- * Leaving ends the space for both people, so the sheet says so before it says
- * anything else — the most common misreading of a "leave" button is that it
- * only removes you.
- *
- * There is no "type LEAVE to confirm" here, unlike deleting an account: this
- * is undoable for thirty days in the only sense that matters, because
- * everything written is still there to read and download.
- */
+// Ending affects both people. No "type to confirm" here, unlike delete — recoverable for 30 days.
 export function LeaveCoupleSheet({
   open,
   onClose,
@@ -40,8 +32,7 @@ export function LeaveCoupleSheet({
     leave.mutate(undefined, {
       onSuccess: (ended) => {
         onClose();
-        // Straight to what is left of it, rather than dropping someone back
-        // into onboarding with no sign of where their space went.
+        // Go straight to what's left rather than dropping them into onboarding with no trace of the space.
         router.replace(ended.length > 0 ? routes.settingsPastSpace : routes.home);
       },
       onError: (e) => setError(isApiError(e) ? e.message : GENERIC_ERROR_MESSAGE),

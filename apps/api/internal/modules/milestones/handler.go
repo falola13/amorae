@@ -38,8 +38,7 @@ type milestoneDTO struct {
 	Title string `json:"title"`
 	Date  string `json:"date"`
 	Sub   string `json:"sub,omitempty"`
-	// Always sent, never omitted: the list screen branches on it, and an
-	// absent field and a false one would have to mean the same thing.
+	// Always sent: an absent field and false would mean the same thing anyway.
 	Reminder bool `json:"reminder"`
 }
 
@@ -57,8 +56,7 @@ type createRequest struct {
 	Title string `json:"title"`
 	Date  string `json:"date"`
 	Sub   string `json:"sub"`
-	// Absent means yes. The composer sends it either way, but a date worth
-	// writing down is usually a date worth coming round again.
+	// Absent means yes (defaults to recurring).
 	Reminder *bool `json:"reminder"`
 }
 

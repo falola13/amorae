@@ -46,8 +46,8 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("DELETE /prayers/points/{id}/answered", http.HandlerFunc(h.unsetAnswered))
 }
 
-// Every write answers with the whole week, the same shape a read returns, so
-// a client never has to re-fetch to see what it just changed.
+// Every write responds with the whole week, so a client never has to
+// re-fetch to see what it just changed.
 
 func (h *Handler) current(w http.ResponseWriter, r *http.Request) {
 	userID, ok := caller(w, r)
@@ -91,10 +91,8 @@ type savePointsRequest struct {
 		Text      string `json:"text"`
 		Scripture string `json:"scripture"`
 		Verse     string `json:"verse"`
-		// Accepted and ignored. The client sends back the position it read,
-		// but the order of the array is what decides — ValidatePoints
-		// numbers them from it. Declaring the field keeps the decoder, which
-		// refuses unknown ones, from rejecting an otherwise good request.
+		// Accepted and ignored — array order decides position (ValidatePoints).
+		// Declared so the decoder, which rejects unknown fields, doesn't reject the request.
 		Position int `json:"position"`
 	} `json:"points"`
 }
@@ -112,9 +110,7 @@ func (h *Handler) savePoints(w http.ResponseWriter, r *http.Request) {
 
 	points := make([]Point, 0, len(req.Points))
 	for _, p := range req.Points {
-		// An id the client cannot supply is a new point. A malformed one is
-		// treated the same way rather than refused: the position in the array
-		// is what identifies a point to the person writing it.
+		// No id, or a malformed one, both mean a new point rather than an error.
 		id, err := uuid.Parse(p.ID)
 		if err != nil {
 			id = uuid.UUID{}
@@ -201,9 +197,8 @@ func (h *Handler) answered(w http.ResponseWriter, r *http.Request) {
 	httpx.Data(w, http.StatusOK, ToAnsweredDTOs(items))
 }
 
-// PUT rather than POST: saying a prayer was answered, with this note, twice
-// means the same as saying it once, and the second one is an edit of the
-// note rather than a second answer.
+// PUT rather than POST: marking answered twice is idempotent, the second
+// call just edits the note.
 func (h *Handler) setAnswered(w http.ResponseWriter, r *http.Request) {
 	userID, ok := caller(w, r)
 	if !ok {
@@ -255,8 +250,7 @@ func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return userID, true
 }
 
-// pathID reads a uuid from the path. `thing` names it for the person reading
-// the message, who should never see the words "uuid" or "path parameter".
+// pathID reads a uuid from the path; `thing` names it in the user-facing error.
 func pathID(w http.ResponseWriter, r *http.Request, name, thing string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue(name))
 	if err != nil {

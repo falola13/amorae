@@ -57,8 +57,7 @@ type goalDTO struct {
 	Done      bool          `json:"done"`
 }
 
-// The running total is not sent: it is the sum of progress, and a client that
-// adds it up itself can never disagree with one that was told (BR-GOAL-01).
+// Running total isn't sent: a client summing progress itself can't disagree with one it was told (BR-GOAL-01).
 func toDTO(g Goal) goalDTO {
 	out := goalDTO{
 		ID:        g.ID.String(),

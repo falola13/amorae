@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { countdown, nextOccurrence, occursOn, yearsBy } from "./milestones";
 
-// These four decide which day a kept date lands on, and the server decides
-// the same thing again when it sends the reminder
-// (notifications.OccursOn / EventReminderAt). If the two ever disagree the
-// calendar counts down to one day and the notification arrives on another,
-// which is the sort of thing nobody notices until February.
+// Must agree with the server's notifications.OccursOn / EventReminderAt, or the calendar and the
+// notification disagree on the day.
 describe("nextOccurrence", () => {
   it("leaves a date that has not happened yet alone", () => {
     expect(nextOccurrence("2026-12-25", "2026-09-24")).toBe("2026-12-25");
@@ -25,8 +22,7 @@ describe("nextOccurrence", () => {
   });
 
   it("moves the twenty-ninth of February to the twenty-eighth in a common year", () => {
-    // 2027 has no 29th. Building "2027-02-29" and letting the browser sort
-    // it out lands on 1 March, a day late and in the wrong month.
+    // 2027 has no 29th; "2027-02-29" would roll over to March 1 if left to the browser.
     expect(nextOccurrence("1996-02-29", "2026-09-24")).toBe("2027-02-28");
   });
 
@@ -74,7 +70,6 @@ describe("countdown", () => {
   const on = (iso: string) => new Date(`${iso}T09:00:00`);
 
   it("can say today", () => {
-    // It used to read "in 0 days" on the one day that matters.
     expect(countdown("2026-09-24", on("2026-09-24"))).toBe("Today");
   });
 

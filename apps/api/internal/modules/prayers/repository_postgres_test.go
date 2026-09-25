@@ -69,8 +69,7 @@ func TestPostgresRepository_EnsureWeek_IsSafeToRunTwice(t *testing.T) {
 		t.Fatalf("first EnsureWeek: %v", err)
 	}
 
-	// The scheduler and a reader can arrive at the same moment; whoever
-	// loses the insert must still be handed the week that won.
+	// Concurrent creation must return the same week to both callers.
 	second, err := repo.EnsureWeek(ctx, coupleID, weekStart, ada, at)
 	if err != nil {
 		t.Fatalf("second EnsureWeek: %v", err)
@@ -102,8 +101,7 @@ func TestPostgresRepository_LoadsAWholeWeek(t *testing.T) {
 		t.Fatalf("EnsureWeek: %v", err)
 	}
 
-	// Inserted directly: this test is about reading, and the write methods
-	// are the next thing to build.
+	// Inserted directly: this test is about reading.
 	points := make([]uuid.UUID, 3)
 	for i := range points {
 		points[i] = uuid.New()
@@ -163,8 +161,6 @@ func TestPostgresRepository_LoadsAWholeWeek(t *testing.T) {
 	})
 
 	t.Run("completions are kept apart, per person", func(t *testing.T) {
-		// The whole point of the model: each partner prays for themselves,
-		// and one person's progress is never the other's.
 		if len(rec.Completed[ada]) != 2 {
 			t.Errorf("Ada completed %d, want 2", len(rec.Completed[ada]))
 		}
@@ -183,8 +179,6 @@ func TestPostgresRepository_LoadsAWholeWeek(t *testing.T) {
 	})
 
 	t.Run("it answers the question CanEditPoints asks", func(t *testing.T) {
-		// Ben has prayed the first point, so Ada may no longer rewrite that
-		// one under him — but the rest of the week is still hers.
 		prayed := rec.PrayedByOthers(ada)
 		if !prayed[rec.Points[0].ID] {
 			t.Error("the setter was told nobody had started, but Ben had")
@@ -281,8 +275,7 @@ func TestPostgresRepository_ReplacePoints(t *testing.T) {
 			t.Fatalf("SetCompletion: %v", err)
 		}
 
-		// Swapping two positions is where UNIQUE (week_id, position) bites if
-		// the rows are updated in place without clearing them first.
+		// Exercises the UNIQUE (week_id, position) collision guard.
 		rec := write([]prayers.Point{
 			{ID: rest.ID, Title: "Rest"},
 			{ID: work.ID, Title: "Work"},

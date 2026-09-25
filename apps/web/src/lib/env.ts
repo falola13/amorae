@@ -11,8 +11,7 @@ function readApiUrl(): string {
   return value;
 }
 
-// Strict on purpose: these flags guard security settings, and a lenient parse
-// would read COOKIE_SECURE=1 or TRUE as false.
+// Strict on purpose: a lenient parse would read COOKIE_SECURE=1 or TRUE as false.
 function readBool(name: string, fallback: boolean): boolean {
   const value = process.env[name]?.trim().toLowerCase();
   if (value === undefined || value === "") return fallback;

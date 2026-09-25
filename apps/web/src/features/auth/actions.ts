@@ -14,9 +14,7 @@ import { safeNext } from "@/lib/safe-next";
 import { login, logout, register } from "./api";
 import { routes } from "@/lib/routes";
 
-// Auth stays on Server Actions because only the server may set the httpOnly
-// session cookie (docs/adr/0002). The forms validate with React Hook Form +
-// Zod first; the same Zod schema runs again here.
+// Server Actions only: the httpOnly session cookie can only be set server-side (docs/adr/0002).
 
 export async function loginAction(input: LoginInput): Promise<ActionError | undefined> {
   const parsed = loginSchema.safeParse(input);
@@ -55,8 +53,7 @@ export async function logoutAction(): Promise<void> {
     try {
       await logout(token);
     } catch {
-      // The cookie is cleared regardless: a failed logout call must never
-      // strand the user in a logged-in-looking state.
+      // Clear the cookie regardless — a failed logout must not strand the user logged-in-looking.
     }
   }
   await clearSession();

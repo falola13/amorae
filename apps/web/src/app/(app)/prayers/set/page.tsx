@@ -25,10 +25,7 @@ export default function SetPrayers() {
   const router = useRouter();
   const [confirm, setConfirm] = useState(false);
   const [saved, setSaved] = useState(true);
-  // A prayer often outlasts a week — the same interview, the same month of
-  // saving — and retyping it was the whole complaint (Q-26). The most recent
-  // week that had anything in it is the one worth offering; a week nobody
-  // filled in is not.
+  // Offers the most recent non-empty week to copy from (Q-26).
   const history = useHistory();
   const previous = history.data?.find((h) => h.points.length > 0);
   const partner = couple.data?.partner?.display_name ?? "your partner";
@@ -36,9 +33,7 @@ export default function SetPrayers() {
     setSaved(false);
     save.mutate(next, { onSuccess: () => setSaved(true) });
   };
-  // Copied, not carried: these become this week's own prayers, to edit or
-  // drop freely. Their ids are dropped so the server makes new ones — the
-  // week you are writing never shares a row with the week behind it.
+  // Ids are dropped so the server creates new rows instead of reusing last week's.
   const startFromLast = () => {
     if (!previous) return;
     commit(previous.points.map((p) => ({ ...p, id: "" })));
@@ -58,10 +53,7 @@ export default function SetPrayers() {
       }
     >
       {(w) => {
-        // Whose week it is decides whether this screen is an editor at all.
-        // Without this it told whoever opened it "It's your week", and only
-        // the save came back 403 — the rotation was enforced by the API and
-        // nowhere the person could see it.
+        // Mirrors the API's rotation enforcement so a non-setter sees a read-only view, not a save that 403s.
         const me = couple.data?.me.id;
         if (me && w.setter_id !== me) {
           return (
@@ -86,9 +78,6 @@ export default function SetPrayers() {
         }
 
         const items = drag.items ?? w.points;
-        // Editing no longer ends at publishing, so this screen spends most of
-        // the week on an already-shared week. Offering "Publish prayers"
-        // there asks for something already done.
         const shared = w.status === "published";
         const doPublish = () =>
           publish.mutate(undefined, { onSuccess: () => router.replace(routes.home) });
@@ -145,9 +134,7 @@ export default function SetPrayers() {
               ) : null}
               <ol className="m-0 mt-6 list-none border-t border-line p-0" {...drag.listProps}>
                 {items.map((p, i) => {
-                  // Once they have prayed it, it is theirs too: it can still
-                  // be moved, but not reworded or taken away underneath them.
-                  // Everything else on this screen stays open all week.
+                  // Once the partner has prayed it, it can be reordered but not edited or removed.
                   const prayed = w.partner_completed.includes(p.id);
                   const body = (
                     <>
@@ -165,10 +152,7 @@ export default function SetPrayers() {
                   return (
                     <li
                       key={p.id}
-                      // A held row lifts onto its own surface and follows the
-                      // finger. Without this the gesture had no middle: you
-                      // pressed, nothing happened, and then the list either
-                      // jumped or did not.
+                      // Held row lifts onto its own layer and tracks the drag offset via transform.
                       className={cx(
                         "flex min-h-[72px] items-center gap-3 border-b border-line",
                         drag.held?.index === i
@@ -258,8 +242,7 @@ export default function SetPrayers() {
               labelledBy="pub-h"
             >
               <Para>
-                {/* "they" whoever the partner is: a name says nothing about
-                    which pronoun somebody uses. */}
+                {/* "they" is used since a display name doesn't indicate pronoun. */}
                 {partner} will see {items.length === 1 ? "it" : `all ${items.length}`}. You can keep
                 adding and changing them all week &mdash; only the ones they&rsquo;ve already prayed
                 stay as they are.

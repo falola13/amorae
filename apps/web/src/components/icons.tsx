@@ -1,6 +1,5 @@
 import type { SVGProps } from "react";
 
-// Outline icon set from the Amorae design system. 24 grid, 1.6 stroke, round caps.
 const PATHS: Record<string, string> = {
   home: "M3.5 10.5 12 3.5l8.5 7V19a1.5 1.5 0 0 1-1.5 1.5h-4.5v-6h-5v6H5A1.5 1.5 0 0 1 3.5 19z",
   together:
@@ -43,7 +42,6 @@ const PATHS: Record<string, string> = {
   bookmark: "M7 4h10v16.5l-5-4-5 4z",
 };
 
-// Extra primitives (circles and rects) some icons need.
 const EXTRA: Record<string, React.ReactNode> = {
   clock: <circle cx="12" cy="12" r="8.5" />,
   sliders: (
@@ -110,9 +108,7 @@ export function Icon({
   );
 }
 
-/** The Amorae mark: two paths around one shared centre. Stroke gets heavier as it gets smaller. */
-// The mark is two arcs, each sweeping toward the shared centre. Split here so
-// the splash can draw one, then the other (see AnimatedMark).
+// Split so AnimatedMark can draw each arc separately.
 const [ARC_A, ARC_B] = PATHS.together.split(/(?=M19\.36)/);
 
 const markStroke = (size: number) =>
@@ -137,12 +133,8 @@ export function Mark({ size = 40, className }: { size?: number; className?: stri
 }
 
 /**
- * The mark, drawing itself: one arc toward the centre, then the other — the
- * two-people-becoming-one idea the logo is built on (docs/BRAND.md).
- *
- * `pathLength="1"` normalises each arc, so one dash offset draws either of
- * them. The finished state is the base style and the keyframes only set the
- * start, so with `prefers-reduced-motion` the mark simply appears, whole.
+ * pathLength="1" normalises each arc so one dash-offset animates either. The
+ * finished state is the base style, so `prefers-reduced-motion` just shows it.
  */
 export function AnimatedMark({ size = 56, className }: { size?: number; className?: string }) {
   return (

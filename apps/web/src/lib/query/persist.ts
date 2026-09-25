@@ -6,16 +6,9 @@ import { persistQueryClient } from "@tanstack/react-query-persist-client";
 
 import { isResumable } from "./mutations";
 
-// Changes made offline survive the app being closed.
-//
-// What's saved: ONLY writes that are paused waiting for the connection, and
-// only ones registered as resumable (registerWrites). Never the query cache:
-// that would leave a couple's prayers and journal on the device for anyone
-// who picks it up.
-//
-// Whose: saved under the signed-in user's id, so one person's pending
-// changes can never be sent from another person's session on a shared
-// device. Everything is cleared on logout (clearSignedInState).
+// Changes made offline survive the app being closed. Saves ONLY paused,
+// resumable (registerWrites) writes — never the query cache, which would leave
+// a couple's data on a shared device. Keyed by user id, cleared on logout.
 
 const KEY_PREFIX = "amorae:offline-changes:";
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -45,8 +38,7 @@ export function persistOfflineChanges(qc: QueryClient, userId: string): () => vo
       shouldDehydrateMutation: (m) => m.state.isPaused && isResumable(qc, m.options.mutationKey),
     },
   });
-  // Restored changes are paused; send them now if we're online. If not,
-  // React Query sends them when the connection returns.
+  // Send restored (paused) changes now if online; otherwise React Query sends them on reconnect.
   restored.then(() => qc.resumePausedMutations()).catch(() => {});
 
   const stop = () => {
@@ -58,15 +50,10 @@ export function persistOfflineChanges(qc: QueryClient, userId: string): () => vo
 }
 
 /**
- * Forgets everything the signed-in user left in this browser: the in-memory
- * cache and any saved offline changes. Call it on logout, session expiry and
- * account deletion.
- *
- * The order matters. The persister saves at most every SAVE_THROTTLE_MS,
- * always writing the latest state it was handed. Clearing the cache first
- * makes that latest state empty, so its last write can't bring a pending
- * change back; then we stop it, delete the saved copy, and sweep once more
- * after that last (empty) write has landed.
+ * Clears the in-memory cache and saved offline changes on logout, session
+ * expiry or account deletion. Order matters: clear the cache first so the
+ * persister's next (throttled) write can't resurrect a pending change, then
+ * stop it, delete the saved copy, and sweep again after that write lands.
  */
 export function clearSignedInState(qc: QueryClient) {
   qc.clear();
@@ -83,8 +70,7 @@ function removeSavedChanges() {
   }
 }
 
-// localStorage can be missing or throw (private browsing, blocked storage);
-// then changes simply aren't saved across restarts.
+// localStorage can be missing or throw (private browsing, blocked storage) — then nothing persists.
 function localStorageOrNull(): Storage | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage;

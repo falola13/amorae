@@ -3,9 +3,8 @@ package database
 import "testing"
 
 func TestIsTransactionPooler(t *testing.T) {
-	// Getting this wrong in either direction is expensive: miss a pooler and
-	// production fails intermittently with 08P01; see one that is not there
-	// and every query gives up its prepared statement for nothing.
+	// Wrong in either direction is expensive: miss a pooler and production
+	// fails intermittently (08P01); false-positive and statements go uncached.
 	pooled := map[string]string{
 		"neon":              "ep-flat-tooth-b26zn32a-pooler.c-6.eu-central-1.aws.neon.tech",
 		"pgbouncer in host": "db-pgbouncer.example.com",

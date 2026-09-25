@@ -1,11 +1,6 @@
 // Package milestones owns the dates a couple keeps: birthdays, anniversaries,
-// the day they met. One entity rather than one per kind (BR-DATE-01).
-//
-// A date here is the day something happened, never the next time it comes
-// round. Everything that wants "when is this next" works it out — the list
-// screen so it can show what is coming up, the notification worker so it can
-// say something on the morning. That keeps one fact in the database and no
-// January where every row is wrong.
+// the day they met. One entity, not one per kind (BR-DATE-01). A row is the
+// day it happened; "when is this next" is worked out by callers, not stored.
 package milestones
 
 import (
@@ -25,7 +20,6 @@ const (
 	maxSubRunes   = 80
 )
 
-// Milestone is one kept date.
 type Milestone struct {
 	ID       uuid.UUID
 	CoupleID uuid.UUID
@@ -36,7 +30,6 @@ type Milestone struct {
 	Reminder bool
 }
 
-// Input is what either partner sends to add one.
 type Input struct {
 	Title    string
 	Date     time.Time
@@ -44,8 +37,7 @@ type Input struct {
 	Reminder bool
 }
 
-// Validate trims and bounds an input, in the same words the composer uses so
-// a person who sees an error recognises the field it belongs to.
+// Validate trims and bounds fields using the same wording as the composer, so errors are recognizable.
 func Validate(in Input) (Input, error) {
 	in.Title = strings.TrimSpace(in.Title)
 	in.Sub = strings.TrimSpace(in.Sub)

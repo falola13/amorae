@@ -30,9 +30,7 @@ import {
   TopBar,
 } from "@/components/ui/kit";
 
-// The sheet's amount field is still free-typed text while the couple is
-// entering it; strip non-digits and pipe the result through progressSchema's
-// own "amount" rule so the message and the positive-number check stay in sync.
+// Strips non-digits from the free-typed input, then reuses progressSchema's amount validation.
 const progressFormSchema = z.object({
   amount: z
     .string()
@@ -137,9 +135,7 @@ export default function GoalDetail() {
                     <Button icon="plus" onClick={() => setOpen(true)}>
                       Add progress
                     </Button>
-                    {/* Reaching the number is not the only way a goal ends,
-                        so this is always offered rather than appearing once
-                        the total is high enough. */}
+                    {/* Always offered, not just once the target is reached — a goal can end early. */}
                     <Button
                       variant="text"
                       loading={update.isPending}

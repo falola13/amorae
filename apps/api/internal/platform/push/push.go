@@ -1,8 +1,5 @@
-// Package push sends a web push notification to one browser.
-//
-// Like platform/mailer, this is a seam: a development sender that writes to
-// the log, and a real one that talks to the browser's push service. The
-// worker takes the interface, so nothing above here knows what VAPID is.
+// Package push sends a web push notification to one browser, behind a
+// Sender interface with a log-only dev implementation and a real one.
 package push
 
 import (
@@ -10,11 +7,8 @@ import (
 	"errors"
 )
 
-// Message is what a person sees. Deliberately small: a title, a line, and
-// where tapping it goes.
-//
-// No private content belongs in any of these fields. They land on a lock
-// screen, which is the one place in Amorae that is not private (FR-NOTF-005).
+// Message is what a person sees: a title, a line, and where tapping it goes.
+// No private content belongs here — it lands on a lock screen (FR-NOTF-005).
 type Message struct {
 	Title string
 	Body  string
@@ -32,9 +26,8 @@ type Device struct {
 	Auth     string
 }
 
-// ErrGone means the push service says this subscription no longer exists, so
-// the caller should forget it (FR-NOTF-004). It is the one error worth
-// telling apart: every other failure is worth retrying, and this one never is.
+// ErrGone means the push service says this subscription no longer exists;
+// the caller should forget it (FR-NOTF-004) rather than retry.
 var ErrGone = errors.New("push subscription is gone")
 
 type Sender interface {

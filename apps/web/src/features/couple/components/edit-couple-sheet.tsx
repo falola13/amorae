@@ -13,11 +13,7 @@ import { notify } from "@/lib/store/toast";
 import { ZONES, zoneLabel } from "@/lib/timezones";
 import { useUpdateCouple, useUpdateRole } from "../hooks";
 
-/**
- * The couple's name and start date are shared; the role is only yours. They
- * are separate endpoints, so only what changed is sent.
- */
-/** The zones we offer, plus this couple's own if it is not among them. */
+// Name/date and role are separate endpoints; only what changed is sent.
 function zoneOptions(current?: string) {
   const zones: string[] = [...ZONES];
   if (current && !zones.includes(current)) zones.unshift(current);
@@ -97,9 +93,7 @@ export function EditCoupleSheet({
         <Select
           label="Where your week starts"
           hint="Your prayer week turns over on Sunday here, for both of you."
-          // A couple whose zone is not one we list would otherwise see the
-          // first option selected, and saving anything else on this sheet
-          // would quietly move their week. Keep their own in the list.
+          // Keep the couple's own zone in the list, or saving anything else here would quietly move their week.
           options={zoneOptions(couple.timezone)}
           error={errors.timezone?.message}
           {...register("timezone")}

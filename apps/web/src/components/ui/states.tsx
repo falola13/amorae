@@ -20,26 +20,13 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-/**
- * The shape of what is not here yet.
- *
- * These were four sets of grey rectangles — abstract enough that the same
- * drawing did for photographs, goals and weeks alike, which is to say it said
- * nothing about any of them. Each one now borrows from the thing it stands in
- * for: corner mounts for an album, ruled lines for something written, a
- * measure for a goal, a timeline for a record kept week by week. Still quiet,
- * still `bg-faint`, but recognisably about the screen it appears on.
- */
+/** Empty-state illustrations shaped like what's missing (album corners, ruled
+ *  lines, a goal's measure, a timeline), not a generic placeholder. */
 export function Ghost({ kind = "lines" }: { kind?: "lines" | "frames" | "bars" | "dots" }) {
   if (kind === "frames") {
-    // Corner mounts, the paper triangles that held a photograph into an album.
-    // The frame they imply is empty, which is the whole point of the drawing.
+    // Corner mounts: the paper triangles that held a photograph into an album.
     return (
       <div aria-hidden="true" className="flex items-end gap-3.5 pb-3.5">
-        {/* The mount is the subject — it is the one that says "a photograph
-            belongs here" — so it is the largest thing and the only one drawn
-            in line rather than fill. One tile behind it, for depth; the second
-            one that used to sit here only crowded it. */}
         <span className="relative block h-[96px] w-[118px]">
           {[
             "left-0 top-0 border-l-2 border-t-2",
@@ -120,12 +107,8 @@ export function EmptyState({
   );
 }
 
-/**
- * A load that didn't work, shown where only the missing content would go, so
- * the rest of the screen keeps working. `tone="error"` is a real failure worth
- * retrying; `quiet` is offline or not built yet, which isn't the user's
- * problem and needs no alarm.
- */
+/** Inline failure notice, shown in place of just the missing content.
+ *  `tone="error"` is a real failure worth retrying; `quiet` needs no alarm. */
 export function LoadProblem({
   icon,
   title,

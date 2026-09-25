@@ -40,7 +40,6 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("the note has more room than the title", func(t *testing.T) {
-		// It is the part worth writing: 500 characters against 80.
 		if _, err := Validate(Input{
 			Title: "Fine", Date: day, Note: strings.Repeat("a", maxNoteRunes),
 		}); err != nil {

@@ -1,15 +1,9 @@
-// Command worker sends the notifications nobody asks for by opening the app:
-// that it is your week to set the prayers, that you have some left to pray
-// today, and that something the two of you planned is about to happen.
+// Command worker sends scheduled notifications (prayer week reminders,
+// upcoming plans). A second entry point in the same module rather than a
+// separate service (DEC-20, Q-16), sharing config, database and modules.
 //
-// A second entry point in the same module rather than a separate service
-// (DEC-20, Q-16). It shares the config, the database and the modules, so a
-// rule only ever exists in one place — the worker reads the same preferences
-// the settings screen writes.
-//
-// It holds no state between ticks. What has already been sent is a row
-// (notification_sends), so restarting it, running it late, or running two of
-// them sends each notification exactly once.
+// Holds no state between ticks: notification_sends rows make restarting,
+// running late, or running two workers all send each notification once.
 package main
 
 import (
@@ -20,11 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	// The zone database, compiled in. Every week, every reminder and every
-	// event time in Amorae is a wall clock in somebody's timezone, and a
-	// binary that cannot find /usr/share/zoneinfo does not fail — it quietly
-	// becomes UTC, which is an hour of wrong for Lagos and eight for
-	// California. 450KB to never have to trust the base image.
+	// Compiled-in zone database: without it, a missing /usr/share/zoneinfo
+	// silently falls back to UTC instead of failing.
 	_ "time/tzdata"
 
 	"github.com/joho/godotenv"
@@ -36,13 +27,9 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/push"
 )
 
-// Five minutes, because an event reminder is the one thing here that is about
-// a moment. "Ten minutes before" on an hourly tick can arrive after the thing
-// it was warning about, which is worse than not sending it.
-//
-// Nothing else minds the extra passes: a week starts once and a daily
-// reminder is keyed on the day, so a tick that finds nothing new sends
-// nothing — the claim row is what makes that true, not the interval.
+// 5 minutes: fine-grained enough that "N minutes before" event reminders
+// don't fire late. Other reminder types are idempotent per day/week via
+// their claim row, so the extra ticks are harmless.
 const tick = 5 * time.Minute
 
 func main() {
@@ -64,9 +51,6 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// The same class of problem as the schema flag above: a configuration
-	// that is wrong in a way nothing says out loud, and that fails
-	// intermittently in production only. Twice now.
 	if database.IsTransactionPooler(cfg.DatabaseURL) {
 		log.Warn(`DATABASE_URL goes through a transaction pooler. pgx's protocol exchanges ` +
 			`can be split across backends there, which fails under connection reuse ` +
@@ -80,9 +64,8 @@ func run() error {
 	}
 	defer db.Close()
 
-	// Without VAPID keys the worker still runs and still decides everything;
-	// it just writes what it would have sent. That way local work and CI
-	// exercise the same code path as production, minus the network.
+	// Without VAPID keys, falls back to logging instead of sending, so local/CI
+	// exercise the same decision path as production.
 	var sender push.Sender = push.NewLog(log)
 	if cfg.VAPIDPrivateKey != "" {
 		sender = push.NewWebPush(cfg.VAPIDPublicKey, cfg.VAPIDPrivateKey, cfg.VAPIDSubject)
@@ -103,8 +86,7 @@ func run() error {
 			if ctx.Err() != nil {
 				break
 			}
-			// A failed tick is a reason to try again in an hour, never a
-			// reason to take the worker down.
+			// A failed tick retries next interval; it never takes the worker down.
 			log.Error("tick failed", "error", err)
 		} else if sent > 0 {
 			log.Info("notifications sent", "count", sent)

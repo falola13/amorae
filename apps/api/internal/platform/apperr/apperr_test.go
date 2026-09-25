@@ -41,9 +41,7 @@ func TestValidation_CarriesAllFields(t *testing.T) {
 }
 
 func TestInternal_DoesNotLeakUnderlyingMessageInError(t *testing.T) {
-	// Error() is used for logs, not client responses, but it must still
-	// carry the underlying cause so logs are useful — httpx is the layer
-	// responsible for keeping it out of the response body.
+	// Error() is for logs, not responses; httpx keeps the cause out of the response body.
 	cause := errors.New("connection refused")
 	err := Internal(cause)
 

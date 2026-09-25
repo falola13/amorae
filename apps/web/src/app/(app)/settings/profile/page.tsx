@@ -25,8 +25,7 @@ import { routes } from "@/lib/routes";
 import { ZONES, zoneLabel } from "@/lib/timezones";
 
 export default function ProfilePage() {
-  // Your profile is yours whether or not you are in a space, so it hangs off
-  // the account. The couple only decides one line of copy.
+  // Reads from the account, not the couple, so it works without a paired partner.
   const account = useMe();
   const me = account.data;
   const couple = useCouple();
@@ -44,9 +43,7 @@ export default function ProfilePage() {
   } = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
     defaultValues: { display_name: "", timezone: "Africa/Lagos" },
-    // Straight from the profile, rather than an effect calling reset() on
-    // every couple.data change: that also fires on a background refetch and
-    // would wipe a half-typed name. keepDirtyValues protects edited fields.
+    // keepDirtyValues prevents a background refetch from wiping a half-typed name.
     values: me ? { display_name: me.display_name, timezone: me.timezone } : undefined,
     resetOptions: { keepDirtyValues: true },
   });

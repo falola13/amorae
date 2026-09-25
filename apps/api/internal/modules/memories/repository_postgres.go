@@ -25,8 +25,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 
 const columns = `id, couple_id, title, date, COALESCE(location, ''), COALESCE(note, ''), COALESCE(photo_id, ''), updated_at`
 
-// List is the couple's memories, newest first — the order an archive is read
-// in, and the order the screen wants before it groups them by month.
+// List returns the couple's memories, newest first.
 func (r *PostgresRepository) List(ctx context.Context, coupleID uuid.UUID) ([]Memory, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT `+columns+`
@@ -71,8 +70,7 @@ func (r *PostgresRepository) ByID(ctx context.Context, coupleID, id uuid.UUID) (
 	return m, nil
 }
 
-// Create keeps a moment. No photo: one is attached afterwards, once it has
-// actually been stored somewhere (SetPhoto).
+// Create keeps a moment without a photo; one is attached afterwards via SetPhoto.
 func (r *PostgresRepository) Create(ctx context.Context, m Memory, at time.Time) (uuid.UUID, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -88,8 +86,7 @@ func (r *PostgresRepository) Create(ctx context.Context, m Memory, at time.Time)
 	return id, nil
 }
 
-// SetPhoto records where a memory's picture is, or clears it. The id is the
-// server's own (photos.PublicID), never a client's.
+// SetPhoto records or clears the picture location; the id is server-derived (photos.PublicID), never a client's.
 func (r *PostgresRepository) SetPhoto(ctx context.Context, coupleID, id uuid.UUID, photoID string, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE memories SET photo_id = $3, updated_at = $4

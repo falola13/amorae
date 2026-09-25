@@ -1,9 +1,6 @@
-// Package goals owns the things a couple is working toward together.
-//
-// One shared total, never two side by side: a goal is theirs, and the log of
-// who put in what is so they can see their own history, not so the total can
-// be divided (BR-GOAL-01). Nothing here is gamified — no streaks, no scores,
-// no one partner ahead of the other.
+// Package goals owns the things a couple is working toward together. One
+// shared total, never split — the log exists for history, not division
+// (BR-GOAL-01). Nothing gamified.
 package goals
 
 import (
@@ -25,7 +22,6 @@ const (
 
 var ErrNotFound = apperr.NotFound("goal_not_found", "That goal isn’t here.")
 
-// Unit is what the numbers mean.
 type Unit string
 
 const (
@@ -54,10 +50,7 @@ type Progress struct {
 	Date   time.Time
 }
 
-// Total is the running total: the sum of what has been logged, worked out
-// every time rather than kept in a column. A stored counter and a log that
-// disagree is a bug waiting to happen, and correcting one entry would mean
-// correcting two places.
+// Total is computed from the log each time, never stored — a stored counter could drift from it.
 func (g Goal) Total() int64 {
 	var total int64
 	for _, p := range g.Progress {
@@ -66,8 +59,7 @@ func (g Goal) Total() int64 {
 	return total
 }
 
-// Input is a create or an edit. A nil field is left alone, so an edit can
-// send one thing.
+// Input is a create or edit; a nil field is left alone.
 type Input struct {
 	Title     *string
 	Why       *string
@@ -172,11 +164,7 @@ func optionalDate(in *string, current time.Time, required bool, field string, fi
 	return parsed
 }
 
-// ValidateAmount checks one progress entry.
-//
-// Zero is refused because it records nothing; a negative is allowed, because
-// a correction is how somebody fixes a number they typed wrong, and deleting
-// the entry would lose the fact that it happened.
+// ValidateAmount refuses zero (records nothing); negative is allowed as a correction, so the entry isn't just deleted.
 func ValidateAmount(amount int64) error {
 	if amount == 0 {
 		return apperr.Validation(map[string]string{"amount": "Enter an amount."})

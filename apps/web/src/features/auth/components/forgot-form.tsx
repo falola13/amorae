@@ -11,10 +11,7 @@ import { isApiError } from "@/lib/api/errors";
 import { forgotSchema, type ForgotInput } from "@/lib/api/schemas";
 import { routes } from "@/lib/routes";
 
-/**
- * The API answers the same whether or not the email has an account, so this
- * screen must too: "check your inbox" either way, never "no such account".
- */
+// API answers identically whether or not the email has an account; this screen must too.
 export function ForgotForm() {
   const forgot = useForgotPassword();
   const {

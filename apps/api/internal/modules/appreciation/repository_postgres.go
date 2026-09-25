@@ -20,9 +20,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Every method takes a couple id, never a user id: another couple's note is
-// simply not found (DEC-19). Both partners read all of them — the one who
-// sent it and the one it was for.
+// Every method takes a couple id, never a user id (DEC-19); both partners read all notes.
 
 const columns = `id, couple_id, from_id, date, text, created_at`
 
@@ -68,9 +66,8 @@ func (r *PostgresRepository) ByID(ctx context.Context, coupleID, id uuid.UUID) (
 	return a, nil
 }
 
-// Create sends a note. The date it is filed under is the couple's local day,
-// worked out from the couple row that is already in this query rather than
-// from UTC in Go — see the same note on the journal repository.
+// Create files the note under the couple's local day (from the couple row,
+// not Go's UTC) — see journal repository.
 func (r *PostgresRepository) Create(ctx context.Context, a Appreciation, at time.Time) (Appreciation, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -89,8 +86,7 @@ func (r *PostgresRepository) Create(ctx context.Context, a Appreciation, at time
 	return a, nil
 }
 
-// Delete removes a note. Scoped to the couple as everything here is; whether
-// this person may is decided before it is called (CanUndo).
+// Delete is scoped to the couple; whether this person may is decided by the caller (CanUndo).
 func (r *PostgresRepository) Delete(ctx context.Context, coupleID, id uuid.UUID) error {
 	if _, err := r.db.Q(ctx).Exec(ctx, `
 		DELETE FROM appreciations WHERE couple_id = $1 AND id = $2

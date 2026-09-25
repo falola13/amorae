@@ -8,15 +8,9 @@ import { cx } from "@/components/ui/kit";
 import { NAV } from "./nav-items";
 import { routes } from "@/lib/routes";
 
-/**
- * Primary navigation on a tablet or desktop, where a bottom bar would be a long
- * reach from the hands and waste the width. A rail of icons from `md`, widening
- * to labelled rows from `lg`.
- *
- * Only one of this and the TabBar is ever displayed: each is `display: none` at
- * the other's widths, which also keeps it out of the accessibility tree, so
- * there is never a second "Primary" navigation landmark.
- */
+/** Tablet/desktop nav: icon rail from `md`, labelled rows from `lg`. TabBar and
+ *  this are mutually `display: none`, which also keeps the hidden one out of
+ *  the accessibility tree — never two "Primary" nav landmarks. */
 export function SideNav() {
   const path = usePathname();
   return (

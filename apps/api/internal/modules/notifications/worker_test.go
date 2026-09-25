@@ -41,8 +41,6 @@ func TestForNewWeek(t *testing.T) {
 	})
 
 	t.Run("the partner is not", func(t *testing.T) {
-		// Telling them "a week has started" is telling them their partner
-		// hasn't written it yet, which is nobody's business.
 		c := base
 		c.UserID = partner
 		if _, ok := ForNewWeek(c); ok {
@@ -234,8 +232,7 @@ func TestWorkerTick(t *testing.T) {
 			t.Fatalf("sent = %d, messages = %d, want 1 and 1", sent, len(sender.sent))
 		}
 
-		// The whole reason for the claim: a second tick within the same
-		// window must not tell them again.
+		// A second tick within the same window must not tell them again.
 		sent, err = w.Tick(context.Background())
 		if err != nil {
 			t.Fatalf("second Tick: %v", err)
@@ -273,7 +270,6 @@ func TestWorkerTick(t *testing.T) {
 			t.Fatal("the claim was kept, so the notification is lost forever")
 		}
 
-		// It works this time.
 		sender.err = nil
 		sent, err := w.Tick(context.Background())
 		if err != nil {
@@ -343,8 +339,7 @@ func TestForPublishedWeek(t *testing.T) {
 }
 
 func TestPreferencesAreRespected(t *testing.T) {
-	// A switch that is off has to actually stop the notification, or the
-	// settings screen is decoration (FR-NOTF-007.AC1).
+	// A switch that is off must actually stop the notification (FR-NOTF-007.AC1).
 	setter, partner := uuid.New(), uuid.New()
 	week := uuid.New()
 
@@ -402,8 +397,7 @@ func TestEventReminderAt(t *testing.T) {
 		// A phrase somebody typed before the list existed.
 		{name: "an hour before", start: "19:30", reminder: "an hour before", want: "2026-09-25 18:30"},
 		{name: "case and spacing", start: "19:30", reminder: "  1 Hour Before ", want: "2026-09-25 18:30"},
-		// Nothing to be an hour before, so it becomes the morning rather
-		// than being dropped.
+		// Nothing to be an hour before, so it falls back to the morning.
 		{name: "all-day event", start: "", reminder: "1 hour before", want: "2026-09-25 08:00"},
 		{name: "all-day, at the time", start: "", reminder: "at the time", want: "2026-09-25 08:00"},
 		{name: "all-day, day before", start: "", reminder: "1 day before", want: "2026-09-24 08:00"},
@@ -453,8 +447,6 @@ func TestForEventReminder(t *testing.T) {
 		if n.Message.Path != "/together/events/"+id.String() {
 			t.Errorf("path = %q, should open the event", n.Message.Path)
 		}
-		// A plan is not private writing: the reminder says what it is for,
-		// or there is no point waking somebody for it.
 		if n.Message.Title != "Dinner at Terra" {
 			t.Errorf("title = %q, should name the event", n.Message.Title)
 		}
@@ -510,8 +502,6 @@ func TestForEventReminder(t *testing.T) {
 	})
 
 	t.Run("the key moves when the event does", func(t *testing.T) {
-		// Otherwise moving an event you have already been reminded about
-		// means never hearing about the new time.
 		first, _ := ForEventReminder(base, due)
 		moved := base
 		moved.StartTime = "20:30"
@@ -568,8 +558,6 @@ func TestOccursOn(t *testing.T) {
 	})
 
 	t.Run("the twenty-ninth of February falls back to the twenty-eighth", func(t *testing.T) {
-		// 2026 has no 29th. Skipping it would mean three years in four with
-		// no anniversary at all.
 		if !OccursOn(leapDay, day(2026, time.February, 28)) {
 			t.Error("a leap-day anniversary was skipped in a common year")
 		}
@@ -728,8 +716,6 @@ func TestForWritten(t *testing.T) {
 	})
 
 	t.Run("not while it can still be undone", func(t *testing.T) {
-		// A note taken back ten seconds later should never have reached a
-		// lock screen, and this is the only place that can promise it.
 		if _, ok := ForWritten(note, sent.Add(10*time.Second)); ok {
 			t.Error("an appreciation was announced inside its undo window")
 		}
@@ -779,8 +765,7 @@ func TestForWritten(t *testing.T) {
 	})
 
 	t.Run("nothing about the note itself goes out", func(t *testing.T) {
-		// FR-NOTF-005: what one of them wrote is the one thing a lock screen
-		// must not carry.
+		// FR-NOTF-005: what they wrote never reaches a lock screen.
 		n, _ := ForWritten(note, sent.Add(time.Minute))
 		if strings.Contains(n.Message.Body, "appreciate") || len(n.Message.Body) > 60 {
 			t.Errorf("body = %q, want it to say nothing of the words", n.Message.Body)
@@ -812,8 +797,7 @@ func TestForWritten_Goals(t *testing.T) {
 	})
 
 	t.Run("but never how much", func(t *testing.T) {
-		// A goal is a shared plan and may be named (FR-NOTF-005.AC2). What
-		// somebody just moved into their savings is not for a lock screen.
+		// Named but not priced (FR-NOTF-005.AC2): the amount isn't lock-screen material.
 		n, _ := ForWritten(base, sent.Add(time.Minute))
 		if strings.ContainsAny(n.Message.Title+n.Message.Body, "0123456789₦") {
 			t.Errorf("an amount reached the lock screen: %q / %q", n.Message.Title, n.Message.Body)
@@ -905,8 +889,7 @@ func TestForChallenge(t *testing.T) {
 	})
 
 	t.Run("it never counts what was missed", func(t *testing.T) {
-		// A challenge is not a streak (DEC-30): a skipped day is a day, not
-		// a failure, and nothing here should imply otherwise.
+		// A challenge is not a streak (DEC-30).
 		n, _ := ForChallenge(base, morning)
 		for _, word := range []string{"miss", "streak", "behind", "broke"} {
 			if strings.Contains(strings.ToLower(n.Message.Body+n.Message.Title), word) {
@@ -917,8 +900,6 @@ func TestForChallenge(t *testing.T) {
 }
 
 func TestPushService_NamesThePlatformNotThePerson(t *testing.T) {
-	// The rest of a push endpoint is the address of one person's browser. It
-	// belongs in the database, not in a log somebody reads over your shoulder.
 	tests := map[string]string{
 		"https://web.push.apple.com/QF-MeF-lG8sQteU-secret-part": "apple",
 		"https://fcm.googleapis.com/fcm/send/cDx-secret-part":    "fcm",
@@ -965,11 +946,8 @@ func TestForWritten_PrayerAnswered(t *testing.T) {
 	})
 
 	t.Run("never says which prayer (FR-NOTF-005.AC1)", func(t *testing.T) {
-		// The subject is deliberately carried on the candidate and
-		// deliberately not used. Prayer points are private writing — a
-		// parent's illness, a pregnancy, a debt — and this assertion is what
-		// stops a later edit putting one on a lock screen because naming it
-		// would read better.
+		// Subject is set on the candidate but deliberately unused; guards
+		// against a later edit naming the prayer for a better-reading message.
 		n, ok := ForWritten(answered, marked.Add(answeredUndoWindow+time.Second))
 		if !ok {
 			t.Fatal("nobody was told a prayer had been answered")

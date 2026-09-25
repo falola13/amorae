@@ -9,9 +9,7 @@ import { startupImages } from "@/lib/pwa/startup-images";
 
 import "./globals.css";
 
-// One face across the product, per the design system: Manrope 400 to 700.
-// Self-hosted (SIL OFL, src/fonts) so an installed app never waits on a
-// third-party request and the offline shell still has its type.
+// Self-hosted so the offline PWA shell doesn't depend on a third-party font request.
 const manrope = localFont({
   src: [{ path: "../fonts/manrope-latin-variable.woff2", weight: "200 800", style: "normal" }],
   variable: "--font-manrope",
@@ -46,20 +44,14 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
-// Everything dynamic in this app ends up asking the Go API, which sits in
-// Frankfurt with its database. Rendering in the United States and then
-// fetching across the Atlantic is a second per screen that nobody chose; see
-// the note in app/api/v1/[...path]/route.ts for the measurement. Static
-// assets are unaffected — they are served from the edge either way.
+// Pinned to Frankfurt to stay next to the API (see app/api/v1/[...path]/route.ts).
 export const preferredRegion = "fra1";
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  // One value would paint the status bar and the PWA's chrome linen whatever
-  // the app underneath is doing. media queries here are how Next lets a
-  // viewport answer per scheme.
+  // Per-scheme so the status bar/PWA chrome matches light vs dark.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: brand.colors.background },
     { media: "(prefers-color-scheme: dark)", color: brand.colors.backgroundDark },

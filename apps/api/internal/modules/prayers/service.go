@@ -7,9 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Repository is what this service needs of storage, declared here rather than
-// next to the implementation: the consumer names the contract, so the
-// repository can grow methods nobody here has to know about.
+// Repository is what this service needs of storage; declared by the
+// consumer, not the implementation.
 type Repository interface {
 	EnsureWeek(ctx context.Context, coupleID uuid.UUID, weekStart time.Time, setter uuid.UUID, at time.Time) (uuid.UUID, error)
 	FirstWeekStart(ctx context.Context, coupleID uuid.UUID) (time.Time, bool, error)
@@ -24,21 +23,15 @@ type Repository interface {
 	SetReflection(ctx context.Context, weekID, userID uuid.UUID, body string, at time.Time) error
 }
 
-// CoupleContext is everything this module needs to know about a couple, and
-// nothing else: which couple, whose turn it can be, and the zone its week
-// turns over in (DEC-27).
-//
-// It is expressed in this package's own types on purpose. Prayers does not
-// import couples; the composition root adapts one to the other, so neither
-// module knows the other exists.
+// CoupleContext is everything this module needs about a couple (DEC-27),
+// expressed in this package's own types — prayers does not import couples.
 type CoupleContext struct {
 	CoupleID uuid.UUID
 	Location *time.Location
 	Members  []Member
 }
 
-// Partner is the other member, for a view that has to separate "mine" from
-// "theirs".
+// Partner is the other member.
 func (cc CoupleContext) Partner(userID uuid.UUID) uuid.UUID {
 	for _, m := range cc.Members {
 		if m.UserID != userID {
@@ -64,14 +57,8 @@ func NewService(repo Repository, couples Couples, now func() time.Time) *Service
 }
 
 // Current is this week, created on first sight if nobody has made it yet.
-//
-// The contract once said a scheduler would create weeks and the API never
-// would. There is no scheduler yet (Q-16), and waiting for one would mean the
-// feature does not work at all — so the read creates it, which is safe for
-// exactly the reason the scheduler would have been: UNIQUE (couple_id,
-// week_start) means the second writer loses harmlessly. When the worker
-// arrives it pre-warms the week and sends the notification; it does not
-// become a prerequisite.
+// No scheduler exists yet (Q-16), so the read creates it; UNIQUE
+// (couple_id, week_start) makes concurrent creation safe.
 func (s *Service) Current(ctx context.Context, userID uuid.UUID) (Record, CoupleContext, error) {
 	cc, err := s.couples.ForPrayers(ctx, userID)
 	if err != nil {
@@ -81,8 +68,8 @@ func (s *Service) Current(ctx context.Context, userID uuid.UUID) (Record, Couple
 	now := s.now()
 	weekStart := StartOfWeek(now, cc.Location)
 
-	// The rotation is counted from the couple's first week ever, so it does
-	// not restart when they miss one.
+	// Counted from the couple's first week ever, so it doesn't restart when
+	// they miss one.
 	first, ok, err := s.repo.FirstWeekStart(ctx, cc.CoupleID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
@@ -93,9 +80,7 @@ func (s *Service) Current(ctx context.Context, userID uuid.UUID) (Record, Couple
 
 	setter, err := SetterFor(cc.Members, WeekIndex(first, weekStart))
 	if err != nil {
-		// One member, or none: there is nobody whose turn it could be. That
-		// is the couple's state, not a missing week, and it reads very
-		// differently to someone waiting for their partner to join.
+		// Fewer than two members: treat as waiting for partner, not a missing week.
 		return Record{}, CoupleContext{}, ErrWaitingForPartner
 	}
 
@@ -128,11 +113,7 @@ func (s *Service) Week(ctx context.Context, userID, weekID uuid.UUID) (Record, C
 	return rec, cc, err
 }
 
-// SavePoints replaces this week's points. The setter may keep editing all
-// week — fixing a typo is not a betrayal, and a week you cannot add to on
-// Wednesday is a week that stops being useful on Monday. What they cannot do
-// is rewrite or remove a prayer their partner has already prayed; see
-// CanEditPoints.
+// SavePoints replaces this week's points, subject to CanEditPoints.
 func (s *Service) SavePoints(ctx context.Context, userID uuid.UUID, points []Point) (Record, CoupleContext, error) {
 	rec, cc, err := s.Current(ctx, userID)
 	if err != nil {
@@ -154,8 +135,7 @@ func (s *Service) SavePoints(ctx context.Context, userID uuid.UUID, points []Poi
 	return rec, cc, err
 }
 
-// Publish shares this week with the partner. Publishing twice is not an
-// error: a client that retries should find the world as it wanted it.
+// Publish shares this week with the partner. Publishing twice is a no-op.
 func (s *Service) Publish(ctx context.Context, userID uuid.UUID) (Record, CoupleContext, error) {
 	rec, cc, err := s.Current(ctx, userID)
 	if err != nil {
@@ -176,7 +156,7 @@ func (s *Service) Publish(ctx context.Context, userID uuid.UUID) (Record, Couple
 }
 
 // SetCompletion marks one point as prayed, or unmarks it, for the caller
-// alone. Their partner's progress is never touched — that is the whole model.
+// alone; their partner's progress is never touched.
 func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, done bool) (Record, CoupleContext, error) {
 	cc, err := s.couples.ForPrayers(ctx, userID)
 	if err != nil {
@@ -192,8 +172,6 @@ func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, 
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
-	// A week still being written is invisible to the partner, so there is
-	// nothing there for them to have prayed.
 	if StatusFor(rec.Week, userID) == StatusWaiting {
 		return Record{}, CoupleContext{}, ErrNotFound
 	}
@@ -206,15 +184,9 @@ func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, 
 	return rec, cc, err
 }
 
-// SetReflection stores the caller's own words about a week. Both partners
-// write their own, and both can read both.
-// SetAnswered marks a prayer answered, or takes the mark back.
-//
-// Deliberately not restricted to the current week. Prayers are answered on
-// their own schedule — months later, long after the week has closed into
-// history — and a feature that only worked for seven days would miss most of
-// what it exists to catch. The couple-scoped lookup of the point is the whole
-// permission check: a point belonging to anyone else is simply not found.
+// SetAnswered marks a prayer answered, or takes the mark back. Not
+// restricted to the current week — prayers get answered on their own
+// schedule. The couple-scoped point lookup is the whole permission check.
 func (s *Service) SetAnswered(
 	ctx context.Context, userID, pointID uuid.UUID, answered bool, note string,
 ) (Record, CoupleContext, error) {

@@ -2,11 +2,9 @@ package httpx
 
 import "net/http"
 
-// StatusWriter wraps a ResponseWriter to record the status code a handler
-// sent, since http.ResponseWriter itself exposes no way to read it back.
-// Router uses one to label metrics; middleware.Logging uses the same type
-// to log request status — one wrapper, so "what status did this request
-// send" is answered the same way everywhere it's asked.
+// StatusWriter wraps a ResponseWriter to record the status code sent, since
+// http.ResponseWriter itself exposes no way to read it back. Router and
+// middleware.Logging both use it, so status is read the same way everywhere.
 type StatusWriter struct {
 	http.ResponseWriter
 	Status int
@@ -35,9 +33,8 @@ func (w *StatusWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// Unwrap lets http.ResponseController see through this wrapper to the
-// underlying ResponseWriter, so a handler that needs e.g. Flush still works
-// with this wrapper in front of it.
+// Unwrap lets http.ResponseController see through to the underlying
+// ResponseWriter, so e.g. Flush still works through this wrapper.
 func (w *StatusWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }

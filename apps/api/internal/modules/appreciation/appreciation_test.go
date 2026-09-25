@@ -44,8 +44,6 @@ func TestCanUndo(t *testing.T) {
 	})
 
 	t.Run("and at the last moment of the window", func(t *testing.T) {
-		// The client stops offering Undo at five seconds; the rest of the
-		// thirty is for the connection, not the person.
 		if err := CanUndo(note, sender, sent.Add(UndoWindow)); err != nil {
 			t.Errorf("a tap inside the window was refused: %v", err)
 		}
@@ -65,8 +63,6 @@ func TestCanUndo(t *testing.T) {
 	})
 
 	t.Run("whose it is is decided before when it was", func(t *testing.T) {
-		// Otherwise the answer to "can I delete this?" tells somebody
-		// whether their partner's note is fresh.
 		err := CanUndo(note, partner, sent.Add(time.Hour))
 		if err != ErrNotYours {
 			t.Errorf("err = %v, want not-theirs rather than a timing answer", err)

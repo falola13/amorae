@@ -34,18 +34,7 @@ import {
   TopBar,
 } from "@/components/ui/kit";
 
-/**
- * The when and where of an event, changed from the event itself.
- *
- * These were read-only lines with a "Change" link on the reminder alone, so
- * tapping the time or the place did nothing at all — and a reminder took a
- * round trip through the whole compose form to move by an hour. Each row is
- * now the control, and each one saves on its own: the endpoint is a PATCH, so
- * a row sends the single field it owns and leaves the rest of the event,
- * checklist included, exactly where it was.
- *
- * Empty rows still show. "Add a time" is how you discover you can.
- */
+// Each row is its own control and PATCHes only the field it owns, leaving the rest of the event untouched.
 function When({ event }: { event: Event }) {
   const patch = usePatchEvent();
   const set = (field: keyof EventInput) => (value: string) =>
@@ -120,7 +109,6 @@ export default function EventDetail() {
         }
       >
         {(e) => {
-          // "Over" is a fact about the clock, not a thing to be told.
           const over = !stillAhead(e.date, e.start_time, today());
           return (
             <>
@@ -155,11 +143,7 @@ export default function EventDetail() {
                 ) : null}
               </Main>
               <BottomActions>
-                {/* Once it is over, the app already knows it is over — asking
-                  somebody to "mark as done" is asking them to confirm the
-                  date. The question worth asking is the other one: did this
-                  happen, and is it worth keeping. Before it happens, there is
-                  nothing to ask at all, so the action stays out of the way. */}
+                {/* Once an event is over, "mark as done" is replaced by keep-as-memory / it-didn't-happen. */}
                 {e.done || over ? (
                   <Button variant="secondary" icon="image" onClick={() => setKeeping(true)}>
                     {e.done ? "Keep it as a memory" : "Keep this as a memory"}
@@ -207,8 +191,6 @@ export default function EventDetail() {
                 onClose={() => setKeeping(false)}
                 onKept={() => router.push(routes.memories)}
               />
-              {/* It goes for both of them, so it asks first. There is no undo:
-                an event is small enough that re-adding it beats keeping a bin. */}
               <Sheet
                 open={confirming}
                 onClose={() => setConfirming(false)}

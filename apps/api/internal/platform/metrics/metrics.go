@@ -1,7 +1,5 @@
-// Package metrics wraps a private prometheus.Registry (never the global
-// default one) so that importing this package can't accidentally pull in
-// metrics some other dependency registered globally, and so tests can spin
-// up an isolated registry per test without collisions.
+// Package metrics wraps a private prometheus.Registry, never the global
+// default, so tests can spin up an isolated registry without collisions.
 package metrics
 
 import (
@@ -12,9 +10,8 @@ import (
 )
 
 // Metrics holds the HTTP-layer counters and histograms every route records
-// into. It's deliberately small: one counter and one histogram, both
-// labelled the same way, is enough to answer "what's slow" and "what's
-// erroring" without turning this into a metrics-everything free-for-all.
+// into. Deliberately small: one counter and one histogram cover "what's
+// slow" and "what's erroring".
 type Metrics struct {
 	registry        *prometheus.Registry
 	requestsTotal   *prometheus.CounterVec
@@ -76,9 +73,8 @@ func (m *Metrics) CoupleCreated() { m.couplesCreated.Inc() }
 func (m *Metrics) CouplePaired()  { m.couplesPaired.Inc() }
 func (m *Metrics) CoupleEnded()   { m.couplesEnded.Inc() }
 
-// Observe records one completed request. route is the pattern the handler
-// was registered under (e.g. "GET /v1/users/me"), not the raw request path,
-// so that path parameters don't explode the label cardinality.
+// Observe records one completed request. route is the registration pattern
+// (e.g. "GET /v1/users/me"), not the raw path, to keep label cardinality bounded.
 func (m *Metrics) Observe(method, route, status string, seconds float64) {
 	m.requestsTotal.WithLabelValues(method, route, status).Inc()
 	m.requestDuration.WithLabelValues(method, route, status).Observe(seconds)

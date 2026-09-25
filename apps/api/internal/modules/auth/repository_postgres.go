@@ -12,9 +12,6 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 )
 
-// PostgresSessionRepository is the only implementation of SessionRepository.
-// user.PostgresRepository (a different type, in a different package) plays
-// the equivalent role for auth's UserRepository interface.
 type PostgresSessionRepository struct {
 	db *database.DB
 }
@@ -85,8 +82,6 @@ func (r *PostgresSessionRepository) ListByUser(ctx context.Context, userID uuid.
 	return sessions, nil
 }
 
-// DeleteOthers ends every session this user has except the one making the
-// request, and reports how many ended.
 func (r *PostgresSessionRepository) DeleteOthers(ctx context.Context, userID uuid.UUID, keepHash []byte) (int, error) {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2
@@ -97,8 +92,7 @@ func (r *PostgresSessionRepository) DeleteOthers(ctx context.Context, userID uui
 	return int(tag.RowsAffected()), nil
 }
 
-// DeleteAllForUser ends every session the user has, the caller's included.
-// A password reset uses it: whoever asked may not be the one holding them.
+// Used by password reset: whoever asked may not be the one holding the sessions.
 func (r *PostgresSessionRepository) DeleteAllForUser(ctx context.Context, userID uuid.UUID) error {
 	if _, err := r.db.Q(ctx).Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
 		return fmt.Errorf("deleting sessions: %w", err)

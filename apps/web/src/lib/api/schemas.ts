@@ -1,15 +1,11 @@
 import { z } from "zod";
 
-// Zod schemas shared by React Hook Form (client validation) and the Server
-// Actions (they re-parse, so a tampered form still meets the same rules).
-// Messages say how to fix the problem, per the design's error copy.
+// Shared by React Hook Form (client validation) and Server Actions (re-parsed
+// there, so a tampered form still meets the same rules).
 export const emailSchema = z.string().trim().email("Add the part after the @, like .com");
-// The password rule, identical to the Go API's (auth.passwordProblem):
-// - at least 10 *characters*, counted as a person would (Array.from counts
-//   code points, so an emoji is one; .min() would count UTF-16 units and let
-//   5 emoji through as "10");
-// - at most 72 *bytes*, because bcrypt ignores everything after that and a
-//   password must never be silently truncated. Accents and emoji take 2-4 bytes.
+// Matches the Go API's rule (auth.passwordProblem): min counted with
+// Array.from (code points, so an emoji is 1, not .min()'s UTF-16 units); max
+// in bytes, since bcrypt silently truncates past 72.
 const MIN_PASSWORD_CHARS = 10;
 const MAX_PASSWORD_BYTES = 72;
 export const passwordSchema = z
@@ -36,8 +32,7 @@ export const registerSchema = z.object({
     .max(50, "Keep it under 50 characters."),
   email: emailSchema,
   password: passwordSchema,
-  // FR-AUTH-010 and 011, checked again by the API. The faith box is separate
-  // and optional (FR-AUTH-012): agreeing to the Terms never implies it.
+  // FR-AUTH-010/011. faith_consent is separate and optional (FR-AUTH-012).
   age_confirmed: z.boolean().refine((v) => v, "You need to be 18 or older to use Amorae."),
   accepted_terms: z
     .boolean()
@@ -54,8 +49,7 @@ export const joinSchema = z.object({
     .trim()
     .regex(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/i, "Codes look like XXX-XXX."),
 });
-// Email isn't part of the profile form: changing it needs the current
-// password, so it has its own form and endpoint (changeEmailSchema).
+// Email isn't in the profile form: changing it needs the current password (changeEmailSchema).
 export const profileSchema = z.object({
   display_name: registerSchema.shape.display_name,
   timezone: z.string().min(1),
@@ -71,9 +65,7 @@ export const changePasswordSchema = z.object({
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
-// The word a person types to confirm deleting their account. The Go API
-// applies the same rule (auth.isDeleteConfirmation): case and surrounding
-// spaces don't matter, the word does.
+// Matches the Go API's rule (auth.isDeleteConfirmation): case/spaces don't matter.
 export const DELETE_CONFIRMATION = "delete";
 export const isDeleteConfirmation = (s: string) => s.trim().toLowerCase() === DELETE_CONFIRMATION;
 export const deleteAccountSchema = z.object({
@@ -108,8 +100,7 @@ export const eventSchema = z.object({
   location: z.string().trim().max(120).optional(),
   reminder: z.string().trim().max(40).optional(),
   notes: z.string().trim().max(1000).optional(),
-  // The things to do between now and then. Sent whole: the order is the
-  // order, and an item left out is an item removed.
+  // Sent whole: an item left out is an item removed.
   checklist: z.array(z.string()).max(20).optional(),
 });
 

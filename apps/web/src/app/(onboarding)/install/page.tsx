@@ -39,8 +39,7 @@ function Step({
   );
 }
 
-// Gentle install guidance (spec 19.2): explain, show the iOS steps or the
-// Android prompt, and remember a dismissal so it is not shown again.
+// Install guidance per spec 19.2.
 export default function InstallPage() {
   const router = useRouter();
   const onboarding = useOnboarding();
@@ -59,9 +58,7 @@ export default function InstallPage() {
     );
   };
 
-  // Already installed: skip this step. A mutation belongs in an effect, not
-  // in the render body — calling it while rendering fires twice under
-  // StrictMode and can race with the render that triggered it.
+  // Mutation runs in an effect, not render body, to avoid double-firing under StrictMode.
   useEffect(() => {
     if (standalone) done();
     // eslint-disable-next-line react-hooks/exhaustive-deps

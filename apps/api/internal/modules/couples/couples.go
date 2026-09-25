@@ -23,23 +23,20 @@ var (
 	ErrAlreadyPaired = apperr.Conflict("already_paired", "You are already in a couple.")
 	ErrNotFound      = apperr.NotFound("couple_not_found", "You are not in a couple yet.")
 
-	// errCodeTaken means a freshly drawn invite code already exists; the
-	// service draws another. It never reaches a client.
+	// errCodeTaken signals a drawn invite code collision; the service draws
+	// another. Never reaches a client.
 	errCodeTaken = errors.New("invite code taken")
 )
 
-// inviteError keeps a specific code, so the client can tell "expired" from
-// "already used", and repeats the message under fields.code, so the join form
-// shows it beneath the code input like any other field error.
+// inviteError repeats the message under fields.code so the join form shows
+// it beneath the code input like any other field error.
 func inviteError(code, message string) *apperr.Error {
 	err := apperr.Invalid(code, message)
 	err.Fields = map[string]string{"code": message}
 	return err
 }
 
-// A role is how a member labels themselves in the couple ("Husband", "Wife",
-// whatever they prefer) and grants no permissions, so the wording is left to
-// the couple and only the length is bounded.
+// ValidateRole grants no permissions from the label itself, so only length is bounded.
 func ValidateRole(role string) (string, error) {
 	role = strings.TrimSpace(role)
 	if n := utf8.RuneCountInString(role); n < 1 || n > maxRoleRunes {
@@ -50,8 +47,7 @@ func ValidateRole(role string) (string, error) {
 	return role, nil
 }
 
-// Onboarding is the per-person tail of the signup flow. There is no field for
-// the couple step because membership itself is that step's completed state.
+// Onboarding has no field for the couple step: membership itself is that step's completed state.
 type Onboarding struct {
 	Install       bool
 	Notifications bool
@@ -60,23 +56,20 @@ type Onboarding struct {
 type Member struct {
 	ID   uuid.UUID
 	Role string
-	// When they joined. It is what fixes the order of anything that
-	// alternates between the two of them — the prayer setter rotation reads
-	// it, so it cannot be inferred from the order rows happen to arrive in.
+	// Fixes the order of anything that alternates between the two members
+	// (e.g. the prayer setter rotation) — not inferable from row arrival order.
 	JoinedAt   time.Time
 	Onboarding Onboarding
 }
 
-// Mine is the signed-in couple view: the couple row, both memberships, and
-// the latest invite code.
+// Mine is the signed-in couple view.
 type Mine struct {
 	Couple     COUPLES
 	Members    []Member
 	InviteCode string
 }
 
-// Member finds one membership by user id. Callers use it to separate "me"
-// from "my partner", since the slice holds both in join order.
+// Member separates "me" from "my partner" in the join-ordered slice.
 func (m Mine) Member(userID uuid.UUID) (Member, bool) {
 	for _, member := range m.Members {
 		if member.ID == userID {
@@ -89,16 +82,14 @@ func (m Mine) Member(userID uuid.UUID) (Member, bool) {
 type COUPLES struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
-	// An IANA zone name, matching the TEXT column. It decides when a prayer
-	// week turns over, so it is the couple's zone, not either phone's.
+	// IANA zone name; decides when a prayer week turns over. The couple's zone, not either phone's.
 	Timezone              string    `json:"timezone"`
 	RelationshipStartDate time.Time `json:"relationship_start_date"`
 	CreatedBy             uuid.UUID `json:"created_by"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
-	// When one partner ended the couple, or nil while it is live. A couple
-	// with an end date is readable and exportable but closed to writes, until
-	// the retention window runs out and it is deleted. See dissolution.go.
+	// Nil while live. Once set, the couple is read-only until the retention
+	// window runs out and it is deleted. See dissolution.go.
 	DissolvedAt *time.Time `json:"dissolved_at,omitempty"`
 }
 

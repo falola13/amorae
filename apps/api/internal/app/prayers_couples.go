@@ -11,11 +11,9 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 )
 
-// prayersCouples adapts the couples service to the one question prayers asks
-// of it. It lives here, in the composition root, because that is the only
-// place allowed to know both modules exist: prayers does not import couples,
-// couples does not import prayers, and neither has to change when the other
-// does.
+// prayersCouples adapts the couples service to the question prayers asks of
+// it. Lives here in the composition root so prayers and couples never import
+// each other.
 type prayersCouples struct {
 	couples *couples.Service
 }
@@ -26,10 +24,8 @@ func (a prayersCouples) ForPrayers(ctx context.Context, userID uuid.UUID) (praye
 		return prayers.CoupleContext{}, err
 	}
 
-	// The couple's zone, not either partner's: it decides when the week turns
-	// over, so both must agree on it (DEC-27). A zone the database somehow
-	// holds but this machine cannot load falls back to UTC rather than taking
-	// the feature down.
+	// The couple's zone, not either partner's — decides when the week turns
+	// over (DEC-27). Falls back to UTC rather than failing if unloadable.
 	timezone := mine.Couple.Timezone
 	if timezone == "" {
 		timezone = user.DefaultTimezone
@@ -52,8 +48,7 @@ func (a prayersCouples) ForPrayers(ctx context.Context, userID uuid.UUID) (praye
 }
 
 // CoupleFor is the smaller question the Together modules ask: which couple,
-// and nothing else. Same adapter, because the answer comes from the same
-// place and neither module should learn what a couples.Mine is.
+// and nothing else.
 func (a prayersCouples) CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
 	mine, err := a.couples.GetMine(ctx, userID)
 	if err != nil {

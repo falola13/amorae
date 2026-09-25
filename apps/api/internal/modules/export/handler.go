@@ -1,7 +1,5 @@
 // Package export builds "download my data" (FR-ACCT-006). It owns no table:
-// each section comes from the module that owns that data, through a small
-// interface declared here, so later modules add a section without touching
-// the others.
+// each section comes from its owning module through a small interface declared here.
 package export
 
 import (
@@ -54,8 +52,7 @@ type consentDTO struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// memberDTO names a member by display name and role only. The partner's
-// email and anything about their credentials stay out (FR-ACCT-006.AC2).
+// Partner's email and credentials stay out on purpose (FR-ACCT-006.AC2).
 type memberDTO struct {
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
@@ -69,8 +66,7 @@ type coupleDTO struct {
 	CreatedAt  time.Time   `json:"created_at"`
 	Members    []memberDTO `json:"members"`
 	InviteCode string      `json:"invite_code,omitempty"`
-	// Set on a couple that has ended: when, and the day it is deleted. Taking
-	// a copy before then is the whole point of this file (FR-PAIR-008.AC2).
+	// Set once a couple has ended; exporting before purge is the point of this file (FR-PAIR-008.AC2).
 	DissolvedAt   *time.Time `json:"dissolved_at,omitempty"`
 	ReadOnlyUntil *time.Time `json:"read_only_until,omitempty"`
 }
@@ -80,8 +76,7 @@ type exportDTO struct {
 	User       user.DTO     `json:"user"`
 	Consents   []consentDTO `json:"consents"`
 	Couple     *coupleDTO   `json:"couple"`
-	// Couples this person used to be in, while their window is still open.
-	// Empty once they have been purged.
+	// Couples this person used to be in, while the retention window is open; empty once purged.
 	EndedCouples []coupleDTO `json:"ended_couples"`
 }
 

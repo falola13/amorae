@@ -2,10 +2,8 @@ package httpx
 
 import "context"
 
-// The request id's context key lives here, not in middleware, so that
-// httpx.Error (which needs to read it) doesn't have to import middleware
-// (which needs to import httpx to build the Router). Middleware sets it via
-// WithRequestID; everything else reads it via RequestID.
+// Lives here, not in middleware, so httpx.Error can read it without
+// middleware importing httpx (which it needs, to build the Router).
 type requestIDKey struct{}
 
 func WithRequestID(ctx context.Context, id string) context.Context {

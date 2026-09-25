@@ -25,12 +25,8 @@ export const setterSentence = (
   partnerName: string,
 ): string => `${setterLabel(week, meId, partnerName)} set the prayers`;
 
-/**
- * The prayer index to open prayer mode at: `at` if it's a whole number in
- * range, else the first prayer not yet marked prayed (or 0 if all are done).
- * Guards against `?at=` being missing, non-numeric, or out of bounds — any
- * of which used to reach `points[NaN]` and crash.
- */
+// Index to open prayer mode at: `at` if valid, else the first unprayed point (or 0). Guards against
+// `?at=` being missing, non-numeric, or out of bounds.
 export const startIndex = (week: PrayerWeek, at: string | null): number => {
   const n = at === null ? NaN : Number(at);
   if (Number.isInteger(n) && n >= 0 && n < week.points.length) return n;

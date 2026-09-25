@@ -22,14 +22,7 @@ import { longDateYear, yearsAndMonths } from "@/lib/dates";
 import { zoneLabel } from "@/lib/timezones";
 import { routes } from "@/lib/routes";
 
-/**
- * The couple itself: what you call your space, when it started, and who the
- * two of you are. Profile next door is only ever about you.
- *
- * Nothing about your partner's account belongs here. Their email, their
- * devices and their sign-in history are theirs (DEC-23), and a shared screen
- * is exactly where that line is easiest to cross.
- */
+// Shared couple settings only; a partner's own account (email, devices, sign-in) stays out of this screen (DEC-23).
 export default function CouplePage() {
   const couple = useCouple();
   const [editing, setEditing] = useState(false);
@@ -131,10 +124,7 @@ export default function CouplePage() {
   );
 }
 
-/**
- * One partner: who they are and what they call themselves. Row takes an icon,
- * and a person deserves their initial, so this keeps Row's metrics by hand.
- */
+// Reimplements Row's layout by hand since this needs an initial avatar instead of an icon.
 function Person({
   name,
   role,

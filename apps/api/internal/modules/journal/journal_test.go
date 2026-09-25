@@ -30,8 +30,6 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("a tag we never offered is not", func(t *testing.T) {
-		// It comes from a picker, so a different value means a client sending
-		// something this server has never shown anybody.
 		if _, _, err := Validate("Prayer reflection", "Something."); err == nil {
 			t.Error("an unknown tag was accepted")
 		}
@@ -59,7 +57,6 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("both problems are reported together", func(t *testing.T) {
-		// One round trip should tell somebody everything that is wrong.
 		_, _, err := Validate("Nonsense", "")
 		if err == nil {
 			t.Fatal("nothing was wrong with a bad tag and no text")

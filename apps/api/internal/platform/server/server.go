@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-// These timeouts protect the server from slow or stalled clients holding a
-// connection open; they're fixed rather than configurable because there's
-// no legitimate reason a deployment of this API would need different ones.
+// Fixed (not configurable) timeouts protecting against slow/stalled clients.
 const (
 	readHeaderTimeout = 5 * time.Second
 	readTimeout       = 15 * time.Second
@@ -43,11 +41,9 @@ func New(addr string, handler http.Handler, shutdownTimeout time.Duration, log *
 	}
 }
 
-// Run blocks until ctx is canceled — main.go cancels it on SIGINT/SIGTERM
-// via signal.NotifyContext — then gives in-flight requests up to
-// shutdownTimeout to finish before returning. The listener goroutine's
-// result is always read back (even on the shutdown path), so Run never
-// returns while that goroutine is still running.
+// Run blocks until ctx is canceled, then gives in-flight requests up to
+// shutdownTimeout before returning. The listener goroutine's result is
+// always read back, so Run never returns while it's still running.
 func (s *Server) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
 

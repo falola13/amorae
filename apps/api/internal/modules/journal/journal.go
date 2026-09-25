@@ -1,10 +1,5 @@
-// Package journal owns the couple's shared journal: short entries, each
-// tagged, each with an author.
-//
-// The author is the difference between this and memories. A memory is
-// something that happened to them both; a journal entry is something one of
-// them wrote, and reading it back years later is partly about which of them
-// was thinking it.
+// Package journal owns the couple's shared journal: short, tagged entries,
+// each with an author — the difference from memories, which have none.
 package journal
 
 import (
@@ -20,8 +15,7 @@ import (
 
 const maxTextRunes = 2000
 
-// Tag is what an entry is: the five the composer offers, spelled the way it
-// sends them.
+// Tag values are spelled exactly as the composer sends them.
 type Tag string
 
 const (
@@ -34,7 +28,6 @@ const (
 
 var tags = []Tag{TagGratitude, TagReflection, TagMemory, TagAppreciation, TagPlans}
 
-// Entry is one thing one of them wrote.
 type Entry struct {
 	ID       uuid.UUID
 	CoupleID uuid.UUID
@@ -44,11 +37,7 @@ type Entry struct {
 	Text     string
 }
 
-// Validate checks a new entry and returns it cleaned.
-//
-// The tag is matched exactly rather than case-insensitively: it is a value
-// from a picker, not something anybody types, so a different spelling means a
-// client sending something this server has never offered.
+// Validate matches the tag exactly, not case-insensitively — it's from a picker, not free text.
 func Validate(tag, text string) (Tag, string, error) {
 	text = strings.TrimSpace(text)
 

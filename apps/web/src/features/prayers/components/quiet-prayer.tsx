@@ -7,10 +7,7 @@ import { Button } from "@/components/ui/kit";
 import type { useTimer } from "@/lib/hooks/use-timer";
 import { routes } from "@/lib/routes";
 
-/**
- * No list today: just space, and an optional timer. Shown for "quiet
- * prayer" (?quiet=1) and whenever the current week has no points.
- */
+/** No list today — just space and an optional timer. Shown for quiet prayer (?quiet=1) or an empty week. */
 export function QuietPrayer({ timer }: { timer: ReturnType<typeof useTimer> }) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col bg-paper">

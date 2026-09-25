@@ -15,7 +15,6 @@ type Repository interface {
 	AddProgress(ctx context.Context, coupleID, goalID, userID uuid.UUID, amount int64, on time.Time) error
 }
 
-// Couples answers the one question this module asks of pairing.
 type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
@@ -81,9 +80,7 @@ func (s *Service) Update(ctx context.Context, userID, goalID uuid.UUID, in Input
 	return s.repo.ByID(ctx, coupleID, goalID)
 }
 
-// LogProgress appends an entry carrying who logged it and the day it counts
-// for. The running total is not stored, so there is nothing else to keep in
-// step (BR-GOAL-01).
+// LogProgress appends an entry; the running total isn't stored, so nothing else needs to stay in sync (BR-GOAL-01).
 func (s *Service) LogProgress(ctx context.Context, userID, goalID uuid.UUID, amount int64) (Goal, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {

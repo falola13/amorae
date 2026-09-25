@@ -1,8 +1,6 @@
-// iOS ignores the manifest for launch screens: it only shows an
-// apple-touch-startup-image whose media query matches the device exactly,
-// and falls back to a blank screen otherwise. One entry per portrait size.
-// When Apple ships a new screen size, add its PNG under public/splash and a
-// line here.
+// iOS ignores the manifest for launch screens — only an apple-touch-startup-image
+// whose media query matches the device exactly, else a blank screen. Add new
+// sizes as a PNG under public/splash plus an entry here.
 
 interface Device {
   width: number; // CSS pixels

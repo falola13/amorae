@@ -65,7 +65,6 @@ func TestValidate_Editing(t *testing.T) {
 	}
 
 	t.Run("a field nobody mentioned is left alone", func(t *testing.T) {
-		// A PATCH that changes the title must not quietly clear the location.
 		e, err := existing.Validate(Input{Title: ptr("Late dinner")}, false)
 		if err != nil {
 			t.Fatalf("Validate: %v", err)
@@ -143,7 +142,6 @@ func TestValidate_Checklist(t *testing.T) {
 	})
 
 	t.Run("blank rows are dropped, not complained about", func(t *testing.T) {
-		// They come from an input somebody never filled in.
 		e, err := base.Validate(Input{Checklist: &[]string{"Book it", "   ", "", "Petrol"}}, false)
 		if err != nil {
 			t.Fatalf("Validate: %v", err)
@@ -151,8 +149,7 @@ func TestValidate_Checklist(t *testing.T) {
 		if len(e.Checklist) != 2 {
 			t.Fatalf("%d items, want 2", len(e.Checklist))
 		}
-		// Positions close up rather than leaving holes the unique index
-		// would later reject.
+		// Positions close up: a hole would later be rejected by the unique index.
 		if e.Checklist[1].Position != 1 {
 			t.Errorf("second item has position %d", e.Checklist[1].Position)
 		}
@@ -186,7 +183,6 @@ func TestValidate_Checklist(t *testing.T) {
 }
 
 func TestValidate_ReportsEverythingAtOnce(t *testing.T) {
-	// Nobody should fix one field only to be told about the next.
 	fields := fieldsOf(t, func() error {
 		_, err := Event{}.Validate(Input{
 			Title:    ptr(strings.Repeat("x", maxTitleRunes+1)),

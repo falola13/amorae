@@ -1,8 +1,6 @@
-// Package config reads and validates the application's configuration from
-// environment variables. Load fails fast: it collects every problem it
-// finds (rather than stopping at the first) so a misconfigured deployment
-// reports everything wrong with it in one shot instead of one env var per
-// restart.
+// Package config reads and validates configuration from environment
+// variables. Load collects every problem it finds rather than stopping at
+// the first, so a misconfigured deployment sees everything wrong in one shot.
 package config
 
 import (
@@ -24,71 +22,50 @@ type Config struct {
 	SessionTTL      time.Duration
 	BCryptCost      int
 	ShutdownTimeout time.Duration
-	// MetricsAddr is a separate listener for /metrics, so it is never on
-	// the public API port. Defaults to loopback; containers set ":9090" and
-	// simply don't publish it.
+	// MetricsAddr is a separate listener for /metrics, never the public API port.
 	MetricsAddr string
 	// BFFSecret, when set, lets the web BFF vouch for the real client IP
 	// (see middleware.ClientIP). Empty means no forwarded IP is trusted.
 	BFFSecret      string
 	RESEND_API_KEY string
 	DefaultFrom    string
-	// VAPID identifies this server to a browser's push service, and signs
-	// every send (RFC 8292). The public key also reaches the browser, through
-	// the web app's NEXT_PUBLIC_VAPID_PUBLIC_KEY; the private one never
-	// leaves here. Without a pair, push is disabled rather than broken: the
-	// worker logs what it would have sent.
+	// VAPID identifies this server to a browser's push service and signs
+	// every send (RFC 8292). Public key also goes to the web app; private
+	// key stays here. Without a pair, the worker logs instead of sending.
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
-	// Who to contact about this server's sends — a mailto: or https: URL the
-	// push service can use if something goes wrong. Required by RFC 8292.
+	// Contact URI (mailto: or https:) for the push service. Required by RFC 8292.
 	VAPIDSubject string
 
-	// Cloudinary holds the photos attached to memories (FR-MEM-003, Q-06).
-	// All three or none: without them the photo endpoints answer "not
-	// available" and the rest of the app is unaffected, exactly as it is
-	// without VAPID keys.
+	// Cloudinary holds photos attached to memories (FR-MEM-003, Q-06). All
+	// three or none: without them photo endpoints answer "not available".
 	CloudinaryCloudName string
 	CloudinaryAPIKey    string
 	CloudinaryAPISecret string
 
-	// MigrateOnStart makes the API apply pending migrations before it serves
-	// anything. Off by default, because the right shape is a one-shot job
-	// that runs before the new version goes live, and docker-compose has
-	// exactly that.
-	//
-	// It exists for deployments with nowhere to put one. On Render's free
-	// tier a push deploys the code and nothing runs migrations, so the app
-	// goes live asking for a column that is not there — which is not a
-	// hypothetical, it is what happened on 2026-09-24. Set this only where a
-	// single instance runs; goose takes a session advisory lock so more than
-	// one would serialise rather than corrupt anything, but a deploy that
-	// waits on another instance's migration is not what anybody planned.
+	// MigrateOnStart applies pending migrations before serving. Off by
+	// default (the normal shape is a one-shot job before deploy); exists for
+	// platforms with nowhere to run that job. goose takes a session advisory
+	// lock, so multiple instances serialise rather than corrupt anything.
 	MigrateOnStart bool
 
 	// TickSecret, when set, exposes POST /internal/tick — one pass of the
-	// notification worker, on request. It is for deployments with nowhere to
-	// put a process that runs forever: something external and free calls it
-	// every few minutes instead. Empty means the endpoint does not exist.
+	// notification worker, for deployments with no long-running process.
+	// Empty means the endpoint doesn't exist.
 	TickSecret string
 
-	// AppURL is the web origin, used to build links in emails
-	// (e.g. the password-reset link).
+	// AppURL is the web origin used to build links in emails (e.g. password reset).
 	AppURL string
-	// Policy versions recorded with each consent at sign-up. They come from
-	// here, never from the request, so a client can't claim a version.
+	// Policy versions recorded with each consent at sign-up, from here
+	// rather than the request, so a client can't claim a version.
 	TermsVersion   string
 	PrivacyVersion string
 	FaithVersion   string
 }
 
-// httpAddr is where the server listens.
-//
-// PORT wins when it is set, because that is how every platform-as-a-service
-// tells a process which port it has been given — Render, Railway, Fly and
-// Heroku all inject it, and a service that ignores it binds somewhere nothing
-// is listening for and is killed as unhealthy. HTTP_ADDR stays for everywhere
-// else, where the whole address matters and not just the port.
+// httpAddr is where the server listens. PORT wins when set, since that's how
+// PaaS platforms (Render, Railway, Fly, Heroku) assign a port; HTTP_ADDR
+// covers everywhere else that needs the whole address.
 func httpAddr() string {
 	if port := strings.TrimSpace(getEnv("PORT", "")); port != "" {
 		return ":" + port
@@ -140,10 +117,8 @@ func Load() (Config, error) {
 	case vapidPrivate != "" && vapidSubject == "":
 		errs = append(errs, errors.New("VAPID_SUBJECT: required when VAPID keys are set (a mailto: or https: URL)"))
 	case vapidPrivate != "" && !validVAPIDSubject(vapidSubject):
-		// It goes into the signed JWT verbatim, and a push service that
-		// dislikes it answers 400 on the first real send — long after this
-		// looked configured. "mailto: <me@example.com>" is the shape that
-		// gets typed; "mailto:me@example.com" is the one that works.
+		// Goes into the signed JWT verbatim: no spaces or angle brackets,
+		// e.g. "mailto:me@example.com" not "mailto: <me@example.com>".
 		errs = append(errs, fmt.Errorf(
 			"VAPID_SUBJECT: must be a bare mailto: or https: URI with no spaces or angle brackets, got %q", vapidSubject))
 	}
@@ -210,8 +185,7 @@ func Load() (Config, error) {
 			"CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET: set all three or none"))
 	}
 
-	// The same floor as the BFF secret, for the same reason: it is the only
-	// thing between the internet and an endpoint that does work.
+	// Same length floor as the BFF secret — it's the only thing gating this endpoint.
 	tickSecret := getEnv("TICK_SECRET", "")
 	if tickSecret != "" && len(tickSecret) < minBFFSecretLen {
 		errs = append(errs, fmt.Errorf("TICK_SECRET: must be at least %d characters when set", minBFFSecretLen))
@@ -255,11 +229,8 @@ func Load() (Config, error) {
 	}, nil
 }
 
-// getEnv treats an unset variable and one set to the empty string the same
-// way: both fall back to the default. That matches getInt/getDuration below
-// and keeps "the variable wasn't provided" unambiguous — the one field
-// where an explicit empty value is itself meaningful (LOG_FORMAT) has a
-// fallback of "" anyway, so this doesn't change its behavior.
+// getEnv treats unset and empty-string the same, falling back to the
+// default either way (matches getInt/getDuration below).
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -308,9 +279,7 @@ func oneOf(v string, options ...string) bool {
 	return false
 }
 
-// validVAPIDSubject checks the shape RFC 8292 asks for: a URI a push service
-// can contact about our sends. Only the shape — whether anyone answers it is
-// not something this can know.
+// validVAPIDSubject checks only the shape RFC 8292 requires, not reachability.
 func validVAPIDSubject(subject string) bool {
 	if strings.ContainsAny(subject, " 	<>") {
 		return false

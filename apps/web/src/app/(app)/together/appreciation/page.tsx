@@ -22,8 +22,7 @@ import { BareTextarea, ComposeBar, Micro, Toast, cx } from "@/components/ui/kit"
 
 type AppreciationFormInput = z.infer<typeof appreciationSchema>;
 
-// How long "Undo" stays on screen after sending. The API accepts the undo a
-// little longer (docs/API.md) so a slow connection doesn't lose it.
+// The API accepts undo slightly longer than this, to cover slow connections (docs/API.md).
 const UNDO_VISIBLE_MS = 5000;
 
 export default function Appreciation() {

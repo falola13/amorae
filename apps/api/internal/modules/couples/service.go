@@ -26,13 +26,12 @@ type Repository interface {
 	GetArchivedForUser(ctx context.Context, userID uuid.UUID, now time.Time) ([]Mine, error)
 }
 
-// AttemptLimiter caps join attempts per person, so invite codes can't be
-// guessed by brute force. ratelimit.Limiter satisfies it.
+// AttemptLimiter caps join attempts per person against brute-forcing invite codes.
 type AttemptLimiter interface {
 	Allow(key string) (allowed bool, retryAfter time.Duration)
 }
 
-// Events counts product events for metrics. Counts only, never content.
+// Events counts product events for metrics — counts only, never content.
 type Events interface {
 	CoupleCreated()
 	CouplePaired()
@@ -45,12 +44,9 @@ func (noEvents) CoupleCreated() {}
 func (noEvents) CouplePaired()  {}
 func (noEvents) CoupleEnded()   {}
 
-// How long an invite code stays usable. Read through the service clock so a
-// test can move time past it.
 const inviteTTL = 7 * 24 * time.Hour
 
-// With 17.6 million codes a collision is rare; three draws make one that
-// repeats practically impossible.
+// With 17.6 million possible codes, three draws make a repeat practically impossible.
 const inviteCodeTries = 3
 
 type Service struct {
@@ -71,13 +67,10 @@ func NewService(repo Repository, now func() time.Time, attempts AttemptLimiter, 
 type CoupleCreateInput struct {
 	Name                  *string
 	RelationshipStartDate *string
-	// The creator's own zone, which seeds the couple's. Nothing lets a couple
-	// change it yet, so this is the only chance to get it right.
+	// Seeds the couple's zone; nothing lets it be changed later.
 	Timezone string
 }
 
-// The API takes calendar days as "2006-01-02"; encoding/json only decodes
-// RFC 3339 into a time.Time, so the string is parsed here instead.
 func parseDay(day *string) (*time.Time, error) {
 	if day == nil {
 		return nil, nil
@@ -150,9 +143,8 @@ func (s *Service) Create(ctx context.Context, createdBy uuid.UUID, creatorName s
 	return created, nil
 }
 
-// withFreshCode calls write with a new invite code, drawing again when the
-// repository reports the code is taken. Each try is its own transaction,
-// because a failed insert aborts the one it ran in.
+// withFreshCode draws a new code again when the repository reports it taken;
+// each try is its own transaction since a failed insert aborts the one it ran in.
 func (s *Service) withFreshCode(write func(code string) error) error {
 	for try := 0; ; try++ {
 		code, err := s.newInviteCode()
@@ -166,9 +158,7 @@ func (s *Service) withFreshCode(write func(code string) error) error {
 	}
 }
 
-// RegenerateInvite replaces the pending invite with a new code and a fresh
-// seven days. The old code stops working at once. Only a couple still
-// waiting for a partner has an invite, so a full one gets ErrCoupleFull.
+// RegenerateInvite's old code stops working at once; a full couple gets ErrCoupleFull.
 func (s *Service) RegenerateInvite(ctx context.Context, userID uuid.UUID) (Mine, error) {
 	now := s.now()
 	if err := s.withFreshCode(func(code string) error {
@@ -179,8 +169,6 @@ func (s *Service) RegenerateInvite(ctx context.Context, userID uuid.UUID) (Mine,
 	return s.GetMine(ctx, userID)
 }
 
-// Joining answers with the same view GetMine returns: the caller has just
-// gained a partner, and that partner is the first thing the next screen shows.
 func (s *Service) Join(ctx context.Context, userID uuid.UUID, code string) (Mine, error) {
 	if ok, retryAfter := s.attempts.Allow("join:" + userID.String()); !ok {
 		return Mine{}, apperr.RateLimited(retryAfter)
@@ -212,17 +200,12 @@ func (s *Service) GetMine(ctx context.Context, userID uuid.UUID) (Mine, error) {
 	return s.repo.GetForUser(ctx, userID, s.now())
 }
 
-// Both updates return the whole couple, the same shape GetMine returns, so a
-// client never has to re-fetch to see what it just changed.
 func (s *Service) UpdateCouples(ctx context.Context, userID uuid.UUID, update UpdateDto) (Mine, error) {
 	start, err := parseDay(update.RelationshipStartDate)
 	if err != nil {
 		return Mine{}, err
 	}
-	// Either partner may move the couple's zone, and it moves for both: a
-	// week both people are praying cannot start at two different moments
-	// (DEC-27). Validated before anything is written, so a bad zone changes
-	// nothing at all.
+	// The zone moves for both partners at once (DEC-27); validated before anything is written.
 	var timezone *string
 	if update.Timezone != nil {
 		valid, err := user.ValidateTimezone(*update.Timezone)
@@ -257,9 +240,7 @@ func (s *Service) UpdateRole(ctx context.Context, userID uuid.UUID, role string)
 	return s.GetMine(ctx, userID)
 }
 
-// UpdateOnboarding records the caller's own progress. A nil field is left
-// alone, so the client can send one step at a time. The couple step is not
-// stored: GetMine answering at all means the caller is in a couple.
+// UpdateOnboarding leaves a nil field alone so the client can send one step at a time.
 func (s *Service) UpdateOnboarding(ctx context.Context, userID uuid.UUID, patch OnboardingDto) (Mine, error) {
 	mine, err := s.GetMine(ctx, userID)
 	if err != nil {
@@ -274,13 +255,8 @@ func (s *Service) UpdateOnboarding(ctx context.Context, userID uuid.UUID, patch 
 	return s.GetMine(ctx, userID)
 }
 
-// LeaveCouple ends the caller's couple for both partners, and answers with
-// what is left of it: no live couple, and an archive entry carrying the date
-// its window closes.
-//
-// The couple id is not a parameter. It is read from the caller's membership,
-// exactly as every other write in this service does, which leaves no id for a
-// client to substitute.
+// LeaveCouple reads the couple id from the caller's own membership, like
+// every other write here, so a client can't substitute a different id.
 func (s *Service) LeaveCouple(ctx context.Context, userID uuid.UUID) ([]Mine, error) {
 	if err := s.repo.Dissolve(ctx, userID, s.now()); err != nil {
 		return nil, err
@@ -289,9 +265,6 @@ func (s *Service) LeaveCouple(ctx context.Context, userID uuid.UUID) ([]Mine, er
 	return s.Archived(ctx, userID)
 }
 
-// Archived is what the caller used to be part of and can still read: ended,
-// not yet purged, and inside the retention window. Usually empty, and at most
-// one entry for anyone who has left a single couple.
 func (s *Service) Archived(ctx context.Context, userID uuid.UUID) ([]Mine, error) {
 	return s.repo.GetArchivedForUser(ctx, userID, s.now())
 }

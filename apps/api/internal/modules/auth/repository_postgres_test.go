@@ -18,8 +18,7 @@ func TestPostgresSessionRepository_CreateGetDelete(t *testing.T) {
 	sessionRepo := auth.NewPostgresSessionRepository(db)
 	ctx := context.Background()
 
-	// A session's user_id has a foreign key into users, so it needs a real
-	// user row to point at.
+	// user_id has a foreign key into users.
 	u, err := user.New("session-test-"+uuid.NewString()+"@example.com", "Name", "hash", time.Now())
 	if err != nil {
 		t.Fatalf("user.New() returned an error: %v", err)
@@ -69,7 +68,6 @@ func TestPostgresSessionRepository_Delete_IsIdempotent(t *testing.T) {
 	}
 }
 
-// seedSession creates a user-owned session row and returns it.
 func seedSession(t *testing.T, repo *auth.PostgresSessionRepository, userID uuid.UUID, created time.Time, expires time.Time, ua string) auth.Session {
 	t.Helper()
 	s := auth.Session{

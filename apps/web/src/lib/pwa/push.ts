@@ -4,9 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { http } from "@/lib/api/http";
 
-// "unsupported" covers both "this browser cannot" and "this build has no
-// service worker to subscribe through", because to the person holding the
-// phone those are the same sentence: notifications cannot reach you here.
+// "unsupported" covers both "this browser can't" and "no service worker to subscribe through".
 type PushState = "unsupported" | "default" | "granted" | "denied";
 const current = (): PushState =>
   !("Notification" in window) || !("serviceWorker" in navigator)
@@ -35,13 +33,8 @@ export function usePush() {
     if (p !== "granted") return p;
     const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     try {
-      // navigator.serviceWorker.ready never settles when there is no worker
-      // to become ready — it waits, forever, without throwing. A development
-      // build is exactly that case: ServiceWorkerRegistrar unregisters
-      // workers there so hot reload is not served stale files. Awaiting it
-      // meant this function simply never returned, the button stayed busy,
-      // and nobody was ever subscribed. Asking for the registration first
-      // turns that silence into an answer.
+      // .ready never settles (and never throws) if there's no worker — true in
+      // dev, where ServiceWorkerRegistrar unregisters it. Check first, or this hangs forever.
       const existing = await navigator.serviceWorker.getRegistration();
       if (!existing) return "unsupported";
 

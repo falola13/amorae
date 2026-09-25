@@ -6,9 +6,7 @@ import (
 	"time"
 )
 
-// clearEnv removes every variable Load reads so each test starts from a
-// blank slate regardless of what's set in the process actually running
-// these tests.
+// clearEnv resets every variable Load reads so each test starts blank.
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
@@ -143,9 +141,6 @@ func TestValidVAPIDSubject(t *testing.T) {
 }
 
 func TestHTTPAddr_PORTWinsForAPaaS(t *testing.T) {
-	// Render, Railway, Fly and Heroku all hand a process its port this way.
-	// A service that ignores it binds where nothing is listening and is
-	// killed as unhealthy — which is a confusing way to learn this.
 	t.Setenv("PORT", "10000")
 	t.Setenv("HTTP_ADDR", ":8088")
 	if got := httpAddr(); got != ":10000" {

@@ -1,6 +1,5 @@
-// Thrown by apiFetch for every non-2xx response and for network failures.
-// `message` is always safe to show a user as-is: it is either the API's own
-// user-safe message or our generic fallback, never a raw backend error.
+// Thrown by apiFetch for every non-2xx response and network failure.
+// `message` is always safe to show a user as-is — never a raw backend error.
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;

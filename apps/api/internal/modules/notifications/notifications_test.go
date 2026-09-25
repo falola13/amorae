@@ -8,8 +8,6 @@ import (
 )
 
 func TestApply_LeavesUntouchedFieldsAlone(t *testing.T) {
-	// The client sends one switch at a time, so a missing field has to mean
-	// "leave it" — never "turn it off".
 	start := Defaults()
 	off := false
 
@@ -91,8 +89,6 @@ func TestValidateSubscription(t *testing.T) {
 	})
 
 	t.Run("an endpoint that is not https is refused", func(t *testing.T) {
-		// Otherwise a client bug — or somebody choosing the address — points
-		// our sends at a server of their own.
 		if _, _, _, err := ValidateSubscription("http://example.com/push", "k", "a"); err == nil {
 			t.Error("a plain http endpoint was accepted")
 		}
@@ -117,8 +113,6 @@ func TestReminderPassed(t *testing.T) {
 		{"before it", at(17, 0), false},
 		{"the moment it arrives", at(18, 0), true},
 		{"after it", at(20, 0), true},
-		// The reason this is not an equality check: a tick that runs hours
-		// late still owes the person their reminder.
 		{"much later the same day", at(22, 30), true},
 	}
 	for _, tc := range tests {
@@ -134,9 +128,8 @@ func TestReminderPassed(t *testing.T) {
 	}
 
 	t.Run("the date is the person's own, not the server's", func(t *testing.T) {
-		// 23:30 UTC is already the next day in Lagos. Keying the send on the
-		// server's date would give someone two reminders on one of their
-		// days and none on the next.
+		// 23:30 UTC is already the next day in Lagos; keying on the server's
+		// date would double up or skip a reminder.
 		date, _, err := ReminderPassed("19:00", lagos, time.Date(2026, 9, 23, 23, 30, 0, 0, time.UTC))
 		if err != nil {
 			t.Fatalf("ReminderPassed: %v", err)
@@ -147,9 +140,8 @@ func TestReminderPassed(t *testing.T) {
 	})
 
 	t.Run("it is read in the person's own zone", func(t *testing.T) {
-		// Not London: in September that is also UTC+1 and would prove
-		// nothing. New York is four hours behind, where 19:00 has not come
-		// round yet at the instant it already has in Lagos.
+		// New York, not London (also UTC+1 in September, which would prove
+		// nothing): 19:00 hasn't arrived there when it already has in Lagos.
 		newYork, err := time.LoadLocation("America/New_York")
 		if err != nil {
 			t.Fatalf("loading zone: %v", err)

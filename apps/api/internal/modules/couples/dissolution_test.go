@@ -29,8 +29,7 @@ func TestCheckWritable(t *testing.T) {
 	})
 
 	t.Run("a couple past its window still refuses, rather than reopening", func(t *testing.T) {
-		// The sweeper may be an hour behind. Until the row is gone, the
-		// couple must not quietly start accepting writes again.
+		// The sweeper may be behind; until the row is gone, writes stay refused.
 		long := time.Now().UTC().Add(-2 * RetentionWindow)
 		if err := CheckWritable(&long); !errors.Is(err, ErrDissolved) {
 			t.Errorf("CheckWritable() = %v, want ErrDissolved", err)

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// Repository is what this service needs of storage, named by the consumer.
 type Repository interface {
 	List(ctx context.Context, coupleID uuid.UUID) ([]Event, error)
 	ByID(ctx context.Context, coupleID, eventID uuid.UUID) (Event, error)
@@ -18,9 +17,7 @@ type Repository interface {
 	Delete(ctx context.Context, coupleID, eventID uuid.UUID) error
 }
 
-// Couples answers the one question this module asks of pairing: which couple
-// is calling. Expressed in this package's terms so events does not import
-// couples; the composition root adapts one to the other.
+// Couples answers which couple is calling; expressed here so events doesn't import the couples package.
 type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
@@ -51,8 +48,7 @@ func (s *Service) Get(ctx context.Context, userID, eventID uuid.UUID) (Event, er
 	return s.repo.ByID(ctx, coupleID, eventID)
 }
 
-// Create answers with the whole event, the same shape a read returns, so the
-// client never has to re-fetch to see what it just made.
+// Create returns the whole event so the client never has to re-fetch.
 func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Event, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -71,9 +67,8 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Event
 	return s.repo.ByID(ctx, coupleID, id)
 }
 
-// Update lays the input over what is there. A checklist is only touched when
-// the request mentions one: an edit that changes the title must not quietly
-// empty the list.
+// Update lays input over what's there; the checklist is touched only when the
+// request mentions one, so a title-only edit doesn't empty it.
 func (s *Service) Update(ctx context.Context, userID, eventID uuid.UUID, in Input) (Event, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {

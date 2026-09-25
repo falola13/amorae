@@ -12,13 +12,7 @@ import { changeEmailSchema, type ChangeEmailInput } from "@/lib/api/schemas";
 import { notify } from "@/lib/store/toast";
 import { useChangeEmail } from "../hooks";
 
-/**
- * Changing the email changes what you log in with, so it asks for the
- * current password: a session left open on someone else's phone must not be
- * enough to take the account over. Field errors from the API (wrong
- * password, email taken) land on their inputs; anything else (e.g. too many
- * attempts) shows at the top.
- */
+// Requires current password: a session left open elsewhere must not be enough to take over the account.
 export function ChangeEmailSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const change = useChangeEmail();
   const [show, setShow] = useState(false);

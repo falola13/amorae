@@ -13,7 +13,6 @@ import { useTimer } from "@/lib/hooks/use-timer";
 import { routes } from "@/lib/routes";
 import { useUI } from "@/lib/store/ui";
 
-/** Distraction free: own chrome (no tab bar), paper background, one prayer at a time. */
 export default function PrayerModePage() {
   return (
     <Suspense fallback={null}>
@@ -30,9 +29,7 @@ function PrayerMode() {
   const setI = useUI((s) => s.setPrayerIndex);
   const timer = useTimer();
 
-  // Start at ?at= if it's a valid prayer index, else the first prayer not yet
-  // prayed. ?at= is applied once per value: re-applying it whenever `i`
-  // changes would snap Next/Previous straight back to the deep-linked prayer.
+  // ?at= is applied once per value (not on every `i` change), or Next/Previous would snap back to it.
   const appliedAt = useRef<string | null>(null);
   useEffect(() => {
     const w = week.data;
@@ -53,9 +50,7 @@ function PrayerMode() {
       <Skeleton />
     </div>
   );
-  // Prayer mode has no tab bar, so a notice here needs its own way back.
-  // On the paper background the notice sits on the page's own colour, so
-  // give it the lighter bg for its card to show.
+  // No tab bar in prayer mode, so the notice needs its own back link; bg-bg lifts its card off the paper background.
   const frame = (notice: ReactNode) => (
     <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col gap-2 grain bg-paper px-6 pt-24 [&>[role]]:bg-bg">
       {notice}

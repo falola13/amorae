@@ -14,8 +14,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
 )
 
-// service is declared here, by Handler, so this file depends on the three
-// use cases it actually calls rather than *Service.
+// service decouples Handler from *Service.
 type service interface {
 	Register(ctx context.Context, input RegisterInput) (AuthResult, error)
 	Login(ctx context.Context, input LoginInput) (AuthResult, error)
@@ -29,9 +28,7 @@ type service interface {
 	ResetPassword(ctx context.Context, token, newPassword string) error
 }
 
-// Handler is transport only: decode, call the service, map to a DTO,
-// respond. There's no dto.go in this package — AuthResultDTO is the only
-// shape this module sends and lives next to the handler that builds it.
+// Handler is transport only: decode, call the service, map to a DTO, respond.
 type Handler struct {
 	svc service
 }
@@ -40,30 +37,24 @@ func NewHandler(svc service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// RegisterRoutes follows the same shape every module uses. Logout is
-// deliberately *not* HandleAuthed: holding a token is all the authority
-// needed to destroy it, and putting it behind RequireAuth would turn
-// "log out an already-expired session" into a 401 instead of the idempotent
-// 204 the contract promises.
+// Logout is deliberately *not* HandleAuthed: holding a token is authority
+// enough to destroy it, and an already-expired token should still get the
+// idempotent 204, not a 401.
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.Handle("POST /auth/register", http.HandlerFunc(h.register))
 	r.Handle("POST /auth/login", http.HandlerFunc(h.login))
 	r.Handle("POST /auth/logout", http.HandlerFunc(h.logout))
 	r.Handle("POST /auth/password/forgot", http.HandlerFunc(h.forgotPassword))
 	r.Handle("POST /auth/password/reset", http.HandlerFunc(h.resetPassword))
-	// These live here, not in the user module, because each re-checks the
-	// password, which only auth knows how to do.
+	// Live here, not in the user module: each re-checks the password.
 	r.HandleAuthed("PUT /users/me/email", http.HandlerFunc(h.changeEmail))
 	r.HandleAuthed("PUT /users/me/password", http.HandlerFunc(h.changePassword))
 	r.HandleAuthed("DELETE /users/me", http.HandlerFunc(h.deleteMe))
-	// Your own sessions, and a way to end the rest of them.
 	r.HandleAuthed("GET /sessions", http.HandlerFunc(h.listSessions))
 	r.HandleAuthed("DELETE /sessions/others", http.HandlerFunc(h.signOutOthers))
 }
 
-// authResultDTO matches AuthResult{"token","expires_at","user"} in the HTTP
-// contract exactly; User is user.DTO so the password hash can't leak here
-// either.
+// authResultDTO uses user.DTO so the password hash can't leak here.
 type authResultDTO struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -136,10 +127,8 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	httpx.Data(w, http.StatusOK, toAuthResultDTO(result))
 }
 
-// logout reads the bearer token itself rather than going through
-// RequireAuth (see RegisterRoutes): it needs the raw token to delete the
-// matching session, and a token that is already expired or unknown should
-// still get a 204, because the end state the caller wants already holds.
+// logout reads the raw token directly (see RegisterRoutes) to delete the
+// matching session.
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	token, ok := bearerToken(r)
 	if !ok {
@@ -187,8 +176,7 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-// changePassword needs the caller's own token so their session survives
-// while every other one ends.
+// Needs the caller's own token so their session survives while every other one ends.
 func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	userID, ok := authctx.UserID(r.Context())
 	if !ok {
@@ -217,8 +205,7 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	httpx.NoContent(w)
 }
 
-// deleteConfirmation is the word the person types to delete their account.
-// The web form applies the same rule (isDeleteConfirmation in schemas.ts).
+// deleteConfirmation must match isDeleteConfirmation in the web form's schemas.ts.
 const deleteConfirmation = "delete"
 
 func isDeleteConfirmation(s string) bool {
@@ -230,8 +217,7 @@ type deleteMeRequest struct {
 	CurrentPassword string `json:"current_password"`
 }
 
-// deleteMe needs both the typed word, which guards against a slip, and the
-// password, which proves the person at the keyboard owns the account.
+// Requires both the typed confirmation word and the password (proves account ownership).
 func (h *Handler) deleteMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := authctx.UserID(r.Context())
 	if !ok {
@@ -289,8 +275,7 @@ func (h *Handler) resetPassword(w http.ResponseWriter, r *http.Request) {
 	httpx.NoContent(w)
 }
 
-// sessionDTO is one row of "where you're signed in". No token hash, no raw
-// user agent, no IP: only what the owner needs to recognise their own devices.
+// sessionDTO carries no token hash, raw user agent, or IP.
 type sessionDTO struct {
 	Current    bool       `json:"current"`
 	Device     string     `json:"device"`

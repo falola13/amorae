@@ -53,17 +53,14 @@ func TestStartOfWeek_IsTheCouplesLocalSunday(t *testing.T) {
 			want: date(2026, 9, 13),
 		},
 		{
-			// 00:30 Sunday in Lagos is still Saturday evening in New York, so a
-			// couple keeping New York time is in the previous week. This is the
-			// whole reason the couple's timezone decides, not the server's.
+			// 00:30 Sunday in Lagos is still Saturday evening in New York.
 			name: "the same instant can be different weeks in different zones",
 			at:   time.Date(2026, 9, 20, 0, 30, 0, 0, lagos),
 			loc:  newYork,
 			want: date(2026, 9, 13),
 		},
 		{
-			// New York moves to standard time on 1 November 2026; the Sunday
-			// boundary must not drift by an hour.
+			// New York moves to standard time on 1 November 2026.
 			name: "daylight saving does not move the boundary",
 			at:   time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC),
 			loc:  newYork,
@@ -265,10 +262,8 @@ func TestCanEditPoints(t *testing.T) {
 			{ID: second, Position: 1, Title: "For her mother"},
 		},
 	}
-	// The partner has prayed the first one. The second, nobody has reached.
 	prayed := map[uuid.UUID]bool{first: true}
 
-	// Who may write at all.
 	if err := CanEditPoints(week, setter, week.Points, nil); err != nil {
 		t.Errorf("the setter should be able to edit their own week: %v", err)
 	}
@@ -279,8 +274,6 @@ func TestCanEditPoints(t *testing.T) {
 	unchanged := func() []Point { return append([]Point(nil), week.Points...) }
 
 	t.Run("adding is always allowed", func(t *testing.T) {
-		// The reason the old whole-week lock had to go: something remembered
-		// on Wednesday still belongs in Wednesday's week.
 		points := append(unchanged(), Point{Title: "For the move"})
 		if err := CanEditPoints(week, setter, points, prayed); err != nil {
 			t.Errorf("adding after the partner started was refused: %v", err)
@@ -311,8 +304,7 @@ func TestCanEditPoints(t *testing.T) {
 	})
 
 	t.Run("a prayed point may be moved", func(t *testing.T) {
-		// Its position is where it sits in a list, not what it says. Nobody
-		// prays a position.
+		// Position isn't part of what CanEditPoints locks.
 		points := []Point{week.Points[1], week.Points[0]}
 		points[0].Position, points[1].Position = 0, 1
 		if err := CanEditPoints(week, setter, points, prayed); err != nil {
@@ -321,8 +313,6 @@ func TestCanEditPoints(t *testing.T) {
 	})
 
 	t.Run("their own praying does not tie their hands", func(t *testing.T) {
-		// prayedByOthers excludes the editor, so a setter who ticked their
-		// own point can still fix it.
 		points := unchanged()
 		points[0].Title = "For the new job"
 		if err := CanEditPoints(week, setter, points, nil); err != nil {
@@ -343,8 +333,7 @@ func TestCanPublish(t *testing.T) {
 	}
 }
 
-// errorOf runs fn, requires it to fail, and hands back the typed error so a
-// test can look at its fields.
+// errorOf runs fn, requires it to fail, and hands back the typed error.
 func errorOf(t *testing.T, fn func() error) *apperr.Error {
 	t.Helper()
 	err := fn()
@@ -359,9 +348,6 @@ func errorOf(t *testing.T, fn func() error) *apperr.Error {
 }
 
 func TestValidateAnswerNote_AllowsEmpty(t *testing.T) {
-	// Marking a prayer answered with nothing to add is the common case, not a
-	// mistake. If this ever starts failing, the gladdest action in the app has
-	// quietly become a piece of homework.
 	got, err := ValidateAnswerNote("   ")
 	if err != nil {
 		t.Fatalf("ValidateAnswerNote(blank) error = %v, want nil", err)

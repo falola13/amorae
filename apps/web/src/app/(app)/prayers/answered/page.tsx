@@ -17,18 +17,7 @@ import type { AnsweredPrayer } from "@/lib/api/types";
 import { longDate, monthName } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 
-/**
- * Everything the two of them have seen answered.
- *
- * This is the screen the whole feature exists for. The app has always asked
- * them to pray and then never asked what happened; a week closed into history
- * and that was the end of it. This is where the other half accumulates.
- *
- * Note what is deliberately absent: any count of prayers *not* answered, and
- * any way to sort or filter by that. A list of things you asked for and did
- * not receive is a wound, not a feature, and the moment this screen implies
- * one it stops being worth opening.
- */
+// Deliberately no count or filter of unanswered prayers.
 function Answered({ a }: { a: AnsweredPrayer }) {
   return (
     <article className="flex flex-col gap-1 border-b border-line py-[18px]">
@@ -38,8 +27,7 @@ function Answered({ a }: { a: AnsweredPrayer }) {
           {a.answer_note}
         </p>
       ) : null}
-      {/* Both dates, because the gap between them is the point: this is how
-          long it took, and that is usually the part worth remembering. */}
+      {/* Both dates shown: the gap between them is the point. */}
       <div className="mt-0.5 text-support text-stone">
         Prayed {longDate(a.week_start)} {a.week_start.slice(0, 4)}
         {a.answered_on ? ` · answered ${longDate(a.answered_on)}` : ""}

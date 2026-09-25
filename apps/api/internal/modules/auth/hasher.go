@@ -2,9 +2,8 @@ package auth
 
 import "golang.org/x/crypto/bcrypt"
 
-// BcryptHasher implements Service's PasswordHasher using bcrypt. cost is
-// configurable so tests can pass bcrypt.MinCost and stay fast instead of
-// paying the production cost on every run.
+// BcryptHasher implements Service's PasswordHasher. cost is configurable so
+// tests can use bcrypt.MinCost instead of the production cost.
 type BcryptHasher struct {
 	cost int
 }

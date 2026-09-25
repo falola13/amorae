@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-// The retention window is measured in days, so checking hourly is as precise
-// as it needs to be, and a restart costs at most one missed tick.
 const purgeInterval = time.Hour
 
 type purgeRepository interface {
@@ -15,13 +13,8 @@ type purgeRepository interface {
 }
 
 // Purger deletes the shared content of couples whose retention window has
-// closed (FR-PAIR-008.AC1). It is the half of "leave" that nobody triggers:
-// the promise that a shared history does not outlive the relationship by
-// more than the window.
-//
-// It runs in the API process because there is one API instance today
-// (Q-13) and no worker yet (Q-16). When cmd/worker arrives this type moves
-// there unchanged — it takes a repository and a clock and nothing else.
+// closed (FR-PAIR-008.AC1). Runs in the API process since there's one
+// instance today and no worker yet (Q-13, Q-16).
 type Purger struct {
 	repo  purgeRepository
 	now   func() time.Time
@@ -33,11 +26,9 @@ func NewPurger(repo purgeRepository, now func() time.Time, log *slog.Logger) *Pu
 	return &Purger{repo: repo, now: now, every: purgeInterval, log: log}
 }
 
-// Run sweeps once at start — so a process that was down past a window's end
-// catches up immediately — and then on every tick until ctx is canceled.
-//
-// A failed sweep is logged, not returned: the couple content still there is
-// a reason to try again in an hour, never a reason to take the API down.
+// Run sweeps once at start (catches up after downtime), then on every tick
+// until ctx is canceled. A failed sweep is logged, not returned — never a
+// reason to take the API down.
 func (p *Purger) Run(ctx context.Context) error {
 	ticker := time.NewTicker(p.every)
 	defer ticker.Stop()

@@ -8,22 +8,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// currentWeekStart is the Sunday the couple's current prayer week begins on,
-// read in the couple's own timezone (DEC-27) — the same date prayers.StartOfWeek
-// arrives at in Go, so the two never disagree about which week it is.
-//
-// Matching the *current* week rather than "a week that starts today" matters:
-// a worker that was down on Sunday morning would otherwise never tell anyone
-// it was their week. The send is keyed on the week's id, so being late is
-// fine and sending twice is impossible.
+// currentWeekStart matches prayers.StartOfWeek's Go computation, in the
+// couple's zone (DEC-27), so a worker that was down on Sunday still finds
+// the right week; the send is keyed on week id, so late is fine.
 const currentWeekStart = `(
 	($1 AT TIME ZONE c.timezone)::date
 	- EXTRACT(DOW FROM ($1 AT TIME ZONE c.timezone))::int
 )`
 
-// Candidate is one person the worker might have something to tell, with
-// everything needed to decide and to send — gathered in one query rather than
-// one per person.
+// Candidate is one person, with everything needed to decide and send,
+// gathered in one query rather than one per person.
 type Candidate struct {
 	UserID uuid.UUID
 	Name   string
@@ -41,14 +35,8 @@ type Candidate struct {
 	Completed int
 }
 
-// CurrentWeekCandidates is everyone in a live couple, with that couple's
-// current prayer week and their own progress through it.
-//
-// One query for every kind of notification, rather than one per kind: which
-// of them applies is a rule, and rules belong in Go where they can be read
-// and tested. Nothing here asks "has this already been sent?" either —
-// ClaimSend answers that, and it is the only answer that stays true when two
-// workers ask at once.
+// CurrentWeekCandidates gathers everyone in a live couple with their current
+// week and progress; ClaimSend, not this query, decides what's already sent.
 func (r *PostgresRepository) CurrentWeekCandidates(ctx context.Context, now time.Time) ([]Candidate, error) {
 	return r.candidates(ctx, `
 		SELECT u.id, u.display_name, u.timezone,
@@ -95,18 +83,9 @@ func (r *PostgresRepository) candidates(ctx context.Context, query string, args 
 	return out, nil
 }
 
-// DueEventReminders is every person in a live couple paired with an event of
-// theirs whose reminder might be due.
-//
-// The window is wide on purpose. Which moment a phrase like "the day before"
-// lands on is a rule, and rules live in Go (EventReminderAt) where they can
-// be read and tested — so SQL narrows to the handful of events that could
-// possibly matter and lets Go decide. Two days either side covers the longest
-// lead the composer offers and leaves room for a worker that was down.
-//
-// start_time comes back as text rather than a TIME, because what it means is
-// a wall clock in the couple's zone, and a driver's idea of a bare time is
-// one conversion too many to reason about.
+// DueEventReminders casts a wide net (±2 days); EventReminderAt in Go
+// decides the exact moment. start_time comes back as text since it's a wall
+// clock in the couple's zone, not a driver TIME value.
 func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT u.id, e.id, e.title, c.timezone, e.date,
@@ -144,15 +123,9 @@ func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Tim
 	return out, nil
 }
 
-// ImportantDates is every person in a live couple paired with a date that
-// couple has asked to be reminded of.
-//
-// It takes no window, unlike DueEventReminders: whether a kept date comes
-// round today is a question about a day of the year, and SQL narrowing it
-// would mean comparing month and day across each couple's own timezone and
-// each year's own February. A couple keeps a handful of these. When that
-// stops being true, the narrowing to add is on (month, day) over the two
-// local days any couple could currently be in.
+// ImportantDates takes no window, unlike DueEventReminders — matching
+// "today" against each couple's own zone and leap years isn't worth
+// narrowing in SQL at current couple counts.
 func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDateCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT u.id, ms.id, ms.title, c.timezone, ms.date, ms.reminder,
@@ -185,13 +158,8 @@ func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDat
 	return out, nil
 }
 
-// RecentlyWritten is every appreciation and journal entry written since
-// `since`, paired with the partner who did not write it.
-//
-// One query over two tables because the question is one question: what has
-// one of them written for the other lately. The undo window travels with each
-// row as `settles`, so the rule about when a note is safe to announce lives
-// in Go (ForWritten) and this only says which kind each row is.
+// RecentlyWritten unions appreciations and journal entries since `since`;
+// the undo window travels as `settles`, decided in Go (ForWritten).
 func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Time) ([]WrittenCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		WITH written AS (
@@ -264,13 +232,8 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 	return out, nil
 }
 
-// LiveChallenges is every person in a live couple paired with the challenge
-// their couple is part way through.
-//
-// Which day of it today is comes back from SQL, because started_on and the
-// couple's zone are already sitting together in these rows — and so does
-// whether this person has marked that day, which is the only reason to stay
-// quiet. Everything about when to say it stays in Go (ForChallenge).
+// LiveChallenges reads day/total/marked-today from SQL, since started_on
+// and zone already sit together there; ForChallenge decides what to say.
 func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT u.id, ch.id, ch.title, c.timezone,
@@ -312,23 +275,16 @@ func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCan
 }
 
 // appreciationUndoWindow mirrors appreciation.UndoWindow without importing
-// it: the worker reads that module's table, and one duration is a smaller
-// thing to owe another module than a dependency is — the same trade as
-// statusDraft above. BR-APPR-02 is where the thirty seconds is decided.
+// it (BR-APPR-02), the same trade as statusDraft.
 const appreciationUndoWindow = 30 * time.Second
 
-// answeredUndoWindow is the pause before the other partner is told, and it
-// exists because the screen offers Undo right beside the mark. A minute is
-// long enough to catch the wrong prayer tapped, short enough that good news
-// is not sat on.
+// answeredUndoWindow is the pause before the other partner is told — long
+// enough to catch a mis-tap, short enough not to sit on good news.
 const answeredUndoWindow = time.Minute
 
-// ClaimSend records that this notification is being sent, and reports whether
-// this caller is the one that got to send it.
-//
-// Claiming before sending rather than recording after means a crash costs at
-// most one notification instead of sending it twice on every restart. A send
-// that then fails releases its claim, so the next tick tries again.
+// ClaimSend records the send as underway and reports whether this caller
+// won the claim. Crash-safe: a send that then fails releases its claim, so
+// the next tick retries instead of double-sending.
 func (r *PostgresRepository) ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error) {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		INSERT INTO notification_sends (user_id, kind, key, sent_at)

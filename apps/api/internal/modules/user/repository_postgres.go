@@ -13,11 +13,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 )
 
-// PostgresRepository is the one concrete store behind two different
-// consumer-declared interfaces: user.Service's Repository (GetByID,
-// Update) and auth.Service's UserRepository (Create, GetByEmail). ISP
-// means each consumer sees only the methods it uses — it doesn't mean two
-// separate structs backing the same table.
+// PostgresRepository backs both user.Service's Repository and auth.Service's
+// UserRepository — one table, two consumer-declared interfaces.
 type PostgresRepository struct {
 	db *database.DB
 }
@@ -48,8 +45,7 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id uuid.UUID) (User, e
 	return r.scanOne(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id)
 }
 
-// UpdateEmail changes only the email. A clash with another account comes
-// back as ErrEmailTaken (translateWriteErr), the same as at registration.
+// UpdateEmail changes only the email; a clash returns ErrEmailTaken, same as registration.
 func (r *PostgresRepository) UpdateEmail(ctx context.Context, id uuid.UUID, email string, at time.Time) (User, error) {
 	u, err := r.scanOne(ctx, `
 		UPDATE users SET email = $2, updated_at = $3 WHERE id = $1
@@ -68,9 +64,7 @@ func (r *PostgresRepository) Update(ctx context.Context, u User) (User, error) {
 	if err != nil {
 		return User{}, translateWriteErr(err)
 	}
-	// The id came from an authenticated session, so this should always match
-	// a row — but if the user was deleted between authentication and this
-	// call, say so plainly instead of silently returning stale data.
+	// Should always match a row; ErrNotFound covers the user being deleted mid-request.
 	if tag.RowsAffected() == 0 {
 		return User{}, ErrNotFound
 	}
@@ -115,14 +109,9 @@ func (r *PostgresRepository) scanOne(ctx context.Context, query string, args ...
 	return u, nil
 }
 
-// DeleteMe removes the user. Sessions, their memberships, and invitations
-// they created go with them through ON DELETE CASCADE. A couple is deleted
-// only when they were its last member; a remaining partner keeps it, and
-// created_by moves to that partner because that foreign key does not cascade.
-//
-// Memberships, plural: someone can hold a live one and an ended one whose
-// retention window is still open (Q-24), and each couple has to be released
-// or the foreign key from created_by blocks the delete.
+// DeleteMe cascades sessions/memberships/invitations. Couples are released
+// first (deleted if last member, else created_by transfers — FK doesn't
+// cascade); memberships can be plural per Q-24.
 func (r *PostgresRepository) DeleteMe(ctx context.Context, id uuid.UUID) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
 		coupleIDs, err := r.coupleIDsOf(ctx, id)
@@ -194,9 +183,8 @@ func (r *PostgresRepository) releaseCouple(ctx context.Context, userID, coupleID
 	return nil
 }
 
-// translateWriteErr turns the one constraint this table can violate — the
-// email uniqueness index — into the domain error callers check for, so
-// nothing above this file ever needs to know a Postgres error code.
+// translateWriteErr maps the email-uniqueness violation to ErrEmailTaken so
+// callers never see a raw Postgres error code.
 func translateWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_email_key" {

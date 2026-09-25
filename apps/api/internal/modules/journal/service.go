@@ -12,7 +12,6 @@ type Repository interface {
 	Create(ctx context.Context, e Entry, at time.Time) (Entry, error)
 }
 
-// Couples answers the one question this module asks of pairing.
 type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
@@ -36,9 +35,7 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Entry, error) {
 	return s.repo.List(ctx, coupleID)
 }
 
-// Add writes an entry, dated today and authored by whoever sent it. Neither
-// of those comes from the request: the author is who the session says it is,
-// and the date is when it was written.
+// Add's author and date never come from the request: author is the session, date is server time.
 func (s *Service) Add(ctx context.Context, userID uuid.UUID, tag, text string) (Entry, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -49,8 +46,7 @@ func (s *Service) Add(ctx context.Context, userID uuid.UUID, tag, text string) (
 		return Entry{}, err
 	}
 
-	// The date is not set here: it is the couple's local day, which the
-	// repository works out from the couple row (DEC-27).
+	// Date isn't set here; the repository derives the couple's local day from the couple row (DEC-27).
 	return s.repo.Create(ctx, Entry{
 		CoupleID: coupleID,
 		AuthorID: userID,

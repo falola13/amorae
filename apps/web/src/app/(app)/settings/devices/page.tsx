@@ -10,11 +10,7 @@ import type { SessionInfo } from "@/lib/api/types";
 import { longDate, timeAgo } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 
-/**
- * Your own sessions, and one way to end the rest of them. Only your account's:
- * there is nothing here about your partner's devices, and there never will be
- * — this is for securing your account, not for watching anyone.
- */
+// Only this account's own sessions — never a partner's.
 export default function Devices() {
   const sessions = useSessions();
   const signOutOthers = useSignOutOthers();

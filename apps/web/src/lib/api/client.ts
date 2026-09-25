@@ -6,9 +6,8 @@ import { env } from "@/lib/env";
 import { networkError, toApiError, unwrapData } from "./envelope";
 import { visitorHeaders } from "./upstream";
 
-// The server's HTTP client for the Go API, used by Server Actions (auth).
-// Browser code uses lib/api/http.ts, which reaches the API through the
-// /api/v1 proxy instead. Both share envelope.ts and upstream.ts.
+// Server HTTP client for the Go API (Server Actions/auth). Browser code uses
+// lib/api/http.ts through the /api/v1 proxy instead; both share envelope.ts and upstream.ts.
 
 interface ApiFetchOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
@@ -18,8 +17,7 @@ interface ApiFetchOptions {
 
 const TIMEOUT_MS = 10_000;
 
-// Feature modules pass a resource path ("/auth/login"). The version prefix
-// lives here so a new API version is one change, not an edit to every caller.
+// Version prefix lives here so a new API version is one change, not every caller.
 const API_VERSION_PATH = "/v1";
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
@@ -54,8 +52,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   try {
     payload = await response.json();
   } catch {
-    // A failure with no JSON body is the API's router talking, not a handler:
-    // let toApiError read it (a bare 404 means "not built yet", not a crash).
+    // No JSON body means the router is talking, not a handler (e.g. a bare 404).
     if (!response.ok) throw toApiError(response.status, undefined, retryAfter);
     throw networkError(response.status);
   }

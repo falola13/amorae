@@ -1,8 +1,6 @@
-// Package ratelimit counts events per key in fixed time windows: "at most
-// 10 login attempts per email per 15 minutes". It's in-memory, so limits are
-// per process. That's correct while the API runs as one instance. When it
-// scales out, put a Redis-backed type with the same Allow method behind the
-// same consumer interfaces; only internal/app changes.
+// Package ratelimit counts events per key in fixed time windows (e.g. "10
+// login attempts per email per 15 minutes"). In-memory, so limits are per
+// process; swap in a Redis-backed type with the same Allow method when scaling out.
 package ratelimit
 
 import (

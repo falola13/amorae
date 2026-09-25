@@ -1,7 +1,6 @@
-// Command api runs the Amorae HTTP server. It also doubles as the
-// container's healthcheck binary via the "healthcheck" subcommand, since
-// the distroless base image this ships in has no curl or shell to run one
-// with.
+// Command api runs the Amorae HTTP server, and doubles as the container's
+// healthcheck binary via the "healthcheck" subcommand (the distroless base
+// image has no curl or shell).
 package main
 
 import (
@@ -14,11 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	// The zone database, compiled in. Every week, every reminder and every
-	// event time in Amorae is a wall clock in somebody's timezone, and a
-	// binary that cannot find /usr/share/zoneinfo does not fail — it quietly
-	// becomes UTC, which is an hour of wrong for Lagos and eight for
-	// California. 450KB to never have to trust the base image.
+	// Compiled-in zone database: without it, a missing /usr/share/zoneinfo
+	// silently falls back to UTC instead of failing.
 	_ "time/tzdata"
 
 	"github.com/joho/godotenv"
@@ -42,9 +38,8 @@ func main() {
 }
 
 func run() error {
-	// A missing .env file is expected in production, where config comes
-	// from the real environment — godotenv.Load only errors when the file
-	// exists but can't be parsed, so that's the only case worth surfacing.
+	// godotenv.Load only errors when the file exists but can't be parsed,
+	// so a missing .env (expected in production) is fine to ignore.
 	_ = godotenv.Load()
 
 	cfg, err := config.Load()
@@ -57,11 +52,8 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Before anything is served, not after. A deploy where the code arrives
-	// and the schema does not is a deploy that answers 500 to real people
-	// (2026-09-24), so if this cannot be done the process does not start —
-	// an instance that refuses to come up is a visible failure, and the one
-	// still running keeps serving.
+	// Checked before serving: a schema mismatch should fail startup visibly,
+	// not answer 500s once traffic arrives.
 	warn, notice := schemaNotice(cfg.MigrateOnStart, cfg.IsProduction())
 	if warn {
 		log.Warn(notice)
@@ -69,9 +61,6 @@ func run() error {
 		log.Info(notice)
 	}
 
-	// The same class of problem as the schema flag above: a configuration
-	// that is wrong in a way nothing says out loud, and that fails
-	// intermittently in production only. Twice now.
 	if database.IsTransactionPooler(cfg.DatabaseURL) {
 		log.Warn(`DATABASE_URL goes through a transaction pooler. pgx's protocol exchanges ` +
 			`can be split across backends there, which fails under connection reuse ` +
@@ -84,9 +73,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("applying migrations: %w", err)
 		}
-		// Logged even when it is zero. "Applied none because none were
-		// pending" and "never looked" are the two states this whole flag
-		// exists to tell apart, and only one of them is safe.
+		// Logged even at zero, to distinguish "checked, none pending" from "never looked".
 		log.Info("migrations checked", "applied", applied)
 	}
 
@@ -122,9 +109,8 @@ func runHealthcheck() int {
 	return 0
 }
 
-// portOf reduces an HTTP_ADDR like "0.0.0.0:8088" or ":8088" down to just
-// ":8088" — the healthcheck always dials 127.0.0.1, never whatever host the
-// server itself is configured to bind.
+// portOf extracts the port from an HTTP_ADDR like "0.0.0.0:8088"; the
+// healthcheck always dials 127.0.0.1, never the configured bind host.
 func portOf(addr string) string {
 	if i := strings.LastIndex(addr, ":"); i != -1 {
 		return addr[i:]
@@ -132,17 +118,10 @@ func portOf(addr string) string {
 	return addr
 }
 
-// schemaNotice is what to say at startup about who is looking after the
-// schema, and whether it is worth raising your voice about.
-//
-// Pulled out of the migrating itself because the dangerous case is the quiet
-// one. MIGRATE_ON_START defaults to off and is compared against the exact
-// string "true", so an unset variable and a well-meant "True" both mean the
-// same thing and neither says so. That silence shipped code ahead of its
-// schema twice — the Cloudinary column on 2026-09-24 and the answered-prayer
-// preference on 2026-09-25 — and both times the first sign of it was a 500
-// reaching somebody. A line in the log at boot is the cheapest place to
-// notice, and a pure function is the cheapest place to pin it.
+// schemaNotice reports what to log at startup about schema management.
+// MIGRATE_ON_START compares against the exact string "true", so an unset
+// var and a mistyped "True" silently mean the same thing — worth a loud
+// warning in production, since that's shipped broken schema before.
 func schemaNotice(migrateOnStart, production bool) (warn bool, msg string) {
 	switch {
 	case migrateOnStart:

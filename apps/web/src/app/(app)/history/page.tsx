@@ -21,11 +21,6 @@ import {
 } from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
 
-/**
- * What the bottom of the record is allowed to say: how many weeks there have
- * been, and when the first one was. Both are facts the couple would want, and
- * neither is a slogan.
- */
 function sinceLine(count: number, first?: string) {
   const weeks = count === 1 ? "One week" : `${count} weeks`;
   if (!first) return `${weeks} together.`;

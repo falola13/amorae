@@ -20,12 +20,11 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Every method takes a couple id, never a user id: another couple's date is
+// Every method takes a couple id, never a user id; another couple's date is
 // simply not found (DEC-19).
 
-// List is the couple's dates, oldest first. The client decides what "coming
-// up" means, because that depends on today and on which of them recur
-// (FR-DATE-002.AC1).
+// List returns the couple's dates, oldest first; the client decides "coming
+// up" (depends on today and recurrence) (FR-DATE-002.AC1).
 func (r *PostgresRepository) List(ctx context.Context, coupleID uuid.UUID) ([]Milestone, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT id, couple_id, title, date, COALESCE(sub, ''), reminder

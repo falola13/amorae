@@ -51,8 +51,7 @@ export default function NotificationPermissionPage() {
         </div>
         <div className="flex flex-col border-t border-line">
           <Preview when="On Sundays" text="Your new prayer week is ready." />
-          {/* What actually arrives: the plan's own name and when it is, and
-              nothing else about it (FR-NOTF-005.AC2). */}
+          {/* Notification shows only the plan's name and time (FR-NOTF-005.AC2). */}
           <Preview
             when="Before something you’ve planned"
             text="Dinner at Terra — today at 7:00 pm."

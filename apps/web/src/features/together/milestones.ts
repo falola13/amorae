@@ -1,15 +1,7 @@
 import { daysUntil } from "@/lib/dates";
 
-/**
- * A kept date recurs every year, so "next" means today if it hasn't happened
- * yet this year, otherwise the same day next year. Shared by the hub (soonest
- * upcoming date) and the milestones list (grouping).
- *
- * The twenty-ninth of February moves to the twenty-eighth in the three years
- * out of four that have no twenty-ninth — the same rule the server uses to
- * decide when to send the reminder (notifications.OccursOn), so the day the
- * screen shows and the day the notification arrives are never a day apart.
- */
+// "Next" = today if not yet passed this year, else next year. Feb 29 maps to Feb 28 in non-leap
+// years — same rule as the server's notifications.OccursOn, so screen and reminder never disagree.
 export const nextOccurrence = (date: string, todayIso: string) => {
   if (date >= todayIso) return date;
   const [, m, d] = date.split("-");
@@ -25,13 +17,7 @@ const dayIn = (year: number, month: string, day: string) => {
   return `${year}-${month}-${onTheDay}`;
 };
 
-/**
- * How far off a kept date is, in words: "Today", "Tomorrow", "in 12 days".
- *
- * It used to be `in ${daysUntil(...)} days` for every row, which on the one
- * day that matters most read "in 0 days" — and the day before it, "in 1
- * days". A countdown that cannot say today is not a countdown.
- */
+/** How far off a kept date is: "Today", "Tomorrow", "in 12 days". */
 export const countdown = (next: string, from: Date) => {
   const days = daysUntil(next, from);
   if (days <= 0) return "Today";
@@ -39,17 +25,8 @@ export const countdown = (next: string, from: Date) => {
   return `in ${days} days`;
 };
 
-/**
- * Whether a kept date comes round on this day — same month and day, any year.
- *
- * The calendar asks this of every day it is showing, rather than asking each
- * date when it next comes round: "next" is relative to today, and a calendar
- * you can page backwards and forwards through needs an answer that does not
- * move when you do.
- *
- * It goes through dayIn, so the twenty-ninth of February lands on the
- * twenty-eighth in the years without one — the same day the reminder arrives.
- */
+// Same month/day, any year — used per calendar cell since "next" is relative to today and a paged
+// calendar needs an answer that doesn't move. Feb 29 maps to Feb 28 in non-leap years, like the reminder.
 export const occursOn = (date: string, day: string) => {
   const [, month, dayOfMonth] = date.split("-");
   return dayIn(Number(day.slice(0, 4)), month, dayOfMonth) === day;

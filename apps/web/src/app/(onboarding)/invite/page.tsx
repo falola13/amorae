@@ -20,8 +20,6 @@ export default function InvitePartnerPage() {
   const code = couple.data?.invite_code ? formatInviteCode(couple.data.invite_code) : "•••-•••";
   const [copied, setCopied] = useState(false);
 
-  // "We'll tell you when they do" has to be true: without this the screen sits
-  // on its first answer forever and the person reloads to find out.
   const partner = couple.data?.partner?.display_name;
   const refetch = couple.refetch;
   useEffect(() => {
@@ -59,9 +57,7 @@ export default function InvitePartnerPage() {
   return (
     <>
       <SafeTop />
-      {/* The space exists by this point, so "back" is the app itself — never
-          the sign-up steps behind it. The invite is reachable again from
-          Settings → Couple. */}
+      {/* Back leads to the app, not earlier signup steps; invite is reachable again via Settings → Couple. */}
       <TopBar back="Our space" backHref={routes.home} />
       <div className="flex grow flex-col gap-6 px-6 pt-3">
         <div className="flex flex-col gap-2">
@@ -82,8 +78,7 @@ export default function InvitePartnerPage() {
           >
             {copied ? "Copied" : "Copy code"}
           </Button>
-          {/* A code sent to the wrong person, or one that expired, needs
-              replacing; the old one stops working at once. */}
+          {/* Regenerating invalidates the old code immediately. */}
           <Button
             variant="text"
             onClick={() => regenerate.mutate()}

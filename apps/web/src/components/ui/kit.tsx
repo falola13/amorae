@@ -1,7 +1,4 @@
-// This file used to hold the whole design kit in one module. It's now split
-// across sibling files (buttons, typography, fields, rows, chrome, states)
-// grouped by the section comments the kit used to have; this barrel re-exports
-// everything so existing `@/components/ui/kit` imports keep working unchanged.
+// Barrel: re-exports the split ui modules so `@/components/ui/kit` imports keep working.
 
 export * from "./buttons";
 export * from "./typography";

@@ -20,39 +20,28 @@ function unpaired(error: unknown) {
   return isApiError(error) && error.code === "couple_not_found";
 }
 
-// Screens that stand on their own account rather than on a couple. Someone
-// who has just ended their space still has to be able to reach their devices,
-// their data and the way out.
+// Screens tied to the account rather than a couple, reachable even after a couple ends.
 const ACCOUNT_ROUTES: string[] = [
   routes.settings,
   routes.settingsProfile,
   routes.settingsDevices,
-  // Reminders are per person, not per couple, and Settings links here — so
-  // without this the row would bounce a couple-less person to pairing.
+  // Reminders are per person, not per couple, but Settings links here too.
   routes.settingsNotifications,
   routes.settingsPastSpace,
 ];
 
-// The signed-in shell. src/proxy.ts already bounced visitors with no cookie;
-// this is the real check: GET /couples/me. 401 → login. couple_not_found →
-// pairing. Any other failure (down API, missing route, 500) before the couple
-// has ever loaded is a retry screen — never a raw "404 page not found".
+// Real auth check (proxy.ts only checks for a cookie): GET /couples/me. 401 →
+// login, couple_not_found → pairing, other failures before load → retry screen.
 export function AppShell({ children }: { children: ReactNode }) {
   const couple = useCouple();
   const router = useRouter();
   const path = usePathname();
   const qc = useQueryClient();
   const focused = path.startsWith(routes.prayerMode());
-  // Your account is yours before you have a space and after you leave one.
-  // These screens are about you — what is left of an ended space, your
-  // devices, your data, your profile — so they are not sent back to pairing
-  // when there is no couple. Everything else needs one.
   const outlivesCouple = ACCOUNT_ROUTES.includes(path);
 
-  // Reconnecting needs no wiring here: React Query refetches stale queries
-  // and resumes paused changes on its own (lib/query/client.ts). What this
-  // does add is keeping those changes across restarts, per user, once we
-  // know who's signed in (lib/query/persist.ts).
+  // React Query handles reconnect/refetch itself (lib/query/client.ts); this
+  // only persists paused changes across restarts, per user (lib/query/persist.ts).
   const meId = couple.data?.me.id;
   useEffect(() => (meId ? persistOfflineChanges(qc, meId) : undefined), [qc, meId]);
 
@@ -71,12 +60,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [outlivesCouple, couple.data, couple.error, couple.isError, router]);
 
   if (couple.isPending && !outlivesCouple) return <SplashView />;
-  // Whatever went wrong, it wasn't this screen's business: what is left of an
-  // ended space doesn't depend on having a live one.
+  // An ended space doesn't need a live couple to render.
   if (outlivesCouple && !couple.data) return <>{children}</>;
-  // Full screen only when there's nothing to show. With the couple already
-  // loaded, a failed background refetch keeps the app usable; each screen's
-  // own queries show their problems inline.
+  // Full-screen error only when there's nothing to show; once loaded, a failed
+  // background refetch keeps the app usable and each screen shows its own errors.
   if (!couple.data && couple.isError && !unpaired(couple.error)) {
     const network =
       isApiError(couple.error) &&
@@ -97,9 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
   if (!couple.data || !couple.data.onboarding.couple) return <SplashView />;
   if (focused) return <>{children}</>;
-  // One layout, two shapes: a phone gets the column and the bottom tab bar; a
-  // tablet or desktop gets the side nav and a wider column, centred in what's
-  // left. Only one navigation is ever rendered (see SideNav).
+  // Phone: column + bottom tab bar. Tablet/desktop: side nav + wider column.
   return (
     <div className="mx-auto flex w-full max-w-[1280px]">
       <SideNav />

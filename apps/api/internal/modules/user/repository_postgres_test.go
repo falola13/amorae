@@ -12,9 +12,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/database/dbtest"
 )
 
-// uniqueEmail keeps concurrently running test packages from colliding on
-// the users_email_key constraint — dbtest.New shares one real database
-// across every package's tests rather than truncating between them.
+// uniqueEmail avoids colliding on users_email_key: dbtest.New shares one
+// real database across test packages rather than truncating between them.
 func uniqueEmail(t *testing.T) string {
 	t.Helper()
 	return "test+" + uuid.NewString() + "@example.com"

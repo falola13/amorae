@@ -4,10 +4,8 @@ import { useEffect, useState } from "react";
 
 import { useUI } from "@/lib/store/ui";
 
-/**
- * A stopwatch backed by a shared start timestamp (lib/store/ui.ts), so it
- * keeps running across screens. `toggle` starts it from zero or stops it.
- */
+/** Stopwatch backed by a shared start timestamp (lib/store/ui.ts), so it keeps
+ *  running across screens. `toggle` starts it from zero or stops it. */
 export function useTimer() {
   const startedAt = useUI((s) => s.timerStartedAt);
   const toggle = useUI((s) => s.toggleTimer);

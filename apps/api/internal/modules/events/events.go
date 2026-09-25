@@ -1,10 +1,5 @@
-// Package events owns the things a couple plans together.
-//
-// There is no owner and no participants list: both partners are implicit
-// participants in everything (DEC-16). So every rule here is about the shape
-// of an event, never about who may touch it — the answer to that is always
-// "either of them", and the answer to "whose event is this" is always the
-// couple's (DEC-19).
+// Package events owns the things a couple plans together. No owner or
+// participants list — both partners are implicit in everything (DEC-16, DEC-19).
 package events
 
 import (
@@ -20,13 +15,11 @@ import (
 )
 
 const (
-	maxTitleRunes    = 80
-	maxLocationRunes = 120
-	maxReminderRunes = 40
-	maxNotesRunes    = 1000
-	maxItemRunes     = 120
-	// A checklist longer than this is a different feature, and a screen that
-	// has to scroll to tick something off is not helping anyone.
+	maxTitleRunes     = 80
+	maxLocationRunes  = 120
+	maxReminderRunes  = 40
+	maxNotesRunes     = 1000
+	maxItemRunes      = 120
 	MaxChecklistItems = 20
 )
 
@@ -37,7 +30,6 @@ var (
 	clockTime = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 )
 
-// Event is one thing the two of them are doing.
 type Event struct {
 	ID        uuid.UUID
 	CoupleID  uuid.UUID
@@ -59,8 +51,7 @@ type ChecklistItem struct {
 	Done     bool
 }
 
-// Input is a create or an edit. Every field is a pointer so an edit can send
-// one of them: nil means "leave it", which is not the same as "clear it".
+// Input is a create or edit; every field is a pointer — nil means "leave it", not the same as "clear it".
 type Input struct {
 	Title     *string
 	Date      *string
@@ -72,12 +63,8 @@ type Input struct {
 	Checklist *[]string
 }
 
-// Validate applies an input to an event and reports everything wrong with it
-// at once, so nobody fixes one field only to be told about the next.
-//
-// `creating` decides whether the required fields have to be present: an edit
-// that does not mention the title is leaving it alone, while a create that
-// does not mention it has no title at all.
+// Validate reports every invalid field at once. creating gates required
+// fields: an edit omitting a field leaves it alone, a create omitting it has none.
 func (e Event) Validate(in Input, creating bool) (Event, error) {
 	fields := map[string]string{}
 
@@ -139,8 +126,7 @@ func (e Event) Validate(in Input, creating bool) (Event, error) {
 	return e, nil
 }
 
-// optionalTime keeps "" meaning "there isn't one", so clearing a start time
-// is sending an empty string rather than a separate kind of request.
+// optionalTime treats "" as "there isn't one"; clearing sends an empty string, not a separate request kind.
 func optionalTime(in *string, current, field string, fields map[string]string) string {
 	if in == nil {
 		return current
@@ -168,8 +154,7 @@ func optionalText(in *string, current string, max int, field string, fields map[
 	return value
 }
 
-// validateChecklist takes the whole list, so the order given is the order
-// kept and an item dropped from it is an item deleted.
+// validateChecklist replaces the whole list: order is as given, and a dropped item is deleted.
 func validateChecklist(texts []string) ([]ChecklistItem, error) {
 	if len(texts) > MaxChecklistItems {
 		return nil, apperr.Validation(map[string]string{
@@ -183,8 +168,7 @@ func validateChecklist(texts []string) ([]ChecklistItem, error) {
 		text = strings.TrimSpace(text)
 		switch {
 		case text == "":
-			// Blank rows come from an empty input somebody never filled in.
-			// Dropping them is kinder than making them fix it.
+			// Blank rows are dropped rather than rejected.
 			continue
 		case utf8.RuneCountInString(text) > maxItemRunes:
 			fields[fmt.Sprintf("checklist.%d", i)] = fmt.Sprintf("Keep it under %d characters.", maxItemRunes)

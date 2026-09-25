@@ -18,9 +18,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Every method takes a couple id, never a user id: turning "who is calling"
-// into "which couple" belongs to the couples module, and an event of somebody
-// else's couple is simply not found (DEC-19).
+// Every method takes a couple id, never a user id (DEC-19); an event outside it is simply not found.
 
 func (r *PostgresRepository) List(ctx context.Context, coupleID uuid.UUID) ([]Event, error) {
 	return r.load(ctx, `WHERE e.couple_id = $1`, coupleID)
@@ -37,8 +35,7 @@ func (r *PostgresRepository) ByID(ctx context.Context, coupleID, eventID uuid.UU
 	return found[0], nil
 }
 
-// load reads events and their checklists in two queries however many come
-// back, rather than one query per event's checklist.
+// load reads events and checklists in two queries total, avoiding one query per event.
 func (r *PostgresRepository) load(ctx context.Context, where string, args ...any) ([]Event, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT e.id, e.couple_id, e.title, e.date,
@@ -102,8 +99,7 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 	return out, nil
 }
 
-// Create writes the event and its checklist together, so an event never
-// exists with half a list attached.
+// Create writes the event and checklist in one transaction so neither exists without the other.
 func (r *PostgresRepository) Create(ctx context.Context, e Event, at time.Time) (uuid.UUID, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -125,9 +121,7 @@ func (r *PostgresRepository) Create(ctx context.Context, e Event, at time.Time) 
 	return id, nil
 }
 
-// Update replaces the event's own fields. The service has already laid the
-// input over what was there, so this writes a whole picture rather than
-// merging in SQL.
+// Update writes a whole picture (already merged by the service) rather than merging in SQL.
 func (r *PostgresRepository) Update(ctx context.Context, e Event, replaceChecklist bool, at time.Time) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
 		tag, err := r.db.Q(ctx).Exec(ctx, `
@@ -170,8 +164,7 @@ func (r *PostgresRepository) writeChecklist(ctx context.Context, eventID uuid.UU
 	return nil
 }
 
-// SetDone marks the event done or not. Setting it twice is the same as once,
-// which is what lets the toggle be queued offline.
+// SetDone is idempotent, which lets the toggle be queued offline.
 func (r *PostgresRepository) SetDone(ctx context.Context, coupleID, eventID uuid.UUID, done bool, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE events SET done = $3, updated_at = $4 WHERE id = $2 AND couple_id = $1
@@ -185,9 +178,7 @@ func (r *PostgresRepository) SetDone(ctx context.Context, coupleID, eventID uuid
 	return nil
 }
 
-// SetChecklistItem touches one item and leaves the rest of the list alone
-// (FR-EVT-005.AC1). Scoped through the event to the couple, so an item id
-// from somebody else's list finds nothing.
+// SetChecklistItem touches one item only (FR-EVT-005.AC1); scoped through the event to the couple.
 func (r *PostgresRepository) SetChecklistItem(ctx context.Context, coupleID, eventID, itemID uuid.UUID, done bool, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE event_checklist_items i

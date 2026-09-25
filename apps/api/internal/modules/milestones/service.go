@@ -14,7 +14,6 @@ type Repository interface {
 	Delete(ctx context.Context, coupleID, id uuid.UUID) error
 }
 
-// Couples answers the one question this module asks of pairing.
 type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
@@ -38,8 +37,7 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Milestone, erro
 	return s.repo.List(ctx, coupleID)
 }
 
-// Create keeps a date. Either partner may add one and it belongs to them both
-// (DEC-16), so there is no author on it — a date is not an opinion.
+// Create: either partner may add one; no author, it belongs to them both (DEC-16).
 func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Milestone, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {

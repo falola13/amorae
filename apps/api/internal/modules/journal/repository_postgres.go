@@ -18,9 +18,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Every method takes a couple id, never a user id: another couple's journal
-// is simply not found (DEC-19). Within a couple both partners read
-// everything — a shared journal one of them cannot read is a diary.
+// Every method takes a couple id, never a user id (DEC-19); both partners read everything.
 
 const columns = `id, couple_id, author_id, date, tag, text`
 
@@ -50,14 +48,8 @@ func (r *PostgresRepository) List(ctx context.Context, coupleID uuid.UUID) ([]En
 	return out, nil
 }
 
-// Create writes an entry and answers with the date it landed on.
-//
-// The date is worked out here, in the couple's own timezone, rather than in
-// Go: "today" is a fact about where they are, and the couple row holding the
-// zone is already in this query. Taking the UTC date instead would file
-// anything written between midnight and one in the morning in Lagos under
-// yesterday — the same hour the person is most likely to be writing in a
-// journal.
+// Create computes the date in the couple's own timezone (from the couple
+// row), not Go's UTC — avoids filing a late-night entry under the wrong day.
 func (r *PostgresRepository) Create(ctx context.Context, e Entry, at time.Time) (Entry, error) {
 	id, err := uuid.NewV7()
 	if err != nil {

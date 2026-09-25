@@ -1,11 +1,7 @@
-// Package app is the composition root: the only place in this codebase
-// that constructs a concrete repository, service or handler and wires them
-// together. Every other package depends on an interface it declares
-// itself (see the "consumer defines the interface" comments throughout
-// internal/modules and internal/platform); only here does a concrete type
-// ever get handed to one of those interfaces. Adding a module means adding
-// its three or four lines here — nothing above this package should need to
-// change.
+// Package app is the composition root: the only place that constructs a
+// concrete repository, service or handler and wires them together. Every
+// other package depends on an interface it declares itself; only here does
+// a concrete type get handed to one of those interfaces.
 package app
 
 import (
@@ -56,41 +52,36 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 
 	// --- Mailer ---
-	// Without an API key (development), mail is written to the log instead of
-	// sent. That log line contains reset links, so config.Load refuses to
-	// start production without a key.
+	// No API key: mail is logged, not sent — that log line contains reset
+	// links, so config.Load refuses to start production without a key.
 	var mail auth.Mailer = mailer.NewLog(log)
 	if cfg.RESEND_API_KEY != "" {
 		mail = mailer.NewResend(cfg.RESEND_API_KEY, cfg.DefaultFrom)
 	}
 
 	// --- repositories ---
-	// One postgres type backs two consumer-declared interfaces: see the
-	// ISP note on auth.UserRepository for why that's one repository, not two.
+	// One postgres type backs two consumer-declared interfaces (see the ISP
+	// note on auth.UserRepository).
 	userRepo := user.NewPostgresRepository(db)
 	sessionRepo := auth.NewPostgresSessionRepository(db)
 	resetRepo := auth.NewPostgresPasswordResetRepository(db)
 	consentRepo := auth.NewPostgresConsentRepository(db)
 	hasher := auth.NewBcryptHasher(cfg.BCryptCost)
 
-	// Product counters (signups, couples) are recorded by the services, and
-	// HTTP metrics by the router, into the same private registry.
+	// Product counters (services) and HTTP metrics (router) share this registry.
 	m := metrics.New()
 
 	// --- services ---
-	// Postgres stores timestamps to the microsecond. Truncating here means a
-	// timestamp the API returns on write is identical to the one it returns
-	// on every later read, so clients can compare them safely.
+	// Truncated to match Postgres's microsecond precision, so a timestamp
+	// returned on write equals the one returned on later reads.
 	now := func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 	userSvc := user.NewService(userRepo, now)
 
-	// Rate limits. In memory, so they are per process: correct for one API
-	// instance. When scaling out, swap in a Redis-backed limiter here; both
-	// consumers only see an Allow(key) interface.
-	//   loginAttempts:  per account, stops password guessing from any number of IPs.
-	//   authRequests:   per client IP across /auth/*, caps bcrypt load and
-	//                   account enumeration through register.
-	//   joinAttempts:   per person, stops invite codes being guessed (Q-08).
+	// In-memory rate limits, per process (swap for a Redis-backed limiter behind
+	// the same Allow(key) interface when scaling out).
+	//   loginAttempts:  per account, stops password guessing across IPs.
+	//   authRequests:   per client IP across /auth/*, caps bcrypt load and enumeration.
+	//   joinAttempts:   per person, stops invite-code guessing (Q-08).
 	//   coupleRequests: per client IP across /couples/*.
 	loginAttempts := ratelimit.New(10, 15*time.Minute, time.Now)
 	authRequests := ratelimit.New(20, time.Minute, time.Now)
@@ -121,8 +112,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	milestonesSvc := milestones.NewService(milestonesRepo, togetherCouples, now)
 
 	memoriesRepo := memories.NewPostgresRepository(db)
-	// nil when Cloudinary is not configured: the photo endpoints then say so
-	// and everything else about a memory works (FR-MEM-003, Q-06).
+	// nil when Cloudinary isn't configured; photo endpoints say so, rest still works (FR-MEM-003, Q-06).
 	var pictures memories.Photos
 	if store := photos.New(cfg.CloudinaryCloudName, cfg.CloudinaryAPIKey, cfg.CloudinaryAPISecret); store != nil {
 		pictures = store
@@ -137,13 +127,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	appreciationRepo := appreciation.NewPostgresRepository(db)
 	appreciationSvc := appreciation.NewService(appreciationRepo, togetherCouples, now)
 
-	// Leaving a couple freezes it rather than deleting it; this is what
-	// finally deletes it, once both partners have had the retention window
-	// to read and export (FR-PAIR-008).
+	// Leaving a couple freezes it; this deletes it once the retention window
+	// for both partners to read/export has passed (FR-PAIR-008).
 	purger := couples.NewPurger(couplesRepo, now, log)
 
-	// *database.DB satisfies auth.TxRunner directly (matching InTx method
-	// signature) — no adapter type needed just to cross that interface.
+	// *database.DB satisfies auth.TxRunner directly (matching InTx signature) — no adapter needed.
 	authSvc, err := auth.NewService(userRepo, sessionRepo, hasher, db, cfg.SessionTTL, now, auth.NewToken, loginAttempts, auth.Options{
 		Resets:   resetRepo,
 		Mailer:   mail,
@@ -167,9 +155,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	notificationsHandler := notifications.NewHandler(notificationsSvc)
 
 	// One pass of the worker, on request, for deployments with nowhere to run
-	// a process that never stops (docs/DEPLOYMENT.md). nil unless TICK_SECRET
-	// is set, and then nothing is registered — the API carries no extra
-	// surface for a deployment that does run the worker properly.
+	// a long-lived process (docs/DEPLOYMENT.md). nil unless TICK_SECRET is set.
 	var tickHandler *notifications.TickHandler
 	if cfg.TickSecret != "" {
 		var sender push.Sender = push.NewLog(log)
@@ -199,9 +185,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		tickHandler.RegisterRoutes(router)
 	}
 
-	// Product routes are versioned here, once. Handlers register
-	// "/auth/login" and "/users/me"; they do not know which version
-	// they are mounted on.
+	// Routes are versioned here, once; handlers register "/auth/login" etc.
+	// without knowing which version they're mounted on.
 	v1 := router.Version(httpx.V1)
 	userHandler.RegisterRoutes(v1)
 	authHandler.RegisterRoutes(v1.With(middleware.RateLimit(authRequests, "auth")))
@@ -217,10 +202,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	journalHandler.RegisterRoutes(v1)
 	appreciationHandler.RegisterRoutes(v1)
 
-	// RequestID first so everything below it, including a recovered panic,
-	// logs and responds with the request id. ClientIP resolves the caller
-	// before any rate limit reads it. Recover sits inside Logging so the 500
-	// it writes still gets an access-log line.
+	// Order matters: RequestID first so panics/logs get the id; ClientIP
+	// before any rate limiter reads it; Recover inside Logging so its 500
+	// still gets an access-log line.
 	handler := middleware.Chain(mux,
 		middleware.RequestID(log),
 		middleware.ClientIP(cfg.BFFSecret),
@@ -230,8 +214,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 
 	srv := server.New(cfg.HTTPAddr, handler, cfg.ShutdownTimeout, log)
 
-	// /metrics gets its own listener so it can never be reached through the
-	// public API port, whatever the deployment exposes.
+	// /metrics gets its own listener so it's never reachable via the public API port.
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("GET /metrics", m.Handler())
 	metricsSrv := server.New(cfg.MetricsAddr, metricsMux, cfg.ShutdownTimeout, log)
@@ -239,9 +222,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	return &App{db: db, server: srv, metricsServer: metricsSrv, purger: purger, log: log}, nil
 }
 
-// Run serves the API and the metrics listener until ctx is canceled or
-// either one fails. A failure in one shuts the other down too, so the
-// process never keeps running half up.
+// Run serves the API and metrics listener until ctx is canceled or either
+// fails; a failure in one shuts the other down too.
 func (a *App) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -250,9 +232,7 @@ func (a *App) Run(ctx context.Context) error {
 	go func() { errs <- a.server.Run(ctx) }()
 	go func() { errs <- a.metricsServer.Run(ctx) }()
 
-	// The purge sweeper is not in errs: it ends only when ctx is canceled,
-	// and it must not be able to bring the API down. Its own failures are
-	// logged and retried on the next tick.
+	// Not in errs: the purger must not bring the API down; failures are logged and retried.
 	go func() { _ = a.purger.Run(ctx) }()
 
 	err := <-errs
@@ -263,9 +243,8 @@ func (a *App) Run(ctx context.Context) error {
 	return err
 }
 
-// Close releases resources Run doesn't own — currently just the database
-// pool. It runs after Run returns, so in-flight requests have already
-// finished using the pool by the time this closes it.
+// Close releases resources Run doesn't own (the database pool). Runs after
+// Run returns, once in-flight requests are done using the pool.
 func (a *App) Close() {
 	a.log.Info("closing database connection pool")
 	a.db.Close()

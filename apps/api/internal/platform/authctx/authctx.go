@@ -1,8 +1,6 @@
 // Package authctx carries the authenticated user id through a request's
-// context. It exists as its own package — rather than living in auth —
-// so that user (and any future module) can read "who is calling" without
-// importing auth, which itself imports user. Without this split, user ->
-// auth -> user would be an import cycle.
+// context. Its own package (not part of auth) so user can read "who is
+// calling" without importing auth, which imports user — avoiding a cycle.
 package authctx
 
 import (

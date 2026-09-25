@@ -5,12 +5,9 @@ import (
 	"log/slog"
 )
 
-// Log is the development Sender. It writes what would have been sent and
-// never leaves the machine, so local work and CI need no VAPID keys.
-//
-// It logs the title and the path, never the body: the body is the part most
-// likely to carry something about a person, and a development log is not a
-// place to start putting that.
+// Log is the development Sender: writes what would have been sent, never
+// leaves the machine. Logs title and path, never body, which is more likely
+// to carry something personal.
 type Log struct {
 	log *slog.Logger
 }

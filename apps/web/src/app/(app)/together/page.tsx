@@ -21,12 +21,7 @@ import { today } from "@/lib/today";
 import { Main } from "@/components/layout/screen";
 import { Para, Row, Section, Title } from "@/components/ui/kit";
 
-/**
- * A row's second line. Undefined while loading, the summary once there is
- * one, and a short line if it broke — the screen the row leads to shows the
- * real error. An absence is not a break: an unpaired couple gets 404 from
- * most of the API, which is "nothing yet", not damage.
- */
+// A 404 from an unpaired couple is treated as "nothing yet", not an error.
 function summary(
   query: { data: unknown; error: unknown; isError: boolean },
   line: string,
@@ -84,9 +79,6 @@ export default function Together() {
           <Icon name="plus" size={24} />
         </Link>
       </div>
-      {/* Four independent sections: stacked on a phone, two columns from `lg`,
-          where the width is there and a single column would leave half the
-          screen empty. */}
       <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-x-8">
         <Section label="Plan" className="mt-[22px]">
           <Row

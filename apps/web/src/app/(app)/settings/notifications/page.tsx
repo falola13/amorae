@@ -31,8 +31,6 @@ export default function NotificationSettings() {
   const couple = useCouple();
   const push = usePush();
   const [asking, setAsking] = useState(false);
-  // usePush explains nothing by itself; the copy above this button is the
-  // explaining, which is why the request lives here and not on a switch.
   const allow = async () => {
     setAsking(true);
     try {
@@ -69,8 +67,6 @@ export default function NotificationSettings() {
               <Title>Notifications</Title>
               <Para className="mt-1.5">Few, calm, and only about the two of you.</Para>
             </div>
-            {/* Switches that can't deliver anything would be a lie: if the
-                browser permission is denied or unsupported, say so first. */}
             {push.state === "denied" ? (
               <LoadProblem
                 tone="quiet"
@@ -86,10 +82,7 @@ export default function NotificationSettings() {
                 text="Install Amorae to your Home Screen, or open it in another browser. Your choices below are saved either way."
               />
             ) : push.state === "default" ? (
-              /* The switches below save either way, but nothing can arrive
-                 until the browser has been asked — and it is only asked once,
-                 so it is asked here with a reason rather than on a stray tap
-                 (FR-NOTF-006). */
+              // Permission is requested here, with context, since the browser only asks once (FR-NOTF-006).
               <div className="mt-4 flex flex-col items-start gap-3 border-y border-line py-4">
                 <div className="flex flex-col gap-1">
                   <div className="text-[16px] font-semibold text-ink">
@@ -108,11 +101,6 @@ export default function NotificationSettings() {
             <Section label="Faith" className="mt-[22px]">
               {row(p, "new_week", "New prayer week")}
               {row(p, "prayer_reminder", "Prayer reminder")}
-              {/* This row had its own hand-rolled invisible input and never
-                  got the fix the compose rows did, so it opened once and then
-                  never again — the reminder time was, in practice, unchangeable
-                  after the first go. It is a PickRow like every other time
-                  field now. */}
               <PickRow
                 icon="clock"
                 label="Reminder time"
@@ -121,9 +109,6 @@ export default function NotificationSettings() {
                 disabled={!p.prayer_reminder}
                 onChange={(v: string) => v && save.mutate({ reminder_time: v })}
               />
-              {/* In Faith rather than Together: it is about the prayers, and
-                  it is the one notification in here that carries good news
-                  rather than a reminder. */}
               {row(p, "prayer_answered", `When ${partner} marks a prayer answered`, true)}
             </Section>
             <Section label="Plans" className="mt-[22px]">

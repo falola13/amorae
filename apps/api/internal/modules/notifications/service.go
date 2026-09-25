@@ -23,9 +23,8 @@ func NewService(repo Repository, now func() time.Time) *Service {
 	return &Service{repo: repo, now: now}
 }
 
-// Get is this person's settings, or the defaults if they have never changed
-// any. Reading does not create a row: somebody who never opens the screen
-// should leave no trace of having been asked.
+// Get returns this person's settings, or the defaults if unset. Reading
+// does not create a row.
 func (s *Service) Get(ctx context.Context, userID uuid.UUID) (Preferences, error) {
 	p, _, err := s.repo.PreferencesFor(ctx, userID)
 	return p, err
@@ -48,7 +47,6 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, patch Patch) (Pr
 	return updated, nil
 }
 
-// Subscribe records a browser against this person.
 func (s *Service) Subscribe(ctx context.Context, userID uuid.UUID, endpoint, p256dh, auth string) error {
 	endpoint, p256dh, auth, err := ValidateSubscription(endpoint, p256dh, auth)
 	if err != nil {

@@ -17,11 +17,8 @@ import (
 	"github.com/falola13/amorae/apps/api/migrations"
 )
 
-// envTestDatabaseURL names the environment variable that opts a package
-// into integration tests. Its absence is not a failure — it's how these
-// tests stay skippable on a machine with no Postgres running (e.g. CI
-// without a database service, or this box, where localhost:5432 belongs to
-// something else).
+// envTestDatabaseURL opts a package into integration tests; its absence
+// skips them rather than failing (e.g. no Postgres running locally or in CI).
 const envTestDatabaseURL = "AMORAE_TEST_DATABASE_URL"
 
 // New connects to AMORAE_TEST_DATABASE_URL, migrates it to the latest
@@ -53,10 +50,8 @@ func envOrSkip(t *testing.T) string {
 	return url
 }
 
-// migrate runs the embedded migrations against url using a Postgres
-// advisory session lock, so that test packages running in parallel (Go
-// runs each package's tests as its own process) don't race each other
-// applying the same migrations to the same database.
+// migrate applies the embedded migrations under a Postgres advisory session
+// lock, so parallel test packages don't race applying them to the same database.
 func migrate(t *testing.T, ctx context.Context, url string) {
 	t.Helper()
 

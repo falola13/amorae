@@ -32,8 +32,7 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("DELETE /appreciations/{id}", http.HandlerFunc(h.undo))
 }
 
-// The shape in apps/web/src/lib/api/types.ts. No recipient: a couple has two
-// people, so it is whichever of them did not send it (BR-APPR-01).
+// The shape in apps/web/src/lib/api/types.ts. No recipient (BR-APPR-01).
 type appreciationDTO struct {
 	ID     string `json:"id"`
 	FromID string `json:"from_id"`

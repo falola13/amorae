@@ -26,14 +26,7 @@ import { Main } from "@/components/layout/screen";
 import { QueryState } from "@/components/ui/query-state";
 import { BottomActions, LinkButton, Micro, Skeleton, Title, TopBar, cx } from "@/components/ui/kit";
 
-/**
- * One thing on one day.
- *
- * `at` is what orders a day: "" for all-day, so anniversaries and things with
- * no time sit above the timed ones, then 08:30 before 19:00. `rank` breaks the
- * tie between all-day items from different sources, which used to be settled
- * by the order the three loops happened to run in — an order nobody chose.
- */
+// `at` orders items within a day ("" sorts before timed entries); `rank` breaks ties among all-day items.
 type Item = {
   at: string;
   rank: number;
@@ -46,18 +39,8 @@ type Item = {
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
-/**
- * What the time column says.
- *
- * An event may carry an end without a start — nothing stops it, and the
- * composer offers the two independently — and that used to read as "All day",
- * which is the one thing it is not.
- */
 function clock(start?: string, end?: string): { time: string; until?: string } {
-  // An end that is not after its start is not a range. The API refuses to
-  // save one, but rows predating that check exist, and "10:13 am to 10:00 am"
-  // reads as a broken screen rather than as bad data. The detail screen still
-  // shows both fields, which is where you would go to correct it.
+  // Guards against pre-validation rows where end <= start (would render as a bogus range).
   const ranged = Boolean(start && end && end > start);
   if (start) return { time: time12(start), until: ranged ? time12(end) : undefined };
   if (end) return { time: `Ends ${time12(end)}` };
@@ -71,9 +54,7 @@ export default function Calendar() {
   const couple = useCouple();
   const todayIso = iso(today());
 
-  // One anchor rather than a week offset, so switching between week and month
-  // keeps you where you were instead of throwing you back to today — and so
-  // "next" means the next of whatever you are actually looking at.
+  // A single anchor (not a week offset) keeps week/month toggling on the same date.
   const [anchor, setAnchor] = useState(todayIso);
   const [month, setMonth] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -95,8 +76,7 @@ export default function Calendar() {
           <button
             type="button"
             onClick={() => {
-              // Entering the month, land on a day rather than on nothing: a
-              // grid with no day chosen has an empty half-screen under it.
+              // Selects a day when entering month view so the grid isn't left with an empty list under it.
               if (!month && !selected) setSelected(sameMonth(anchor, todayIso) ? todayIso : anchor);
               setMonth((m) => !m);
             }}
@@ -107,9 +87,6 @@ export default function Calendar() {
           </button>
         </div>
 
-        {/* The calendar never said which month you were in. Day numbers alone
-            repeat every month, so paging more than a few weeks out left you
-            reading 1–31 with no way to know where you had got to. */}
         <div className="mt-1 flex items-center gap-1">
           <button
             type="button"
@@ -147,12 +124,7 @@ export default function Calendar() {
           </button>
         </div>
 
-        {/* Milestones sit inside the gate now. They used to be read as
-            `milestones.data ?? []`, so a failed request looked exactly like a
-            couple who had kept no dates — the calendar quietly reported a
-            smaller life than they have, with nothing to notice and nothing to
-            retry. The week stays outside it on purpose: there genuinely is no
-            week until a partner joins. */}
+        {/* Milestones are gated by QueryState so a failed fetch shows an error, not an empty list. Week stays ungated: there's genuinely no week until a partner joins. */}
         <QueryState queries={[events, milestones]} loading={<Skeleton />}>
           {(eventsData, milestoneData) => {
             const byDay = new Map<string, Item[]>();
@@ -169,10 +141,7 @@ export default function Calendar() {
                   href: routes.event(e.id),
                 });
 
-            // The dates they keep come round every year, so the calendar asks
-            // each day whether one falls on it rather than asking each date
-            // when it is next due. Only the ones set to come round: a date
-            // kept without that is part of their story, not their week.
+            // Checks each visible day against each milestone (not each milestone's next occurrence) and only for ones with a reminder set.
             for (const d of days)
               for (const m of milestoneData)
                 if (m.reminder && occursOn(m.date, d))
@@ -185,7 +154,6 @@ export default function Calendar() {
                     href: routes.milestones,
                   });
 
-            // The Sunday the current prayer week starts on, and no other.
             if (week.data)
               for (const d of days)
                 if (d === week.data.week_start)
@@ -201,12 +169,7 @@ export default function Calendar() {
             for (const items of byDay.values())
               items.sort((a, b) => a.at.localeCompare(b.at) || a.rank - b.rank);
 
-            // A day is listed when it is the one you picked, or — with none
-            // picked — when it has something on it. The old rule also hid
-            // days before today, but fell back to showing them when nothing
-            // else in the week qualified, so whether a past day appeared
-            // depended on what else happened to be in that week. Predictable
-            // beats clever: everything in view that has something on it.
+            // Lists the selected day, or (with none selected) every visible day that has items.
             const list = selected
               ? [selected]
               : days.filter((d) => (byDay.get(d)?.length ?? 0) > 0);
@@ -222,9 +185,7 @@ export default function Calendar() {
                   type="button"
                   aria-current={isToday ? "date" : undefined}
                   aria-pressed={sel}
-                  // "S, 29, button" told a screen reader almost nothing — and
-                  // S is both Sunday and Saturday. The count goes here because
-                  // the dot that carries it visually is decoration.
+                  // Full weekday + item count, since the visual dot marker is aria-hidden decoration.
                   aria-label={`${weekdayDate(d)}${isToday ? ", today" : ""}${
                     count ? `, ${count} ${count === 1 ? "thing" : "things"}` : ", nothing planned"
                   }`}
@@ -314,7 +275,9 @@ export default function Calendar() {
                         </span>
                         <span className="flex flex-col">
                           <span className="text-[16px] font-semibold">{it.title}</span>
-                          {it.sub ? <span className="text-support text-stone">{it.sub}</span> : null}
+                          {it.sub ? (
+                            <span className="text-support text-stone">{it.sub}</span>
+                          ) : null}
                         </span>
                       </Link>
                     ))}
@@ -334,10 +297,7 @@ export default function Calendar() {
         </QueryState>
       </Main>
       <BottomActions>
-        {/* Without a day picked this falls back to the composer's own default,
-            which is today — so paging three weeks out and tapping Add put the
-            thing on the wrong day. Anchor the week you are actually looking
-            at instead. */}
+        {/* Falls back to the anchored week's first day (not today) so paging away and adding still targets the right day. */}
         <LinkButton
           href={routes.eventNew({ on: selected ?? (atToday ? undefined : days[0]) })}
           icon="plus"

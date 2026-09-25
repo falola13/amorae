@@ -20,16 +20,12 @@ type errorBody struct {
 	RequestID string            `json:"request_id"`
 }
 
-// Error is the single place an error becomes an HTTP response. Every
-// handler in this API calls this instead of writing its own error body, so
-// the mapping from apperr.Kind to status — and the rule that internal
-// details never reach the client — only has to be right once.
+// Error is the single place an error becomes an HTTP response, so the
+// mapping from apperr.Kind to status is only right once.
 func Error(w http.ResponseWriter, r *http.Request, err error) {
 	appErr, ok := apperr.As(err)
 	if !ok {
-		// Anything that isn't already an *apperr.Error is a bug or an
-		// unhandled driver/stdlib error — treat it as internal rather than
-		// guessing a more specific status for it.
+		// Not already an *apperr.Error: treat as internal rather than guess a status.
 		appErr = apperr.Internal(err)
 	}
 
@@ -55,8 +51,7 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 		seconds := int(math.Ceil(appErr.RetryAfter.Seconds()))
 		w.Header().Set("Retry-After", strconv.Itoa(max(seconds, 1)))
 	default:
-		// KindInternal (including the zero value): log the real cause for
-		// whoever reads the logs, but the response below stays generic.
+		// KindInternal: log the real cause; the response below stays generic.
 		logger.FromContext(r.Context()).Error("internal error", "code", appErr.Code, "cause", appErr.Err)
 	}
 

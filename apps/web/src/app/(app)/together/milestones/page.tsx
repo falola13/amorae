@@ -51,10 +51,7 @@ function MilestoneActions({ date, onClose }: { date: Milestone | null; onClose: 
 export default function Milestones() {
   const ms = useMilestones();
   const [acting, setActing] = useState<Milestone | null>(null);
-  // The empty state already offers this, centred, with a line saying what
-  // it is for. Showing the bar as well put two buttons for the same thing
-  // on one screen, one under the other. The bar is for when there is a
-  // list to add to.
+  // Hides the bottom add-button when the empty state already shows one.
   const hasAny = (ms.data?.length ?? 0) > 0;
   const [open, setOpen] = useState(false);
   const todayIso = iso(today());

@@ -14,8 +14,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/authctx"
 )
 
-// fakeService is a stand-in for Service, letting the handler test verify
-// transport behavior (decode, status codes, DTO shape) without a database.
+// fakeService is a stand-in for Service so tests can verify transport behavior without a database.
 type fakeService struct {
 	user       User
 	err        error
@@ -34,11 +33,8 @@ func (f *fakeService) UpdateProfile(_ context.Context, id uuid.UUID, input Updat
 	return f.user, f.err
 }
 
-// This package's handler only reads authctx — it never parses a bearer
-// token itself, so "401 without a caller" and "200 for an authenticated
-// caller" are exercised here by setting (or not setting) authctx directly.
-// The token-to-context step is auth's RequireAuth middleware, tested in
-// internal/modules/auth/middleware_test.go.
+// The handler only reads authctx, never parses a token; token-to-context is
+// auth's RequireAuth middleware, tested in auth/middleware_test.go.
 func TestHandler_GetMe_UnauthenticatedWithoutContext(t *testing.T) {
 	h := NewHandler(&fakeService{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)

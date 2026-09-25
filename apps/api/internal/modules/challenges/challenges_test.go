@@ -61,8 +61,7 @@ func TestValidateMark(t *testing.T) {
 	}{
 		{"done", &yes, nil, MarkDone, true, false},
 		{"skipped", nil, &yes, MarkSkipped, true, false},
-		// Changing your mind about having done it: neither, rather than a
-		// third kind of request.
+		// Explicit false means un-marking, not a third kind of request.
 		{"taking it back", &no, nil, "", false, false},
 		{"taking a skip back", nil, &no, "", false, false},
 		{"saying nothing at all", nil, nil, "", false, true},
@@ -83,8 +82,7 @@ func TestValidateMark(t *testing.T) {
 	}
 
 	t.Run("done wins if a client sends both", func(t *testing.T) {
-		// Not an error: the client is confused, and the kinder reading of
-		// "done and skipped" is that they did it.
+		// Not an error: both true is read kindly as "done".
 		mark, marked, err := ValidateMark(&yes, &yes)
 		if err != nil || !marked || mark != MarkDone {
 			t.Errorf("mark = %q, marked = %v, err = %v", mark, marked, err)
@@ -100,8 +98,7 @@ func TestDay_MarkFor_SeparatesThePartners(t *testing.T) {
 		t.Errorf("Ada: mark = %q, ok = %v", mark, ok)
 	}
 
-	// The whole point of DEC-30: one partner marking a day says nothing
-	// about the other, and "not yet" is not the same as "skipped".
+	// DEC-30: one partner's mark says nothing about the other (not yet != skipped).
 	if mark, ok := day.MarkFor(ben); ok {
 		t.Errorf("Ben was marked %q by somebody else", mark)
 	}

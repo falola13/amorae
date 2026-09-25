@@ -10,17 +10,13 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/metrics"
 )
 
-// V1 is the current HTTP API version. Feature modules register paths
-// relative to a version ("POST /auth/login"). Only the composition root
-// mounts this prefix, so a later version is a new Version(...) group in
-// app, not an edit to every handler.
+// V1 is the current HTTP API version. Only the composition root mounts this
+// prefix, so a later version is a new Version(...) group, not a handler edit.
 const V1 = "/v1"
 
-// Router is a thin layer over http.ServeMux that gives every module the
-// same two registration calls — public or authenticated — and records
-// per-route metrics for both, so a new module never has to remember to
-// wire either concern up itself (that's the OCP point: adding a module is
-// "new package + RegisterRoutes(r)", nothing else).
+// Router is a thin layer over http.ServeMux giving every module the same
+// two registration calls (public or authenticated) and per-route metrics
+// for both, so adding a module is just "new package + RegisterRoutes(r)".
 type Router struct {
 	mux         *http.ServeMux
 	requireAuth func(http.Handler) http.Handler
@@ -34,18 +30,15 @@ func NewRouter(mux *http.ServeMux, requireAuth func(http.Handler) http.Handler, 
 }
 
 // Version returns a router that mounts every route it registers under
-// prefix. prefix is a path segment such as V1. Health and metrics stay on
-// the root router; only product routes go through a version.
+// prefix (e.g. V1). Health and metrics stay on the root router.
 func (r *Router) Version(prefix string) *Router {
 	next := *r
 	next.prefix = path.Join(r.prefix, "/"+strings.Trim(prefix, "/"))
 	return &next
 }
 
-// With returns a router that wraps every route it registers in mw, first
-// listed outermost. The composition root uses it to apply a policy such as
-// a rate limit to a whole module without the module knowing:
-// authHandler.RegisterRoutes(v1.With(limit)).
+// With returns a router that wraps every route it registers in mw (first
+// listed outermost), e.g. authHandler.RegisterRoutes(v1.With(limit)).
 func (r *Router) With(mw ...func(http.Handler) http.Handler) *Router {
 	next := *r
 	next.middleware = append(append([]func(http.Handler) http.Handler{}, r.middleware...), mw...)
@@ -58,9 +51,8 @@ func (r *Router) Handle(pattern string, h http.Handler) {
 	r.mux.Handle(pattern, r.instrument(pattern, r.wrap(h)))
 }
 
-// HandleAuthed registers a route behind the app's requireAuth middleware.
-// Router middleware runs before authentication, so a rate limit also
-// covers requests with bad or missing tokens.
+// HandleAuthed registers a route behind requireAuth. Router middleware runs
+// before authentication, so a rate limit also covers bad/missing tokens.
 func (r *Router) HandleAuthed(pattern string, h http.Handler) {
 	pattern = r.fullPattern(pattern)
 	r.mux.Handle(pattern, r.instrument(pattern, r.wrap(r.requireAuth(h))))
@@ -87,11 +79,9 @@ func (r *Router) fullPattern(pattern string) string {
 }
 
 // instrument records method/route/status/duration for one request. The
-// route label is the pattern string given at registration time (e.g.
-// "GET /v1/users/me"), not something read back off the request — Logging
-// puts its own request-scoped values into a *new* context via WithContext,
-// which net/http treats as a new request, so an outer middleware has no
-// reliable way to read the matched pattern back off r after the fact.
+// route label is the registration-time pattern, not read back off the
+// request — middleware.Logging rebuilds the context via WithContext, which
+// net/http treats as a new request, so the matched pattern isn't recoverable later.
 func (r *Router) instrument(pattern string, h http.Handler) http.Handler {
 	method, route := splitPattern(pattern)
 

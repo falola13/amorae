@@ -21,8 +21,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Current is the couple's live challenge, with every day and everything both
-// partners have said about them, in three queries.
+// Current loads the challenge, its days, and both partners' marks in three queries.
 func (r *PostgresRepository) Current(ctx context.Context, coupleID uuid.UUID) (Challenge, error) {
 	var c Challenge
 	err := r.db.Q(ctx).QueryRow(ctx, `
@@ -83,9 +82,8 @@ func (r *PostgresRepository) Current(ctx context.Context, coupleID uuid.UUID) (C
 	return c, nil
 }
 
-// Start writes a challenge and all its days together. The unique index on
-// couple_id is what enforces one at a time, so two taps race to one
-// challenge rather than making two.
+// Start writes the challenge and days together; the couple_id unique index
+// enforces one at a time (racing taps produce one challenge, not two).
 func (r *PostgresRepository) Start(ctx context.Context, coupleID uuid.UUID, t Template, on time.Time) (uuid.UUID, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -93,10 +91,8 @@ func (r *PostgresRepository) Start(ctx context.Context, coupleID uuid.UUID, t Te
 	}
 
 	err = r.db.InTx(ctx, func(ctx context.Context) error {
-		// started_on is the couple's local day, read from the couple row
-		// rather than taken from the UTC instant: a challenge begun at
-		// half past midnight in Lagos began today, not yesterday, and the
-		// screen counts its days from this.
+		// started_on uses the couple's local timezone, not the UTC instant,
+		// so a midnight-ish start lands on the right day.
 		if _, err := r.db.Q(ctx).Exec(ctx, `
 			INSERT INTO challenges (id, couple_id, template, title, started_on, created_at, updated_at)
 			SELECT $1, c.id, $3, $4, ($5 AT TIME ZONE c.timezone)::date, $5, $5
@@ -129,8 +125,7 @@ func (r *PostgresRepository) Start(ctx context.Context, coupleID uuid.UUID, t Te
 	return id, nil
 }
 
-// SetMark records what one partner says about one day, replacing whatever
-// they said before. Their partner's row is never touched (DEC-30).
+// SetMark upserts one partner's mark; the partner's own row is never touched (DEC-30).
 func (r *PostgresRepository) SetMark(ctx context.Context, coupleID, userID uuid.UUID, n int, mark Mark, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		INSERT INTO challenge_progress (day_id, user_id, mark, marked_at)
@@ -149,7 +144,6 @@ func (r *PostgresRepository) SetMark(ctx context.Context, coupleID, userID uuid.
 	return nil
 }
 
-// ClearMark takes back what one partner said about a day.
 func (r *PostgresRepository) ClearMark(ctx context.Context, coupleID, userID uuid.UUID, n int) error {
 	_, err := r.db.Q(ctx).Exec(ctx, `
 		DELETE FROM challenge_progress p
@@ -164,7 +158,6 @@ func (r *PostgresRepository) ClearMark(ctx context.Context, coupleID, userID uui
 	return nil
 }
 
-// Leave ends the couple's challenge, freeing them to start another.
 func (r *PostgresRepository) Leave(ctx context.Context, coupleID uuid.UUID) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `DELETE FROM challenges WHERE couple_id = $1`, coupleID)
 	if err != nil {

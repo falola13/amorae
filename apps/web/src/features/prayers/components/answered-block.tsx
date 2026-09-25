@@ -10,18 +10,7 @@ import type { PrayerPoint } from "@/lib/api/types";
 
 import { AnswerSheet } from "./answer-sheet";
 
-/**
- * The answer to a prayer, or the offer to record one.
- *
- * It sits in the body of the prayer rather than in the bottom actions, which
- * belong to praying. Answering is not a fourth button competing with "I've
- * prayed" — it is something that happened, and once it has, it is the most
- * important thing on the screen.
- *
- * There is no "not answered" state drawn here, only an unobtrusive offer. A
- * prayer that has not been answered yet is not a task left undone, and must
- * never be made to look like one.
- */
+// No "not answered" state drawn here, only an unobtrusive offer — an unanswered prayer isn't a task left undone.
 export function AnsweredBlock({ p }: { p: PrayerPoint }) {
   const [open, setOpen] = useState(false);
   const unanswer = useUnanswer();

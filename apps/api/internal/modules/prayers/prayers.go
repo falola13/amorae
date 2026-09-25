@@ -1,11 +1,6 @@
-// Package prayers owns the weekly prayer cycle: whose turn it is to set the
-// week, what a valid set of prayer points looks like, and what each partner
-// may see and change.
-//
-// This file is the rules, and nothing else: no SQL, no HTTP, no clock of its
-// own. Everything here is a pure function of its arguments, which is why it
-// can be tested without a database and why the service above it has only one
-// job — deciding when to apply these rules.
+// Package prayers owns the weekly prayer cycle: turn rotation, valid prayer
+// points, and per-partner visibility. Pure domain logic only — no SQL, no
+// HTTP, no clock — so it's testable without a database.
 package prayers
 
 import (
@@ -19,8 +14,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-// A week holds at most this many points. The limit is a kindness, not a
-// technical bound: ten things to pray about is already a lot to hold.
+// MaxPoints is a deliberate kindness, not a technical bound.
 const MaxPoints = 10
 
 const (
@@ -36,12 +30,10 @@ type Status string
 
 const (
 	// The setter is still writing; only they can see the points.
-	StatusDraft Status = "draft"
-	// Shared with both partners.
+	StatusDraft     Status = "draft"
 	StatusPublished Status = "published"
-	// Never stored: what the *other* partner sees while the setter writes.
-	// It is a view of draft, so the waiting partner learns that a week exists
-	// without seeing half-written prayers.
+	// Never stored: a derived view of draft shown to the waiting partner,
+	// so they know a week exists without seeing half-written prayers.
 	StatusWaiting Status = "waiting"
 )
 
@@ -50,12 +42,9 @@ var (
 	ErrNotSetter   = apperr.Forbidden("not_this_weeks_setter", "It’s your partner’s week to set the prayers.")
 	ErrNotDraft    = apperr.Conflict("week_already_published", "This week has been shared already.")
 	ErrLockedByUse = apperr.Conflict("prayer_in_use", "Your partner has already prayed this one, so it stays as it is. You can still add more, or change the ones they haven’t reached.")
-	// You cannot answer a prayer that was never shared. A draft is still the
-	// setter thinking aloud, and the other partner has not seen it.
+	// A draft prayer hasn't been seen by the partner, so it can't be answered.
 	ErrNotShared = apperr.Conflict("prayer_not_shared", "This one hasn’t been shared yet.")
-	// A week needs two people to have a setter at all, so a couple still
-	// waiting for its second member has no week — which is a state of the
-	// couple, not a missing thing.
+	// No week exists until the couple has two members to set a rotation.
 	ErrWaitingForPartner = apperr.Conflict("waiting_for_partner", "Your first prayer week starts when your partner joins.")
 )
 
@@ -70,8 +59,8 @@ type Week struct {
 	Points       []Point
 }
 
-// Point is one thing to pray about. Body, scripture and verse are optional:
-// a title alone ("Ada's interview") is a complete prayer point.
+// Point is one thing to pray about. Body, scripture and verse are optional —
+// a title alone is a complete prayer point.
 type Point struct {
 	ID        uuid.UUID
 	Position  int
@@ -80,42 +69,32 @@ type Point struct {
 	Scripture string
 	Verse     string
 
-	// Set when somebody marked this answered. Answering is not per-person the
-	// way praying is — a prayer is answered for the couple, once — so this is
-	// one nullable time and not a join table. AnsweredBy is who noticed.
+	// Answered once per couple, not per person, so a single nullable time
+	// rather than a join table. AnsweredBy is who noticed.
 	AnsweredAt *time.Time
-	// The same moment as AnsweredAt, as a date in the couple's own timezone.
-	// Computed in SQL beside the couple row, the way every other couple-local
-	// date in this codebase is: a prayer answered at half past midnight in
-	// Lagos happened today, and must not read as yesterday because the server
-	// keeps UTC — or read as a different day to each partner.
+	// AnsweredAt as a date in the couple's own timezone (computed in SQL),
+	// so it reads as the same day to both partners regardless of server UTC.
 	AnsweredOn *time.Time
 	AnsweredBy uuid.UUID
 	AnswerNote string
 }
 
-// Answered is one answered prayer with enough of its week to place it in
-// time. The read-back screen shows these across every week a couple has had,
-// so a point on its own would have no date to sit under.
+// Answered carries enough of its week to place it in time, since it's shown
+// across every week a couple has had.
 type Answered struct {
 	Point
 	WeekID    uuid.UUID
 	WeekStart time.Time
 }
 
-// Member is the part of couple membership this module needs: who, and when
-// they joined, which is what fixes the order of the rotation.
+// Member is who, and when they joined — join order fixes the rotation.
 type Member struct {
 	UserID   uuid.UUID
 	JoinedAt time.Time
 }
 
 // StartOfWeek is the Sunday 00:00 that `at` falls in, in the couple's own
-// timezone, as a date-only value.
-//
-// The couple's timezone, not the server's and not each partner's: partners in
-// different places must agree on which week it is, or they'd be praying
-// different weeks while sitting next to each other.
+// timezone (not the server's, not each partner's — they must agree on the week).
 func StartOfWeek(at time.Time, loc *time.Location) time.Time {
 	local := at.In(loc)
 	daysSinceSunday := int(local.Weekday()) // time.Sunday is 0
@@ -123,19 +102,14 @@ func StartOfWeek(at time.Time, loc *time.Location) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-// WeekIndex counts whole weeks from a couple's first prayer week to this one.
-// Both arguments come from StartOfWeek, so this is plain calendar arithmetic
-// and daylight saving can't make a week 23 or 25 hours long.
+// WeekIndex counts whole weeks between two StartOfWeek values; both are
+// date-only so daylight saving can't skew the count.
 func WeekIndex(firstWeekStart, weekStart time.Time) int {
 	return int(weekStart.Sub(firstWeekStart).Hours() / (24 * 7))
 }
 
-// SetterFor is whose turn it is: members in join order, alternating every
-// week. The result is stored on the week when it is created and never
-// recomputed, so the turn can't move retroactively (DEC-18).
-//
-// It takes the members rather than reading them, so the rotation can be tested
-// against any pair without a database.
+// SetterFor is whose turn it is: members in join order, alternating weekly.
+// Stored on creation and never recomputed, so the turn can't move retroactively (DEC-18).
 func SetterFor(members []Member, weekIndex int) (uuid.UUID, error) {
 	if len(members) != 2 {
 		return uuid.UUID{}, fmt.Errorf("a prayer week needs exactly two members, got %d", len(members))
@@ -144,14 +118,12 @@ func SetterFor(members []Member, weekIndex int) (uuid.UUID, error) {
 	if ordered[1].JoinedAt.Before(ordered[0].JoinedAt) {
 		ordered[0], ordered[1] = ordered[1], ordered[0]
 	}
-	// Go's % keeps the sign of the dividend, and a week before the couple's
-	// first would be negative, so normalise into {0,1} either way.
+	// Go's % keeps the sign of the dividend; normalise into {0,1}.
 	return ordered[((weekIndex%2)+2)%2].UserID, nil
 }
 
-// ValidatePoints checks a whole submission and reports every problem at once,
-// so the setter doesn't fix one thing only to be told about the next.
-// Positions are assigned from the order given: the array *is* the order.
+// ValidatePoints reports every problem at once, and assigns Position from
+// the order given.
 func ValidatePoints(points []Point) ([]Point, error) {
 	if len(points) > MaxPoints {
 		return nil, apperr.Validation(map[string]string{
@@ -203,12 +175,8 @@ func ValidateReflection(body string) (string, error) {
 	return body, nil
 }
 
-// ValidateAnswerNote bounds the line about what happened.
-//
-// Empty is allowed on purpose. Sometimes the answer is the whole story and
-// there is nothing to add, and demanding a sentence before you may mark a
-// prayer answered would make the smallest, gladdest action in the app into a
-// piece of homework.
+// ValidateAnswerNote bounds the line about what happened. Empty is allowed —
+// marking a prayer answered shouldn't require writing something.
 func ValidateAnswerNote(note string) (string, error) {
 	note = strings.TrimSpace(note)
 	if utf8.RuneCountInString(note) > maxAnswerRunes {
@@ -219,12 +187,8 @@ func ValidateAnswerNote(note string) (string, error) {
 	return note, nil
 }
 
-// CanAnswer says whether this point may be marked answered.
-//
-// Either partner may: a prayer belongs to the two of them, and the one who
-// notices it was answered is not always the one who wrote it down. The only
-// bar is that the week was actually shared — a draft is still the setter
-// thinking aloud.
+// CanAnswer says whether this point may be marked answered. Either partner
+// may; the only bar is that the week has actually been shared.
 func CanAnswer(w Week) error {
 	if w.Status != StatusPublished {
 		return ErrNotShared
@@ -232,9 +196,8 @@ func CanAnswer(w Week) error {
 	return nil
 }
 
-// StatusFor is what `viewer` should be told the week's status is. A draft is
-// the setter's private workspace; their partner is told a week exists and that
-// they're waiting for it, and sees no points (see PointsFor).
+// StatusFor is what `viewer` should be told the week's status is: a draft
+// reads as StatusWaiting to anyone but the setter (see PointsFor).
 func StatusFor(w Week, viewer uuid.UUID) Status {
 	if w.Status == StatusDraft && viewer != w.SetterUserID {
 		return StatusWaiting
@@ -242,8 +205,8 @@ func StatusFor(w Week, viewer uuid.UUID) Status {
 	return w.Status
 }
 
-// PointsFor is the week's points as `viewer` may see them: none at all while
-// the setter is still writing.
+// PointsFor is the week's points as `viewer` may see them: none while the
+// setter is still writing.
 func PointsFor(w Week, viewer uuid.UUID) []Point {
 	if w.Status == StatusDraft && viewer != w.SetterUserID {
 		return nil
@@ -251,24 +214,10 @@ func PointsFor(w Week, viewer uuid.UUID) []Point {
 	return w.Points
 }
 
-// CanEditPoints reports whether this edit is allowed.
-//
-// Two rules, and the second is narrower than it used to be. Only the setter
-// writes the week. And a prayer their partner has already prayed is fixed:
-// it cannot be reworded and it cannot be taken away, because changing it
-// under someone would change what they had already prayed for.
-//
-// Everything else stays open for the whole week — adding a prayer, editing
-// one nobody has reached, reordering. The old rule locked the entire week the
-// moment the partner ticked anything, which meant a week you could not add to
-// on Wednesday because of something they prayed on Monday.
-//
-// Reordering a prayed point is allowed: its position is where it sits in a
-// list, not what it says. Nobody prays a position.
-//
-// prayedByOthers is the set of point ids somebody other than the editor has
-// completed. Their own completions do not stop them editing: changing a
-// prayer you alone have prayed affects nobody else.
+// CanEditPoints reports whether this edit is allowed: only the setter may
+// write the week, and a point someone else has prayed can't be reworded or
+// removed (reordering is fine). prayedByOthers excludes the editor's own
+// completions, which don't restrict them.
 func CanEditPoints(w Week, editor uuid.UUID, incoming []Point, prayedByOthers map[uuid.UUID]bool) error {
 	if editor != w.SetterUserID {
 		return ErrNotSetter
@@ -290,8 +239,7 @@ func CanEditPoints(w Week, editor uuid.UUID, incoming []Point, prayedByOthers ma
 		}
 		sent, still := kept[stored.ID]
 		if !still {
-			// Dropped from the list, which would delete it and their
-			// completion with it.
+			// Dropped, which would delete it and their completion with it.
 			return ErrLockedByUse
 		}
 		if sent.Title != stored.Title || sent.Body != stored.Body ||
@@ -303,8 +251,7 @@ func CanEditPoints(w Week, editor uuid.UUID, incoming []Point, prayedByOthers ma
 }
 
 // CanPublish reports whether `publisher` may share this week now. Publishing
-// again is not an error: the client may retry, and the second attempt should
-// find the world as it wanted it (the service treats it as a no-op).
+// again is not an error — the service treats it as a no-op.
 func CanPublish(w Week, publisher uuid.UUID) error {
 	if publisher != w.SetterUserID {
 		return ErrNotSetter

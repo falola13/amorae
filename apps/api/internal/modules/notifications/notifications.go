@@ -1,10 +1,5 @@
-// Package notifications owns what each person wants to be told about, and
-// which browsers have agreed to be told. It does not send anything: delivery
-// belongs to the worker, which reads both of these.
-//
-// Everything here is per person. A couple shares a prayer week; it does not
-// share a phone, a timezone for reminders, or an opinion about being buzzed
-// at nine in the evening (FR-NOTF-001).
+// Package notifications stores preferences and push subscriptions per
+// person, not per couple (FR-NOTF-001); the worker does the sending.
 package notifications
 
 import (
@@ -37,11 +32,8 @@ type Preferences struct {
 	PrayerAnswered bool
 }
 
-// Defaults are what someone gets before they have ever opened the screen.
-// Most are on, because a shared life that never tells you anything is not
-// much use; goals and challenges are off, because following one is a thing
-// you opt into rather than something that should start buzzing on its own
-// (FR-NOTF-006).
+// Defaults are what someone gets before ever opening the screen. Goals and
+// challenges default off since those are opt-in (FR-NOTF-006).
 func Defaults() Preferences {
 	return Preferences{
 		NewWeek:        true,
@@ -57,8 +49,7 @@ func Defaults() Preferences {
 	}
 }
 
-// Patch is a change to some of the settings. A nil field is left alone, so a
-// client can send one switch without having to know the rest.
+// Patch changes a subset of settings; a nil field is left alone.
 type Patch struct {
 	NewWeek        *bool
 	PrayerReminder *bool
@@ -104,9 +95,8 @@ func setBool(dst *bool, src *bool) {
 	}
 }
 
-// Subscription is one browser that has agreed to receive push. The keys are
-// the browser's own, and are only useful for encrypting a payload that only
-// it can open.
+// Subscription is one browser's push endpoint; the keys encrypt payloads
+// only that browser can decrypt.
 type Subscription struct {
 	ID       uuid.UUID
 	UserID   uuid.UUID
@@ -115,10 +105,8 @@ type Subscription struct {
 	Auth     string
 }
 
-// ValidateSubscription checks the three parts a push send cannot work
-// without. The browser supplies all of them together or not at all, so a
-// missing one means a malformed client rather than a person's mistake — but
-// it still gets a message a person could read.
+// ValidateSubscription requires endpoint, p256dh, and auth together — the
+// browser never sends only some of them.
 func ValidateSubscription(endpoint, p256dh, auth string) (string, string, string, error) {
 	endpoint, p256dh, auth = strings.TrimSpace(endpoint), strings.TrimSpace(p256dh), strings.TrimSpace(auth)
 
@@ -126,8 +114,7 @@ func ValidateSubscription(endpoint, p256dh, auth string) (string, string, string
 	if endpoint == "" {
 		fields["endpoint"] = "Missing."
 	} else if !strings.HasPrefix(endpoint, "https://") {
-		// A push endpoint is always https; anything else is a client bug or
-		// somebody pointing us at a server of their choosing.
+		// Must be https; anything else is malformed or malicious.
 		fields["endpoint"] = "Must be an https address."
 	}
 	if p256dh == "" {
@@ -142,17 +129,9 @@ func ValidateSubscription(endpoint, p256dh, auth string) (string, string, string
 	return endpoint, p256dh, auth, nil
 }
 
-// ReminderPassed reports whether today's reminder time has come round yet in
-// this person's own zone, and names the local date it belongs to.
-//
-// That date is the whole point. It is what the send record is keyed on
-// (notification_sends.key), so "have they had today's reminder?" is a
-// question the database answers rather than something the worker has to
-// remember between ticks. A worker that restarts, runs late, or runs twice
-// still sends exactly one.
-//
-// Compare this to asking "is it 19:00 right now?", which misses the reminder
-// entirely whenever a tick runs a minute late.
+// ReminderPassed reports whether today's reminder has passed in the user's
+// zone; the returned date keys notification_sends so a late or repeated
+// tick still sends exactly once.
 func ReminderPassed(at string, zone *time.Location, now time.Time) (localDate string, passed bool, err error) {
 	if !clockTime.MatchString(at) {
 		return "", false, fmt.Errorf("reminder time %q is not HH:MM", at)
@@ -165,32 +144,16 @@ func ReminderPassed(at string, zone *time.Location, now time.Time) (localDate st
 	return local.Format(time.DateOnly), !local.Before(due), nil
 }
 
-// reminderMorning is the hour a reminder anchored to a day rather than to a
-// time goes out — "the morning of", "the day before", and anything measured
-// from the start of an event that has no start.
-//
-// Eight is early enough to be worth knowing and late enough not to wake
-// anybody. It is deliberately not the person's own prayer reminder time,
-// which is an evening by default and means a different thing.
+// reminderMorning is the hour used for day-anchored reminders ("morning of",
+// "day before"); deliberately not the person's own evening prayer time.
 const reminderMorning = 8
 
-// eventReminderLead reads the phrases the event composer offers, plus the
-// ones people wrote by hand before it offered anything ("an hour before").
+// eventReminderLead matches reminder phrases like "an hour before".
 var eventReminderLead = regexp.MustCompile(`^(\d{1,3}|a|an|the) (minute|hour|day)s? before$`)
 
-// EventReminderAt is the moment an event's reminder is due, read in the zone
-// the event's date and time are written in — the couple's (DEC-27), because
-// an event happens at a place, not in whichever timezone each partner is
-// standing in.
-//
-// It reports false when there is no reminder to send, or when the phrase is
-// not one it can read. A phrase nobody can turn into a moment cannot be
-// delivered, and guessing at one would be inventing a time to buzz somebody.
-//
-// An event with no start time is the interesting case: "an hour before" has
-// nothing to be an hour before. Rather than drop the reminder somebody asked
-// for, those fall back to the morning of the day — which is the only useful
-// answer for something that takes the whole day anyway.
+// EventReminderAt is when an event's reminder fires, in the couple's zone
+// (DEC-27, not each partner's own). With no start time, falls back to the
+// morning of the day.
 func EventReminderAt(date time.Time, startTime, reminder string, zone *time.Location) (time.Time, bool) {
 	r := strings.ToLower(strings.TrimSpace(reminder))
 	if r == "" {
@@ -225,8 +188,7 @@ func EventReminderAt(date time.Time, startTime, reminder string, zone *time.Loca
 		}
 		n = parsed
 	}
-	// A reminder counted in days is a morning, not a time of day carried
-	// backwards: "the day before" at 11pm is not what anybody means.
+	// Day-counted reminders become morning-of, not a clock-time offset.
 	if m[2] == "day" {
 		return morningOf(day.AddDate(0, 0, -n)), true
 	}
@@ -240,7 +202,6 @@ func EventReminderAt(date time.Time, startTime, reminder string, zone *time.Loca
 	return start.Add(-time.Duration(n) * unit), true
 }
 
-// startOf turns an event's wall-clock start into an instant on its own day.
 func startOf(day time.Time, hhmm string, zone *time.Location) (time.Time, bool) {
 	if !clockTime.MatchString(hhmm) {
 		return time.Time{}, false
@@ -264,13 +225,8 @@ const (
 	KindPrayerAnswered = "prayer_answered"
 )
 
-// OccursOn reports whether a kept date comes round on the given day —
-// same month, same day, any year.
-//
-// The twenty-ninth of February is the whole reason this is a function. Three
-// years in four it does not exist, and a couple married on it should still
-// hear from us: it moves to the twenty-eighth, which is the convention every
-// calendar uses and the only one that does not skip an anniversary.
+// OccursOn reports whether a date recurs on the given day (same month and
+// day, any year); Feb 29 anniversaries fall back to Feb 28 in non-leap years.
 func OccursOn(date, day time.Time) bool {
 	month, dayOfMonth := date.Month(), date.Day()
 	if month == time.February && dayOfMonth == 29 && !isLeapYear(day.Year()) {

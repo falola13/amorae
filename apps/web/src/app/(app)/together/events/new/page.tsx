@@ -27,8 +27,7 @@ export default function NewEventPage() {
 function EventForm() {
   const params = useSearchParams();
   const editId = params.get("edit") ?? undefined;
-  // The day the calendar was showing when this was tapped. Only trusted if it
-  // looks like a date — it comes from a URL.
+  // Validated as a date since it comes from a URL param.
   const on = params.get("on");
   const startOn = on && /^\d{4}-\d{2}-\d{2}$/.test(on) ? on : undefined;
   const existing = useEvent(editId ?? "");
@@ -61,9 +60,7 @@ function EventComposer({
 }) {
   const router = useRouter();
   const save = useSaveEvent();
-  // One per line, rather than a row of inputs with an add button: a list of
-  // three short things is faster to type than it is to manage. Ticking them
-  // off happens on the event itself, not here.
+  // Ticking checklist items off happens on the event page, not here.
   const [checklist, setChecklist] = useState(
     event?.checklist.map((item) => item.text).join("\n") ?? "",
   );

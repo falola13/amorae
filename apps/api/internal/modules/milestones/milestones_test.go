@@ -20,7 +20,6 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("a date needs a name", func(t *testing.T) {
-		// Whitespace is not a name, and a list of blank rows is not a story.
 		if _, err := Validate(Input{Title: "   ", Date: day}); err == nil {
 			t.Error("a nameless date was kept")
 		}

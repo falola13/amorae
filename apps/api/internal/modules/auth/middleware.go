@@ -11,18 +11,14 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
 )
 
-// authenticator is declared here, by RequireAuth, so this file depends on
-// a one-method interface rather than *Service.
+// authenticator decouples RequireAuth from *Service.
 type authenticator interface {
 	Authenticate(ctx context.Context, token string) (uuid.UUID, error)
 }
 
-// RequireAuth resolves the caller's bearer token to a user id and stores it
-// in context via authctx. Only the Authorization header is accepted — the
-// API is client-agnostic: the Next.js BFF keeps the token in its own
-// httpOnly cookie and forwards it as a header on the way in, and a mobile
-// client sends the header directly, so this middleware never needs to know
-// about cookies.
+// RequireAuth resolves the bearer token to a user id and stores it in
+// context via authctx. Only the Authorization header is accepted; the BFF
+// forwards its httpOnly cookie as a header, so this stays client-agnostic.
 func RequireAuth(authr authenticator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,10 +40,9 @@ func RequireAuth(authr authenticator) func(http.Handler) http.Handler {
 	}
 }
 
-// bearerToken reads "Authorization: Bearer <token>". It's also called
-// directly by the logout handler, which needs the raw token (to delete the
-// session) rather than a user id. authctx deliberately carries only the
-// derived identity, never the token itself.
+// bearerToken reads "Authorization: Bearer <token>". Also called directly by
+// logout, which needs the raw token; authctx only ever carries the derived
+// identity, never the token itself.
 func bearerToken(r *http.Request) (string, bool) {
 	const prefix = "Bearer "
 

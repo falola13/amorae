@@ -5,23 +5,9 @@ import { visitorHeaders } from "@/lib/api/upstream";
 import { getSessionToken } from "@/lib/auth/session";
 import { env } from "@/lib/env";
 
-// Same-origin front door for browser calls. The axios client (lib/api/http.ts)
-// hits /api/v1/<path>; this forwards to <API_URL>/v1/<path> with the session
-// cookie's bearer token attached. The browser never holds the token
-// (docs/adr/0002). Nothing here is cached: every call carries a session.
+// Same-origin proxy to <API_URL>/v1/<path>, attaching the session bearer token; the browser never holds it (ADR-0002).
 
-// Run this next to what it talks to.
-//
-// Every call through here is browser -> this function -> the Go API, and the
-// API and its database are both in Frankfurt. Left on Vercel's default the
-// function is in the United States, so each request crosses the Atlantic
-// twice for no reason: measured at roughly 280ms straight to the API against
-// 700-1800ms through here. Nothing is cached at this door — every call
-// carries a session — so that second is paid on every screen.
-//
-// A region is a deployment decision, but it belongs in the repository rather
-// than a dashboard: the reason is the sentence above, and a dashboard has
-// nowhere to put it.
+// Pinned to Frankfurt: API and DB are both there, and every call is uncached, so a mismatched region costs a round-trip on every request.
 export const preferredRegion = "fra1";
 
 const TIMEOUT_MS = 10_000;
@@ -75,14 +61,8 @@ async function forward(request: NextRequest, { params }: { params: Promise<{ pat
   return res;
 }
 
-/**
- * Rebuilds the upstream path from the route's segments, or returns null if
- * any segment could climb out of /v1. Next decodes each segment, so
- * "/api/v1/x%2F..%2F..%2Freadyz" arrives as one segment "x/../../readyz";
- * joined naively, the URL parser would resolve it to the API's /readyz.
- * Rejecting separators and dot segments, then re-encoding, keeps every
- * request inside /v1.
- */
+// Rejects segments with separators or dot-segments (Next decodes each one, so an
+// encoded "../" could otherwise escape /v1) and re-encodes the rest.
 function upstreamPath(segments: string[]): string | null {
   for (const s of segments) {
     if (s === "" || s === "." || s === ".." || s.includes("/") || s.includes("\\")) return null;
@@ -90,14 +70,7 @@ function upstreamPath(segments: string[]): string | null {
   return segments.map(encodeURIComponent).join("/");
 }
 
-/**
- * Cross-site request forgery guard for state-changing calls, the same rule
- * Go's http.CrossOriginProtection uses: trust the browser's Sec-Fetch-Site
- * when present, else compare Origin with Host. Requests with neither header
- * come from non-browser clients, which can't ride a victim's cookie anyway.
- * SameSite=Lax on the session cookie is the first line of defence; this is
- * the second, and it also covers same-site sibling subdomains.
- */
+// CSRF guard for state-changing calls: trusts Sec-Fetch-Site when present, else compares Origin to Host.
 function isCrossOrigin(request: NextRequest): boolean {
   const site = request.headers.get("sec-fetch-site");
   if (site) return site !== "same-origin" && site !== "none";

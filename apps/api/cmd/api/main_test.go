@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// The case this exists for is the third one: production, flag off, nobody
-// told. That combination shipped code ahead of its schema twice in two days,
-// and both times the first sign was a 500 reaching somebody.
 func TestSchemaNotice(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
@@ -47,8 +44,7 @@ func TestSchemaNotice(t *testing.T) {
 	}
 }
 
-// Whatever the wording becomes, the warning has to name the variable. An
-// operator reading it at 1am should not have to go and find out what to set.
+// The warning must name the variable, not just say something's wrong.
 func TestSchemaNotice_WarningNamesTheVariable(t *testing.T) {
 	warn, msg := schemaNotice(false, true)
 	if !warn {

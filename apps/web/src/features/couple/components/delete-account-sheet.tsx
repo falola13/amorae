@@ -14,11 +14,7 @@ import {
 } from "@/lib/api/schemas";
 import { useDeleteAccount } from "../hooks";
 
-/**
- * Deleting an account can't be undone, so the person types the word
- * themselves; a stray tap on the button is never enough. The button stays
- * disabled until the word matches, and the API checks the same word again.
- */
+// Irreversible: requires typing the confirmation word, checked again by the API.
 export function DeleteAccountSheet({
   open,
   onClose,

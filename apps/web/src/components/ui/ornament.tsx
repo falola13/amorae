@@ -1,17 +1,6 @@
 import { cx } from "./cx";
 
-/**
- * A printer's end-mark, for the foot of an archive.
- *
- * Deliberately not the logo. The brand keeps the mark at 16px and up and asks
- * that it not be dropped into rings or repeated as furniture — and a mark used
- * as decoration stops being a mark. This is the idea underneath it instead: two
- * strokes curving toward a centre they share, and not quite reaching it. Same
- * thought, ornament weight, no trademark spent.
- *
- * The rules either side fade out rather than stopping, which is what a rule
- * does on a printed page and what a hairline `border-line` cannot do.
- */
+/** Not the logo — brand guidelines keep the mark ≥16px and never decorative. */
 function EndMark({ className }: { className?: string }) {
   return (
     <svg
@@ -31,14 +20,7 @@ function EndMark({ className }: { className?: string }) {
   );
 }
 
-/**
- * The end of something worth having scrolled through.
- *
- * `caption` is for a true sentence, not a flourish — how many moments are kept,
- * when the first week was. A line that states a fact earns the space at the
- * bottom of a short screen; a line that only decorates it does not, and reads
- * as padding the moment you notice it twice.
- */
+/** `caption` should state a fact, not decorate. */
 export function Ornament({ caption, className }: { caption?: string; className?: string }) {
   return (
     <div className={cx("flex flex-col items-center gap-3 pb-2 pt-9", className)}>

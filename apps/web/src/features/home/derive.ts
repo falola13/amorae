@@ -3,17 +3,7 @@ import type { Event, Goal, NotificationPrefs, PrayerWeek } from "@/lib/api/types
 import { isApiError } from "@/lib/api/errors";
 import { stillAhead, time12 } from "@/lib/dates";
 
-/**
- * Whether this account is still one person.
- *
- * There are two ways of learning the same thing and the screen needs both.
- * The API says it plainly — 409 waiting_for_partner — when a week is asked
- * for. But the week is never asked for until a partner exists, because the
- * query is disabled until then, so a lone account produces no error to read.
- * A screen that waited for one sat on its loading skeleton forever, which is
- * exactly what the first person to sign up saw: a greeting, the words "This
- * week", and a grey bar that never resolved into anything.
- */
+// True if no partner, or the API's 409 waiting_for_partner (only returned once a week was asked for).
 export const isAlone = (hasPartner: boolean, weekError: unknown): boolean =>
   !hasPartner || (isApiError(weekError) && weekError.code === "waiting_for_partner");
 
@@ -23,11 +13,6 @@ export const upcomingEvents = (events: Event[], now: Date): Event[] =>
     .filter((e) => !e.done && stillAhead(e.date, e.start_time, now))
     .sort((a, b) => (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")));
 
-/**
- * The first thing happening today. It used to be called tonightEvent, which
- * was only ever true after five o'clock — see partOfDay for what the card
- * now calls it.
- */
 export const todayEvent = (upcoming: Event[], todayIso: string): Event | undefined =>
   upcoming.find((e) => e.date === todayIso);
 

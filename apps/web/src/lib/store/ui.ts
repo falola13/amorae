@@ -3,10 +3,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-// Small pieces of client-only state that outlive a screen:
-// - the prayer-mode session (which prayer, the quiet timer)
-// - whether install guidance was dismissed (spec 19.2: remember it)
-// - the browser's deferred install prompt (Android)
+// Client-only state that outlives a screen: prayer-mode session, install
+// dismissal (remembered per spec 19.2), and the deferred Android install prompt.
 interface UIState {
   prayerIndex: number | null;
   timerStartedAt: number | null;

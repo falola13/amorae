@@ -1,7 +1,6 @@
 // Package logger builds the application's *slog.Logger and carries a
-// request-scoped copy (one that already has request_id attached) through
-// context, so any code with a context can log without threading a logger
-// argument through every function signature.
+// request-scoped copy through context, so code can log without threading a
+// logger argument through every function signature.
 package logger
 
 import (
@@ -11,9 +10,8 @@ import (
 	"strings"
 )
 
-// Config is the subset of app config the logger needs. It's a separate
-// struct — not internal/config.Config — so this package doesn't import
-// config and config doesn't need to import this package either.
+// Config is the subset of app config the logger needs, kept separate from
+// internal/config.Config to avoid an import cycle between the two packages.
 type Config struct {
 	Level  string // debug|info|warn|error
 	Format string // text|json; empty means "json in production, text otherwise"

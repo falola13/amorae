@@ -14,8 +14,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/database/dbtest"
 )
 
-// dbtest shares one database across packages, so emails and invite codes
-// must be unique per run or tests collide on unique constraints.
+// dbtest shares one database across packages, so values must be unique per run.
 func uniqueEmail() string { return "test+" + uuid.NewString() + "@example.com" }
 func uniqueCode() string  { return "Z" + uuid.NewString()[:5] }
 
@@ -51,8 +50,7 @@ func TestPostgresRepository_Create_AlreadyPaired(t *testing.T) {
 		t.Fatalf("second Create: err = %v, want ErrAlreadyPaired", err)
 	}
 
-	// The transaction must roll back the couple row inserted before the
-	// member insert failed, so no orphan couple is left behind.
+	// Must roll back the couple row inserted before the member insert failed.
 	var n int
 	if err := db.Q(ctx).QueryRow(ctx,
 		`SELECT count(*) FROM couples WHERE created_by = $1`, a.ID).Scan(&n); err != nil {
@@ -63,9 +61,7 @@ func TestPostgresRepository_Create_AlreadyPaired(t *testing.T) {
 	}
 }
 
-// pair creates two users and a couple they both belong to, and returns the
-// pair. Every dissolution test needs the same starting point: a live couple
-// with two members.
+// pair creates two users and a live couple they both belong to.
 func pair(t *testing.T, db *database.DB) (repo *couples.PostgresRepository, a, b uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
@@ -132,8 +128,6 @@ func TestPostgresRepository_Dissolve(t *testing.T) {
 			if got := archived[0].Couple.DissolvedAt; got == nil || !got.Equal(at) {
 				t.Errorf("%s sees it ending at %v, want %s", who, got, at)
 			}
-			// Both names, so the record reads as the two of them rather
-			// than as a list of one.
 			if len(archived[0].Members) != 2 {
 				t.Errorf("%s sees %d people in it, want 2", who, len(archived[0].Members))
 			}
@@ -141,8 +135,7 @@ func TestPostgresRepository_Dissolve(t *testing.T) {
 	})
 
 	t.Run("neither is locked out of starting again", func(t *testing.T) {
-		// The whole point of Q-24: ending a couple must not cost someone a
-		// month of the app.
+		// Q-24: ending a couple must not cost someone a month of the app.
 		next, err := couples.New("", ada, "UTC", nil, at)
 		if err != nil {
 			t.Fatalf("couples.New: %v", err)
@@ -157,7 +150,6 @@ func TestPostgresRepository_Dissolve(t *testing.T) {
 		if mine.Couple.ID != next.ID {
 			t.Error("the live couple is not the new one")
 		}
-		// And the old one is still there to read.
 		archived, err := repo.GetArchivedForUser(ctx, ada, at)
 		if err != nil || len(archived) != 1 {
 			t.Errorf("the old couple went missing: %d, %v", len(archived), err)
@@ -205,14 +197,11 @@ func TestPostgresRepository_Dissolve_RevokesTheInviteStillInTheWild(t *testing.T
 		t.Fatalf("Dissolve: %v", err)
 	}
 
-	// Ada sent the code before changing her mind. It must not still open a
-	// couple that no longer exists.
 	if err := repo.Join(ctx, stranger.ID, code, now); !errors.Is(err, couples.ErrInviteRevoked) {
 		t.Fatalf("Join with a revoked code: err = %v, want ErrInviteRevoked", err)
 	}
 
-	// The second lock on the same door: even an invite that somehow stayed
-	// pending cannot open an ended couple.
+	// Even an invite forced back to pending must not open an ended couple.
 	if _, err := db.Q(ctx).Exec(ctx,
 		`UPDATE couple_invitations SET status = 'pending' WHERE code = $1`, code); err != nil {
 		t.Fatalf("reopening the invite: %v", err)
@@ -244,9 +233,6 @@ func TestPostgresRepository_PurgeDissolvedBefore(t *testing.T) {
 	})
 
 	t.Run("a closed window stops being readable even before the sweep", func(t *testing.T) {
-		// Read access is bounded by the window itself, not by the sweeper
-		// having run — otherwise a sweeper that stops turns 30 days into
-		// forever.
 		archived, err := repo.GetArchivedForUser(ctx, ada, now.Add(time.Second))
 		if err != nil {
 			t.Fatalf("GetArchivedForUser: %v", err)
@@ -305,8 +291,6 @@ func TestPostgresRepository_UpdateCouples_Timezone(t *testing.T) {
 	}
 
 	t.Run("it moves for both partners at once", func(t *testing.T) {
-		// A week the two of them are praying cannot start at two different
-		// moments, so this is the couple's setting and not each person's.
 		_, ben := mustMembers(t, db, mine.Couple.ID)
 		for who, userID := range map[string]uuid.UUID{"the one who changed it": ada, "their partner": ben} {
 			got, err := repo.GetForUser(ctx, userID, now)
@@ -334,7 +318,7 @@ func TestPostgresRepository_UpdateCouples_Timezone(t *testing.T) {
 	})
 }
 
-// mustMembers returns the couple's two member ids in join order.
+// mustMembers returns member ids in join order.
 func mustMembers(t *testing.T, db *database.DB, coupleID uuid.UUID) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	rows, err := db.Q(context.Background()).Query(context.Background(),

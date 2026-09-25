@@ -2,9 +2,7 @@ package user
 
 import "time"
 
-// DTO is what the API actually sends for a user — notably, it has no field
-// that could hold a password hash, so there's nothing for a future change
-// to accidentally serialize.
+// DTO deliberately has no field that could hold a password hash.
 type DTO struct {
 	ID          string    `json:"id"`
 	Email       string    `json:"email"`

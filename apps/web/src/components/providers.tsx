@@ -10,18 +10,16 @@ import { togetherWrites } from "@/features/together/writes";
 import { createQueryClient } from "@/lib/query/client";
 import { registerWrites, type AnyWriteDef } from "@/lib/query/mutations";
 
-// Every write that can be made offline and sent after a restart. This file
-// is the frontend's composition root: the one place that knows every feature,
-// so lib/ never has to import one. A new feature adds its writes here.
+// Composition root: the one place that knows every feature's resumable
+// writes, so lib/ never has to import one. A new feature adds its writes here.
 const resumableWrites: AnyWriteDef[] = [
   ...Object.values(prayerWrites),
   ...Object.values(togetherWrites),
   ...Object.values(settingsWrites),
 ];
 
-// One QueryClient per browser tab (policies in lib/query/client.ts). Server
-// state lives there; client-only state (prayer-mode session, install
-// prompt, toasts) lives in the Zustand stores under src/lib/store.
+// One QueryClient per browser tab. Client-only state (prayer-mode session,
+// install prompt, toasts) lives in the Zustand stores under src/lib/store instead.
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(() => {
     const qc = createQueryClient();

@@ -1,7 +1,6 @@
 // Command migrate applies, reverts, or reports the status of this
-// service's database migrations. It's a separate binary from the API
-// server (see the Dockerfile) so migrations run as a one-shot step in
-// deployment, not as a side effect of the server starting up.
+// service's database migrations, as a one-shot deployment step separate
+// from the API server (see the Dockerfile).
 package main
 
 import (
@@ -30,8 +29,7 @@ func run() error {
 	}
 	command := os.Args[1]
 
-	// Same .env the API reads, so `npm run migrate` works in local dev with
-	// no extra setup. A missing file is fine; deploys set real env vars.
+	// Same .env the API reads; a missing file is fine, deploys set real env vars.
 	_ = godotenv.Load()
 
 	databaseURL := os.Getenv("DATABASE_URL")
@@ -45,9 +43,7 @@ func run() error {
 	}
 	defer db.Close()
 
-	// The provider, its advisory lock and the embedded files all live with
-	// the migrations now, because the API can run them too (MIGRATE_ON_START)
-	// and there should be one way of doing this, not two.
+	// Shared with the API's MIGRATE_ON_START path, so there's one way of doing this.
 	provider, err := migrations.Provider(db)
 	if err != nil {
 		return err

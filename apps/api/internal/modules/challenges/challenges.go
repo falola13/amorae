@@ -1,10 +1,6 @@
-// Package challenges owns short, guided, multi-day experiences a couple can
-// take on together.
-//
-// Two rules shape everything here. Each partner marks their own days
-// (DEC-30), because what each of them kept up is the point and a shared flag
-// would let one tick for both. And nothing counts a streak or calls a missed
-// day a failure: skipping is a first-class answer, not a penalty (01 §6).
+// Package challenges owns short, guided, multi-day experiences a couple
+// takes on together. Each partner marks their own days (DEC-30); skipping is
+// a first-class answer, not a penalty (01 §6).
 package challenges
 
 import (
@@ -17,8 +13,7 @@ import (
 
 var (
 	ErrNotFound = apperr.NotFound("challenge_not_found", "You don’t have a challenge going.")
-	// One at a time: "current" has to mean something, and two half-finished
-	// challenges is not something anyone wants to come back to.
+	// Only one challenge at a time.
 	ErrAlreadyRunning = apperr.Conflict("challenge_already_running",
 		"You already have a challenge going. Finish or leave that one first.")
 	ErrUnknownTemplate = apperr.Invalid("challenge_unknown", "That challenge isn’t one of ours.")
@@ -46,23 +41,17 @@ type Day struct {
 	ID     uuid.UUID
 	N      int
 	Prompt string
-	// What each partner has said about this day. Absent means they have not
-	// said anything yet, which is different from having skipped it.
+	// Absent means unmarked, distinct from skipped.
 	Marks map[uuid.UUID]Mark
 }
 
-// MarkFor is what `userID` has said about this day, and whether they have
-// said anything at all.
 func (d Day) MarkFor(userID uuid.UUID) (Mark, bool) {
 	m, ok := d.Marks[userID]
 	return m, ok
 }
 
-// Template is a curated challenge: a title and a prompt for each day.
-//
-// Kept in code rather than a table on purpose. These are written, edited and
-// reviewed like copy, and a table would mean a migration to fix a typo in a
-// sentence somebody reads on day four.
+// Template is a curated challenge. Kept in code, not a DB table — these read
+// like copy and a typo fix shouldn't need a migration.
 type Template struct {
 	Key     string
 	Title   string
@@ -122,10 +111,8 @@ var templates = []Template{
 	},
 }
 
-// Templates is the catalogue, for a client offering a choice.
 func Templates() []Template { return templates }
 
-// TemplateByKey finds one, or reports that it is not ours.
 func TemplateByKey(key string) (Template, error) {
 	for _, t := range templates {
 		if t.Key == key {
@@ -135,9 +122,7 @@ func TemplateByKey(key string) (Template, error) {
 	return Template{}, ErrUnknownTemplate
 }
 
-// ValidateMark reads what a client asked for. done and skipped are the only
-// two answers, and asking for neither is how a day is un-marked — somebody
-// changing their mind about having done it.
+// ValidateMark requires done or skipped; explicitly false means un-marking.
 func ValidateMark(done, skipped *bool) (Mark, bool, error) {
 	switch {
 	case done != nil && *done:

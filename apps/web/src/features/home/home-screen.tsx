@@ -51,12 +51,7 @@ export function HomeScreen() {
   const week = useWeek();
   const events = useEvents();
   const goals = useGoals();
-  // A source that broke, as opposed to one with nothing in it. Worth telling
-  // apart here more than anywhere: this screen reads `data ?? []`, so a
-  // failed list used to look exactly like an empty week — the plan and the
-  // next event simply were not there, and nothing said why. Quietly
-  // reporting a smaller life than somebody actually has is worse than an
-  // error, because there is nothing to notice and nothing to retry.
+  // data ?? [] below would make a failed fetch look identical to an empty week, so track it separately.
   const eventsBroke = events.isError && !isAbsence(events.error);
   const goalsBroke = goals.isError && !isAbsence(goals.error);
   const history = useHistory();
@@ -64,9 +59,7 @@ export function HomeScreen() {
   const now = today();
   const todayIso = iso(now);
 
-  // The app shell renders this only once the couple has loaded. Every other
-  // source can fail on its own (or not exist in the API yet) without taking
-  // the greeting and the rest of the screen down with it.
+  // Renders only once couple has loaded; other sources can fail independently.
   const coupleData = couple.data;
   const w = week.data;
   if (!coupleData || (!w && week.fetchStatus === "fetching")) {
@@ -81,8 +74,7 @@ export function HomeScreen() {
 
   const me = coupleData.me;
   const partner = coupleData.partner?.display_name ?? "your partner";
-  // Not a failure: there is no week until there are two of them, and until
-  // then the week is never even asked for (see isAlone).
+  // Not a failure — no week exists until there's a partner; see isAlone.
   const alone = isAlone(Boolean(coupleData.partner), week.error);
   const upcoming = upcomingEvents(events.data ?? [], today());
   const todays = todayEvent(upcoming, todayIso);
@@ -196,11 +188,6 @@ export function HomeScreen() {
         </Link>
       </div>
 
-      {/* Alone, this is the only thing on the screen worth doing, so it is
-          the only thing offered. Everything Amorae has — the week, the plans,
-          what gets kept — is built for two people, and a home screen that
-          listed those as empty rows would be describing an app that does not
-          work yet rather than one waiting for somebody. */}
       {alone ? (
         <div className="mt-6 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
           <Micro tone="plum">Just you, so far</Micro>
@@ -217,9 +204,7 @@ export function HomeScreen() {
         </div>
       ) : null}
 
-      {/* Today's plan and this week sit side by side from `lg`, where a
-          single column would leave the right half of the screen empty. With
-          nothing on today, "This week" simply takes the row. */}
+      {/* Side by side from `lg`; a single column would leave the right half empty. */}
       <div className="flex flex-col lg:mt-6 lg:flex-row lg:items-start lg:gap-8">
         {todays ? (
           <Link
@@ -241,10 +226,7 @@ export function HomeScreen() {
           </Link>
         ) : null}
 
-        {/* A heading with nothing under it is worse than no heading: it
-            reads as something that failed to load. Alone and with nothing
-            planned, there is genuinely nothing to put here, so the section
-            does not appear at all. */}
+        {/* Hidden entirely when alone with nothing planned — a heading with nothing under it reads as broken. */}
         {alone && !eventsBroke && !goalsBroke && !nextEvent && !goal ? null : (
           <Section
             label="This week"
@@ -257,12 +239,7 @@ export function HomeScreen() {
               ) : undefined
             }
           >
-            {/* Before a partner joins there is no week and cannot be one: praying
-              together alternates between two people, so one person has no turn
-              to take. The API says exactly that (409 waiting_for_partner) and
-              nothing here listened, so the very first thing a new account saw
-              on its own home screen was a card saying this could not be
-              loaded. It loaded fine. There was simply nothing to load yet. */}
+            {/* No week can exist without a partner (prayer alternates between two people), so skip it. */}
             {alone ? null : (
               <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
                 {(wk) => (

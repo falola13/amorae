@@ -2,9 +2,7 @@
 
 import { create } from "zustand";
 
-// One short message at a time, shown by <Toaster /> above the tab bar. Kept
-// in a store (not React context) so non-React code, like the query client's
-// global mutation error handler, can raise one with notify().
+// A store, not React context, so non-React code (the query client's error handler) can call notify().
 
 interface ToastState {
   message: string | null;

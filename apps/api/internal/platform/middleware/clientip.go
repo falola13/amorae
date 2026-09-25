@@ -17,12 +17,9 @@ const (
 )
 
 // ClientIP resolves who is really calling and stores it for httpx.ClientIP.
-//
-// X-Client-IP is believed only when the request also carries the shared
-// BFF secret, so proving it came from our own web server. Anyone else
-// (including a mobile app, or an attacker setting headers) is identified by
-// the TCP peer address, which can't be spoofed. X-Forwarded-For is never
-// trusted: any client can write whatever it likes there.
+// X-Client-IP is trusted only with the shared BFF secret attached; anyone
+// else is identified by the TCP peer address. X-Forwarded-For is never
+// trusted, since any client can set it.
 func ClientIP(bffSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

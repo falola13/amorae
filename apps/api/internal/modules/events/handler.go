@@ -83,8 +83,7 @@ func toDTO(e Event) eventDTO {
 	return out
 }
 
-// Every field is a pointer: a PATCH that mentions one thing leaves the rest
-// alone, and "" is how a field is cleared.
+// Every field is a pointer: a PATCH mentioning one leaves the rest alone; "" clears it.
 type inputRequest struct {
 	Title     *string   `json:"title"`
 	Date      *string   `json:"date"`
@@ -227,8 +226,7 @@ func callerAndEvent(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUI
 	return userID, eventID, true
 }
 
-// pathID names the thing for the person reading the message, who should never
-// see the words "uuid" or "path parameter".
+// pathID's "thing" names the resource in the error message; never "uuid" or "path parameter".
 func pathID(w http.ResponseWriter, r *http.Request, name, thing string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue(name))
 	if err != nil {

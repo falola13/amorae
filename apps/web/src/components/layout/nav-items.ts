@@ -1,10 +1,7 @@
 import type { IconName } from "@/components/icons";
 import { routes } from "@/lib/routes";
 
-/**
- * The primary destinations, in one place: the bottom tab bar uses them on a
- * phone, the side nav on a tablet or desktop. Same order, same labels.
- */
+/** Shared by TabBar (phone) and SideNav (tablet/desktop). */
 export const NAV: { label: string; icon: IconName; href: string; match: (p: string) => boolean }[] =
   [
     { label: "Home", icon: "home", href: routes.home, match: (p) => p === "/" },

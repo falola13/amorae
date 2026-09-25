@@ -1,7 +1,5 @@
-// Mirrors the Go API's JSON contract (snake_case), see docs/API.md. The
-// auth, users and couples shapes exist in Go; the rest is a planned contract
-// the screens were built against. When a Go module lands with a different
-// shape, change it here and in docs/API.md in the same pull request.
+// Mirrors the Go API's JSON contract (snake_case, docs/API.md). Auth/users/couples
+// exist in Go; the rest is a planned contract the screens were built against.
 
 export interface User {
   id: string;
@@ -28,11 +26,7 @@ export interface Partner {
 export interface Couple {
   id: string;
   name: string;
-  /**
-   * When this couple's prayer week turns over. Not the same as me.timezone,
-   * which is when your own reminders fire: partners in different places must
-   * still agree on which week it is (DEC-27).
-   */
+  /** When the prayer week turns over — not me.timezone, which is for reminders (DEC-27). */
   timezone: string;
   /** role is your own label in the couple, like the partner's. */
   me: User & { role: string };
@@ -43,11 +37,7 @@ export interface Couple {
   onboarding: { couple: boolean; install: boolean; notifications: boolean };
 }
 
-/**
- * A couple someone used to be in. Ending a couple ends it for both partners;
- * for 30 days afterwards it can still be read and downloaded, and then it is
- * deleted. There is nothing to act on here — no invite, no onboarding.
- */
+/** A couple someone used to be in — read-only for 30 days after ending, then deleted. */
 export interface EndedCouple {
   id: string;
   name: string;
@@ -135,11 +125,8 @@ export interface Goal {
   done: boolean;
 }
 
-/**
- * One day of a challenge. `done` and `skipped` are YOURS, exactly as
- * `my_completed` is on a prayer week; your partner's sit alongside so both of
- * you can see both, and neither can change the other's (DEC-30).
- */
+/** One day of a challenge. `done`/`skipped` are yours; partner_* sit alongside,
+ *  and neither side can change the other's (DEC-30). */
 export interface ChallengeDay {
   n: number;
   text: string;

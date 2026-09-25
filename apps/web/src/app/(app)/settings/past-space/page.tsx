@@ -20,18 +20,10 @@ import { daysUntil, longDateYear, yearsAndMonths } from "@/lib/dates";
 import type { EndedCouple } from "@/lib/api/types";
 import { routes } from "@/lib/routes";
 
-/**
- * A space that has ended, for as long as it is still here.
- *
- * Read-only by construction rather than by disabling things: there is nothing
- * on this screen to change. The one action is taking a copy, because that is
- * the only thing left that can still be lost.
- */
+// Read-only: nothing here can be changed, only exported.
 export default function PastSpacePage() {
   const ended = useEndedCouples();
-  // Reachable both ways: from Settings once you have a space again, and
-  // straight after ending one, when you have none and Settings would only
-  // bounce you back to pairing.
+  // Reachable with or without an active couple, since ending one leaves you with none.
   const couple = useCouple();
   const paired = Boolean(couple.data);
 

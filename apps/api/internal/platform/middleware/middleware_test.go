@@ -10,9 +10,8 @@ import (
 	"testing"
 )
 
-// The production chain order (see app.New). A panic must come back as the
-// generic 500 envelope carrying the same request id as the response header,
-// and must never echo the panic value to the client.
+// Production chain order (see app.New): a panic must return the generic 500
+// envelope with the response's request id, never the panic value.
 func TestChain_PanicReturnsGeneric500WithRequestID(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	panicking := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

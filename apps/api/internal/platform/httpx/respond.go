@@ -6,8 +6,7 @@ import (
 )
 
 // JSON writes v as the entire response body. Most handlers should call Data
-// instead — JSON exists for the few endpoints (healthz/readyz) that are
-// contractually plain JSON with no envelope.
+// instead; JSON is for endpoints (healthz/readyz) with no envelope.
 func JSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)

@@ -23,9 +23,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 
 func (r *PostgresRepository) Create(ctx context.Context, inviteCode string, inviteExpiresAt time.Time, c COUPLES) (COUPLES, error) {
 
-	// The column is nullable and the field is a bare time.Time, so an unset
-	// date has to become NULL here — inserting the zero value stores
-	// 0001-01-01, which reads back as a real date and breaks date maths.
+	// Zero time.Time must become NULL, not 0001-01-01, which would read back as a real date.
 	var start *time.Time
 	if !c.RelationshipStartDate.IsZero() {
 		start = &c.RelationshipStartDate
@@ -73,9 +71,7 @@ func (r *PostgresRepository) Create(ctx context.Context, inviteCode string, invi
 	return c, nil
 }
 
-// Join adds the caller to the invite's couple and accepts the invite in one
-// transaction. It does not return the couple: the service re-reads through
-// GetForUser, which is the only query that also carries members and invite.
+// Join does not return the couple: the service re-reads through GetForUser instead.
 func (r *PostgresRepository) Join(ctx context.Context, userID uuid.UUID, code string, at time.Time) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
 		var (
@@ -116,9 +112,8 @@ func (r *PostgresRepository) Join(ctx context.Context, userID uuid.UUID, code st
 			return ErrInviteInvalid
 		}
 
-		// Locks the couple, and reads the one thing that makes an otherwise
-		// valid code useless: the couple it belongs to has ended. Dissolving
-		// revokes pending invites, so this is the second lock on that door.
+		// Locks the couple and checks it hasn't ended (dissolving also revokes
+		// pending invites, so this is the second guard against that).
 		var dissolvedAt *time.Time
 		if err := r.db.Q(ctx).QueryRow(ctx, `
 			SELECT dissolved_at FROM couples WHERE id = $1 FOR UPDATE
@@ -221,8 +216,7 @@ func (r *PostgresRepository) UpdateCouples(ctx context.Context, coupleID uuid.UU
 	return nil
 }
 
-// role is already trimmed and length-checked by ValidateRole, so it is
-// assigned outright rather than through a COALESCE fallback.
+// role is already validated by ValidateRole, so it's assigned outright, not via COALESCE.
 func (r *PostgresRepository) UpdateRole(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, role string) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE couple_members 
@@ -240,21 +234,14 @@ func (r *PostgresRepository) UpdateRole(ctx context.Context, id uuid.UUID, coupl
 	return nil
 }
 
-// Dissolve ends the caller's couple for both partners.
-//
-// Three things happen together or not at all: the couple gets its end date,
-// both memberships are marked ended, and any invite still pending is revoked
-// so a stranger holding the code cannot walk into a couple that no longer
-// exists.
-//
-// The memberships are kept, not deleted — they are how both partners go on
-// reading and exporting until PurgeDissolvedBefore removes the couple. Ending
-// them is what frees each person to start again (Q-24).
+// Dissolve sets the couple's end date, ends both memberships, and revokes
+// any pending invite, all atomically. Memberships are kept, not deleted,
+// until PurgeDissolvedBefore removes the couple; ending them frees each
+// person to start again (Q-24).
 func (r *PostgresRepository) Dissolve(ctx context.Context, userID uuid.UUID, at time.Time) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
-		// Conditional on the couple still being live, so two partners tapping
-		// "leave" at the same moment settle on one end date rather than the
-		// later one restarting the other's window.
+		// Conditional on still being live, so two simultaneous "leave" taps
+		// settle on one end date instead of restarting the window.
 		var coupleID uuid.UUID
 		err := r.db.Q(ctx).QueryRow(ctx, `
 			UPDATE couples c
@@ -289,11 +276,8 @@ func (r *PostgresRepository) Dissolve(ctx context.Context, userID uuid.UUID, at 
 	})
 }
 
-// GetArchivedForUser is the couples this person used to be in and can still
-// read: ended, not yet purged, and inside the retention window.
-//
-// The window is applied here rather than left to the sweeper, so a sweeper
-// that stops running cannot quietly turn 30 days of access into forever.
+// GetArchivedForUser applies the retention window itself, so a stalled
+// sweeper can't quietly turn 30 days of access into forever.
 func (r *PostgresRepository) GetArchivedForUser(ctx context.Context, userID uuid.UUID, now time.Time) ([]Mine, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT c.id, COALESCE(c.name, ''), c.timezone, c.relationship_start_date,
@@ -326,8 +310,7 @@ func (r *PostgresRepository) GetArchivedForUser(ctx context.Context, userID uuid
 		return nil, fmt.Errorf("listing ended couples: %w", err)
 	}
 
-	// Members come after the rows are closed: one connection, one query at a
-	// time, and this is never more than a couple or two.
+	// Runs after rows.Close(): one connection can't hold two open queries.
 	for i := range archived {
 		members, err := r.membersOf(ctx, archived[i].Couple.ID)
 		if err != nil {
@@ -362,15 +345,12 @@ func (r *PostgresRepository) membersOf(ctx context.Context, coupleID uuid.UUID) 
 	return members, nil
 }
 
-// purgeLockID keeps two API instances from sweeping at the same moment. The
-// number is arbitrary but must stay fixed: it only has to differ from every
-// other advisory lock this codebase takes.
+// purgeLockID keeps two API instances from sweeping at once; arbitrary but
+// must stay fixed and distinct from other advisory locks in this codebase.
 const purgeLockID = 20260923
 
-// PurgeDissolvedBefore deletes couples whose retention window closed at or
-// before cutoff, and reports how many went. One DELETE is the whole purge:
-// members, invitations and every couple-owned table cascade from this row,
-// so a module added later is covered the day its table references couples.
+// PurgeDissolvedBefore: one DELETE is the whole purge — members, invitations
+// and every couple-owned table cascade from this row.
 func (r *PostgresRepository) PurgeDissolvedBefore(ctx context.Context, cutoff time.Time) (int64, error) {
 	var purged int64
 	err := r.db.InTx(ctx, func(ctx context.Context) error {
@@ -380,9 +360,7 @@ func (r *PostgresRepository) PurgeDissolvedBefore(ctx context.Context, cutoff ti
 			return fmt.Errorf("taking the purge lock: %w", err)
 		}
 		if !mine {
-			// Someone else is sweeping. There is nothing to wait for: the
-			// next tick will find whatever they leave behind.
-			return nil
+			return nil // someone else is sweeping; next tick will catch up
 		}
 
 		tag, err := r.db.Q(ctx).Exec(ctx, `
@@ -398,8 +376,7 @@ func (r *PostgresRepository) PurgeDissolvedBefore(ctx context.Context, cutoff ti
 	return purged, err
 }
 
-// Only the caller's own membership is touched: install and notifications
-// describe one person's phone, so neither partner can mark them for the other.
+// Only the caller's own membership is touched: neither partner can mark onboarding for the other.
 func (r *PostgresRepository) UpdateOnboarding(ctx context.Context, id uuid.UUID, coupleID uuid.UUID, install *bool, notifications *bool) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE couple_members
@@ -419,8 +396,7 @@ func (r *PostgresRepository) UpdateOnboarding(ctx context.Context, id uuid.UUID,
 	return nil
 }
 
-// ReplaceInvite revokes the couple's pending invite and issues a new one, in
-// one transaction, so there is never a moment with two live codes or none.
+// ReplaceInvite revokes and reissues in one transaction: never a moment with two live codes or none.
 func (r *PostgresRepository) ReplaceInvite(ctx context.Context, userID uuid.UUID, code string, expiresAt, at time.Time) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
 		var coupleID uuid.UUID

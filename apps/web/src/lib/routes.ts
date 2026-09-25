@@ -1,6 +1,4 @@
-// Every in-app URL, built in one place. Pages link with `routes.goal(id)`
-// instead of hand-writing "/together/goals/" + id, so renaming a route or a
-// query parameter is one edit, and the compiler finds every caller.
+// Every in-app URL, built in one place, so renaming a route is one edit and the compiler finds every caller.
 
 const q = (params: Record<string, string | number | boolean | undefined>) => {
   const search = new URLSearchParams();
@@ -49,8 +47,7 @@ export const routes = {
   calendar: "/together/calendar",
   events: "/together/events",
   event: (id: string) => `/together/events/${seg(id)}`,
-  // `on` prefills the date. Tapping a day in the calendar and then adding
-  // something should put it on that day, not on today.
+  // `on` prefills the date, so adding from a tapped calendar day lands on that day.
   eventNew: (opts: { edit?: string; on?: string } = {}) =>
     `/together/events/new${q({ edit: opts.edit, on: opts.on })}`,
   goals: "/together/goals",

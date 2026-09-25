@@ -33,14 +33,8 @@ export const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(),
  *  "a month after the 31st" has no answer worth guessing at. */
 export const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
 
-/**
- * Whole weeks covering a month, Sunday first — what a month grid is made of.
- *
- * Always whole weeks, so the grid is rectangular, which means it runs into
- * the month either side. Those days are real dates and are returned as such;
- * it is the screen's job to draw them quietly, not this function's to lie
- * about them.
- */
+/** Whole weeks covering a month, Sunday first — spills into the neighbouring
+ *  months; it's the caller's job to draw those days quietly. */
 export const monthGrid = (anchor: Date): string[] => {
   const first = startOfMonth(anchor);
   const from = startOfWeek(first);
@@ -51,7 +45,7 @@ export const monthGrid = (anchor: Date): string[] => {
   return out;
 };
 
-/** "September 2026" — the thing the calendar never said. */
+/** "September 2026" */
 export const monthLabel = (isoDate: string) => `${monthName(isoDate)} ${isoDate.slice(0, 4)}`;
 
 /** Same calendar month, by the only part of an ISO date that says so. */
@@ -83,14 +77,7 @@ export const time12 = (t?: string) => {
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
 };
 
-/**
- * What to call an event happening today: "Tonight" only when it is actually
- * the evening. A 7am breakfast labelled "Tonight" is wrong twice over — it
- * says the wrong time of day, and it makes the card look like it belongs to
- * someone else's plan.
- *
- * Without a time there is nothing to be more specific about, so it is "Today".
- */
+/** "Tonight" only for an actual evening time; no time given falls back to "Today". */
 export const partOfDay = (startTime?: string) => {
   if (!startTime) return "Today";
   const h = Number(startTime.split(":")[0]);
@@ -100,14 +87,8 @@ export const partOfDay = (startTime?: string) => {
   return "Tonight";
 };
 
-/**
- * Whether something on this day, at this time, is still ahead of us.
- *
- * A date alone is not enough, and that was the bug: an event at 3:15am stayed
- * under "Coming up" for the rest of the day, because the whole day was still
- * today. With no time it is a whole-day thing, so it counts as ahead until
- * the day itself is over.
- */
+/** A date alone isn't enough for "today": with a time, ahead means not yet
+ *  passed; with none, it's a whole-day thing and counts as ahead all day. */
 export const stillAhead = (date: string, startTime: string | undefined, now: Date) => {
   const todayIso = iso(now);
   if (date !== todayIso) return date > todayIso;
@@ -131,11 +112,7 @@ export const relativeDay = (isoDate: string, today: string) => {
 
 export const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
 
-/**
- * How long ago a timestamp was, in words: "just now", "2 hours ago",
- * "3 days ago", then the date once it stops being useful as a duration.
- * For session lists, where "when" only has to be recognisable.
- */
+/** "just now" / "2 hours ago" / "3 days ago", then falls back to a date. */
 export const timeAgo = (isoTimestamp: string, now = new Date()) => {
   const then = new Date(isoTimestamp);
   const minutes = Math.round((now.getTime() - then.getTime()) / 60000);
@@ -152,11 +129,7 @@ export const timeAgo = (isoTimestamp: string, now = new Date()) => {
 export const longDateYear = (isoDate: string) =>
   `${longDate(isoDate)} ${parse(isoDate).getFullYear()}`;
 
-/**
- * How long since a date, in whole years and months: "2 years, 7 months".
- * Empty for anything under a month, where a duration says less than the date
- * itself does.
- */
+/** "2 years, 7 months"; empty for anything under a month. */
 export const yearsAndMonths = (isoDate: string, now = new Date()) => {
   const from = parse(isoDate);
   let months = (now.getFullYear() - from.getFullYear()) * 12 + (now.getMonth() - from.getMonth());

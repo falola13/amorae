@@ -10,11 +10,7 @@ import { useCouple } from "@/features/couple/hooks";
 import { prayersApi } from "./api";
 import { prayerWrites, type CompletionVars } from "./writes";
 
-/**
- * A prayer week needs two people — one sets it, the other responds — so there
- * is nothing to ask for until a partner has joined. Asking anyway would turn
- * "waiting for your partner" into an error, which is not what it is.
- */
+// Disabled until a partner exists — otherwise "waiting for partner" would surface as a query error.
 export function useWeek() {
   const couple = useCouple();
   return useQuery({

@@ -8,16 +8,13 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-// maxRequestBody caps how much of a request body we'll read. It's set well
-// above any legitimate payload this API accepts (registration/profile
-// forms) and exists purely to stop an unbounded body from holding a
-// goroutine's memory open.
+// maxRequestBody caps body reads well above any legitimate payload, to stop
+// an unbounded body holding a goroutine's memory open.
 const maxRequestBody = 1 << 20 // 1 MiB
 
-// Decode reads r's JSON body into dst. Any problem with the body — invalid
-// JSON, an unknown field, or trailing data after the object — becomes the
-// same apperr.Invalid so the client always sees "invalid_json" rather than
-// a raw json package error.
+// Decode reads r's JSON body into dst. Any problem — invalid JSON, an
+// unknown field, trailing data — becomes the same apperr.Invalid rather
+// than a raw json package error.
 func Decode(w http.ResponseWriter, r *http.Request, dst any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 

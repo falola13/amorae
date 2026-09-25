@@ -10,9 +10,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-// fakeRepository is an in-memory stand-in for Repository, letting service
-// tests run without a database — exactly the point of declaring the
-// interface in service.go rather than depending on the postgres type.
+// fakeRepository is an in-memory stand-in for Repository so tests run without a database.
 type fakeRepository struct {
 	users map[uuid.UUID]User
 }

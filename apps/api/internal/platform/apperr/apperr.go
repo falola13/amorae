@@ -1,7 +1,6 @@
-// Package apperr defines the error type every layer above the database uses
-// to describe what went wrong. Handlers never see a raw pgx or sql error and
-// never send err.Error() to a client — they see a Kind, which httpx maps to
-// exactly one HTTP status in exactly one place.
+// Package apperr defines the error type every layer above the database uses.
+// Handlers never see a raw pgx/sql error or send err.Error() to a client —
+// they see a Kind, which httpx maps to exactly one HTTP status.
 package apperr
 
 import (
@@ -15,9 +14,8 @@ import (
 type Kind int
 
 const (
-	// KindInternal is the zero value on purpose: an error that forgets to set
-	// a Kind fails closed as "internal" (500), never as something more
-	// permissive like NotFound or Invalid.
+	// Zero value on purpose: an error that forgets to set a Kind fails closed
+	// as "internal" (500), never something more permissive.
 	KindInternal Kind = iota
 	KindInvalid
 	KindUnauthenticated
@@ -27,11 +25,9 @@ const (
 	KindRateLimited
 )
 
-// Error is the application's error type. Code is a stable machine-readable
-// string clients can branch on; Message is safe to show a user; Fields
-// carries per-field validation messages; RetryAfter tells a rate-limited
-// client how long to wait; Err is the underlying cause, kept for logging
-// and Unwrap but never rendered.
+// Error is the application's error type. Code is machine-readable, Message
+// is safe to show a user, Fields carries per-field validation messages, and
+// Err is the underlying cause kept for logging/Unwrap but never rendered.
 type Error struct {
 	Kind       Kind
 	Code       string

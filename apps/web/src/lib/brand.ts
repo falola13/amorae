@@ -1,7 +1,5 @@
-// Brand constants shared by everything that can't read CSS variables: the
-// web app manifest, the <meta name="theme-color"> tags, and the Safari
-// pinned-tab colour. globals.css holds the full token set; keep the two in
-// step (docs/BRAND.md is the source of truth).
+// For things that can't read CSS variables (manifest, theme-color meta, pinned
+// tab). Keep in step with globals.css's full token set (docs/BRAND.md is the source of truth).
 export const brand = {
   name: "Amorae",
   tagline: "Two hearts, one faith.",

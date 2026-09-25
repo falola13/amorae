@@ -19,10 +19,7 @@ import {
 
 export default function Events() {
   const events = useEvents();
-  // The empty state already offers this, centred, with a line saying what
-  // it is for. Showing the bar as well put two buttons for the same thing
-  // on one screen, one under the other. The bar is for when there is a
-  // list to add to.
+  // Hides the bottom add-button when the empty state already shows one.
   const hasAny = (events.data?.length ?? 0) > 0;
   const todayIso = iso(today());
   return (
@@ -48,10 +45,7 @@ export default function Events() {
                 />
               );
             }
-            // "Coming up" means still to come, not "today or later": an
-            // event at 3:15am is over by breakfast, and leaving it under
-            // Coming up all day is the app telling you something it can see
-            // is untrue.
+            // "Coming up" checks the actual time, not just the date, so an early-morning event moves to Earlier once it's past.
             const now = today();
             const up = eventsData
               .filter((e) => !e.done && stillAhead(e.date, e.start_time, now))
@@ -85,12 +79,6 @@ export default function Events() {
                         key={e.id}
                         date={e.date}
                         title={e.title}
-                        // "Done together" used to be said of everything down
-                        // here, because everything down here used to have
-                        // been ticked. Now that an event also arrives by
-                        // simply happening, saying it of one nobody marked is
-                        // the app telling them they did something they may
-                        // not have.
                         sub={
                           e.done
                             ? "Done together"
@@ -98,13 +86,6 @@ export default function Events() {
                         }
                         past
                         href={routes.event(e.id)}
-                        // No action here. This used to read "Save a moment
-                        // from it" — an instruction rendered as a label, on a
-                        // row that already goes somewhere else, inviting a tap
-                        // it could not answer. "Kept" would be no better:
-                        // `done` means somebody marked it, not that anything
-                        // was kept. The row says what happened; keeping it is
-                        // a real action and lives on the event itself.
                       />
                     ))}
                   </Section>

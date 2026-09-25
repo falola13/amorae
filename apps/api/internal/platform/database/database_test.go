@@ -10,9 +10,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/database/dbtest"
 )
 
-// These use the real users table (via dbtest, skipped without
-// AMORAE_TEST_DATABASE_URL) purely as a place to insert a row — InTx itself
-// doesn't know or care what table its caller writes to.
+// These use the real users table (via dbtest) purely as a place to insert a
+// row; InTx itself doesn't care what table its caller writes to.
 
 func TestDB_InTx_RollsBackOnError(t *testing.T) {
 	db := dbtest.New(t)
@@ -49,9 +48,7 @@ func TestDB_InTx_ReusesOuterTransaction(t *testing.T) {
 	id := uuid.New()
 
 	err := db.InTx(ctx, func(ctx context.Context) error {
-		// A nested InTx call must join the outer transaction rather than
-		// starting a second one — pgx doesn't support nested transactions
-		// on the same connection.
+		// Nested InTx must join the outer transaction, not start a second one.
 		return db.InTx(ctx, func(ctx context.Context) error {
 			_, execErr := db.Q(ctx).Exec(ctx, `
 				INSERT INTO users (id, email, display_name, password_hash)
