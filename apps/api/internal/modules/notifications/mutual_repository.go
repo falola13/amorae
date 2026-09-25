@@ -275,3 +275,56 @@ func (r *PostgresRepository) EndedEvents(ctx context.Context, now time.Time) ([]
 	}
 	return out, nil
 }
+
+// GoalCrossingCandidate is a goal and how far along it is, for one of the
+// two people working at it.
+type GoalCrossingCandidate struct {
+	UserID uuid.UUID
+	GoalID uuid.UUID
+	Title  string
+	Target int64
+	Total  int64
+	Prefs  Preferences
+}
+
+// GoalsJustMovedOn finds goals somebody has put something towards recently.
+// Whether that crossed anything is decided in Go, so the thresholds live in
+// one place rather than in SQL.
+//
+// `since` keeps it to recent contributions: without it, shipping this would
+// announce halfway for every goal already past it.
+func (r *PostgresRepository) GoalsJustMovedOn(ctx context.Context, since time.Time) ([]GoalCrossingCandidate, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT u.id, g.id, g.title, g.target,
+		       COALESCE((SELECT sum(gp.amount) FROM goal_progress gp
+		                  WHERE gp.goal_id = g.id), 0)::bigint,
+		       COALESCE(p.goal_milestones, true)
+		FROM goals g
+		JOIN couples c ON c.id = g.couple_id
+		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN notification_preferences p ON p.user_id = u.id
+		WHERE c.dissolved_at IS NULL
+		  AND g.target > 0
+		  AND EXISTS (SELECT 1 FROM goal_progress gp
+		               WHERE gp.goal_id = g.id AND gp.logged_at > $1)
+	`, since)
+	if err != nil {
+		return nil, fmt.Errorf("finding goals that have moved on: %w", err)
+	}
+	defer rows.Close()
+
+	var out []GoalCrossingCandidate
+	for rows.Next() {
+		var c GoalCrossingCandidate
+		if err := rows.Scan(&c.UserID, &c.GoalID, &c.Title, &c.Target, &c.Total,
+			&c.Prefs.GoalMilestones); err != nil {
+			return nil, fmt.Errorf("scanning a goal that has moved on: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding goals that have moved on: %w", err)
+	}
+	return out, nil
+}

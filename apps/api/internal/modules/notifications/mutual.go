@@ -180,3 +180,50 @@ func ForEventOver(c EventCandidate, now time.Time) (Notification, bool) {
 		},
 	}, true
 }
+
+// goalCrossings are the two points in a goal's life worth interrupting for.
+// Not every tenth: a bar that announces itself constantly is a bar nobody
+// looks at.
+var goalCrossings = []struct {
+	percent int
+	body    string
+}{
+	{50, "You’re halfway there."},
+	{100, "You’ve reached it."},
+}
+
+// ForGoalCrossing announces the furthest point a goal has just passed.
+//
+// The highest one only: a single contribution that takes a goal from nothing
+// to finished is one piece of news, not two. Keyed by the crossing, so
+// passing halfway, slipping back and passing it again says nothing the
+// second time — which is right, because it is not news the second time.
+//
+// The amount is left out on purpose (FR-NOTF-005.AC2): the goal is shared,
+// the figure is not lock-screen material.
+func ForGoalCrossing(c GoalCrossingCandidate) (Notification, bool) {
+	if !c.Prefs.GoalMilestones || c.Target <= 0 {
+		return Notification{}, false
+	}
+	reached := -1
+	var body string
+	for _, crossing := range goalCrossings {
+		if c.Total*100 >= c.Target*int64(crossing.percent) {
+			reached, body = crossing.percent, crossing.body
+		}
+	}
+	if reached < 0 {
+		return Notification{}, false
+	}
+	return Notification{
+		UserID: c.UserID,
+		Kind:   KindGoalCrossing,
+		Key:    fmt.Sprintf("%s:%d", c.GoalID, reached),
+		Message: push.Message{
+			Title: c.Title,
+			Body:  body,
+			Path:  "/together/goals",
+			Tag:   KindGoalCrossing,
+		},
+	}, true
+}

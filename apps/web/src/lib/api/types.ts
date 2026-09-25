@@ -210,6 +210,8 @@ export interface NotificationPrefs {
   together: boolean;
   /** A moment kept on this day in an earlier year. */
   memories: boolean;
+  /** Halfway and done — not every contribution, which is `goals`. */
+  goal_milestones: boolean;
   /** HH:MM in your own zone; both empty means no quiet hours. */
   quiet_from: string;
   quiet_to: string;

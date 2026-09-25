@@ -34,6 +34,8 @@ type Preferences struct {
 	Together bool
 	// A moment kept on this day in an earlier year.
 	Memories bool
+	// Halfway, and done — not every contribution, which is Goals.
+	GoalMilestones bool
 	// Quiet hours in the person's own zone, as HH:MM. Both empty means off;
 	// the window may wrap midnight.
 	QuietFrom string
@@ -58,6 +60,7 @@ func Defaults() Preferences {
 		PrayerAnswered: true,
 		Together:       true,
 		Memories:       true,
+		GoalMilestones: true,
 		QuietFrom:      "22:00",
 		QuietTo:        "07:00",
 		DailyCap:       defaultDailyCap,
@@ -87,6 +90,7 @@ type Patch struct {
 	PrayerAnswered *bool
 	Together       *bool
 	Memories       *bool
+	GoalMilestones *bool
 	QuietFrom      *string
 	QuietTo        *string
 	DailyCap       *int
@@ -117,6 +121,7 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.Challenges, patch.Challenges)
 	setBool(&p.Together, patch.Together)
 	setBool(&p.Memories, patch.Memories)
+	setBool(&p.GoalMilestones, patch.GoalMilestones)
 
 	if patch.QuietFrom != nil || patch.QuietTo != nil {
 		from, to := p.QuietFrom, p.QuietTo
@@ -316,6 +321,7 @@ const (
 	KindBothMarked      = "both_marked"
 	KindMemoryOnThisDay = "memory_on_this_day"
 	KindEventOver       = "event_over"
+	KindGoalCrossing    = "goal_crossing"
 )
 
 // OccursOn reports whether a date recurs on the given day (same month and
