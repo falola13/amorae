@@ -52,13 +52,24 @@ func Connect(ctx context.Context, url string, maxConns int32) (*DB, error) {
 	// (SQLSTATE 08P01). It appears only when connections are reused, which
 	// means it works in testing and fails in production, occasionally.
 	//
-	// QueryExecModeExec sends the query each time instead. That costs a
-	// little on a workload this size and removes the whole class of problem.
+	// DescribeExec asks the server what the parameters are and then executes,
+	// using unnamed statements — so nothing is cached under a name that
+	// another client can collide with, and pgx still learns each parameter's
+	// type.
+	//
+	// It must be DescribeExec and not Exec. Exec skips the asking, which
+	// leaves pgx guessing how to encode arguments from their Go types alone:
+	// fine for a string, impossible for a []uuid.UUID passed to `= ANY($1)`,
+	// where it gives up with "unable to encode ... for unknown type (OID 0)".
+	// That took the events screen down in production for the length of time
+	// it took somebody to read a log. The cost here is one extra round trip
+	// per query, which next to the database is worth less than a millisecond.
+	//
 	// An application with its own pool does not need a pooler as well, so the
 	// better answer is still the direct endpoint — this is so that choosing
-	// the other one is slow rather than broken.
+	// the other one is slower rather than broken.
 	if isTransactionPooler(url, cfg.ConnConfig.Host) {
-		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
