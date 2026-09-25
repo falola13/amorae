@@ -10,6 +10,8 @@ import (
 type Repository interface {
 	List(ctx context.Context, coupleID uuid.UUID) ([]Entry, error)
 	Create(ctx context.Context, e Entry, at time.Time) (Entry, error)
+	Update(ctx context.Context, e Entry) (Entry, error)
+	Delete(ctx context.Context, coupleID, authorID, id uuid.UUID) error
 }
 
 type Couples interface {
@@ -53,4 +55,34 @@ func (s *Service) Add(ctx context.Context, userID uuid.UUID, tag, text string) (
 		Tag:      cleanTag,
 		Text:     cleanText,
 	}, s.now())
+}
+
+// Update touches tag and text only; the date an entry was filed under never
+// moves. Scoped by author as well as couple, so editing someone else's entry
+// is simply not found, not forbidden.
+func (s *Service) Update(ctx context.Context, userID, id uuid.UUID, tag, text string) (Entry, error) {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return Entry{}, err
+	}
+	cleanTag, cleanText, err := Validate(tag, text)
+	if err != nil {
+		return Entry{}, err
+	}
+	return s.repo.Update(ctx, Entry{
+		ID:       id,
+		CoupleID: coupleID,
+		AuthorID: userID,
+		Tag:      cleanTag,
+		Text:     cleanText,
+	})
+}
+
+// Delete: only the entry's author may remove it (same scoping as Update).
+func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(ctx, coupleID, userID, id)
 }

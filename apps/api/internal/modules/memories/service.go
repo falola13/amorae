@@ -13,6 +13,7 @@ type Repository interface {
 	List(ctx context.Context, coupleID uuid.UUID) ([]Memory, error)
 	ByID(ctx context.Context, coupleID, id uuid.UUID) (Memory, error)
 	Create(ctx context.Context, m Memory, at time.Time) (uuid.UUID, error)
+	Update(ctx context.Context, coupleID, id uuid.UUID, in Input, at time.Time) error
 	SetPhoto(ctx context.Context, coupleID, id uuid.UUID, photoID string, at time.Time) error
 	Delete(ctx context.Context, coupleID, id uuid.UUID) error
 }
@@ -157,6 +158,23 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Memor
 		Note:     clean.Note,
 	}, s.now())
 	if err != nil {
+		return Memory{}, err
+	}
+	return s.repo.ByID(ctx, coupleID, id)
+}
+
+// Update: either partner may, same as Create (DEC-16); the photo is
+// untouched — AttachPhoto and RemovePhoto own that.
+func (s *Service) Update(ctx context.Context, userID, id uuid.UUID, in Input) (Memory, error) {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return Memory{}, err
+	}
+	clean, err := Validate(in)
+	if err != nil {
+		return Memory{}, err
+	}
+	if err := s.repo.Update(ctx, coupleID, id, clean, s.now()); err != nil {
 		return Memory{}, err
 	}
 	return s.repo.ByID(ctx, coupleID, id)

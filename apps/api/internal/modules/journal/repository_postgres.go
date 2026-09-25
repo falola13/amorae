@@ -2,10 +2,12 @@ package journal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 )
@@ -66,4 +68,36 @@ func (r *PostgresRepository) Create(ctx context.Context, e Entry, at time.Time) 
 		return Entry{}, fmt.Errorf("writing a journal entry: %w", err)
 	}
 	return e, nil
+}
+
+// Update scopes by couple, author, and id together: editing another
+// author's entry — or one from another couple — is simply not found. The
+// date is never touched, so it's returned rather than taken as input.
+func (r *PostgresRepository) Update(ctx context.Context, e Entry) (Entry, error) {
+	err := r.db.Q(ctx).QueryRow(ctx, `
+		UPDATE journal_entries
+		SET tag = $4, text = $5
+		WHERE couple_id = $1 AND author_id = $2 AND id = $3
+		RETURNING date
+	`, e.CoupleID, e.AuthorID, e.ID, e.Tag, e.Text).Scan(&e.Date)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Entry{}, ErrNotFound
+		}
+		return Entry{}, fmt.Errorf("updating a journal entry: %w", err)
+	}
+	return e, nil
+}
+
+func (r *PostgresRepository) Delete(ctx context.Context, coupleID, authorID, id uuid.UUID) error {
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		DELETE FROM journal_entries WHERE couple_id = $1 AND author_id = $2 AND id = $3
+	`, coupleID, authorID, id)
+	if err != nil {
+		return fmt.Errorf("deleting a journal entry: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

@@ -13,6 +13,8 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
+var ErrNotFound = apperr.NotFound("not_found", "That entry isn’t here.")
+
 const maxTextRunes = 2000
 
 // Tag values are spelled exactly as the composer sends them.

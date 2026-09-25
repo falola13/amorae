@@ -86,6 +86,21 @@ func (r *PostgresRepository) Create(ctx context.Context, m Memory, at time.Time)
 	return id, nil
 }
 
+// Update replaces title, date, location, and note; the photo is left alone — SetPhoto owns that.
+func (r *PostgresRepository) Update(ctx context.Context, coupleID, id uuid.UUID, in Input, at time.Time) error {
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		UPDATE memories SET title = $3, date = $4, location = $5, note = $6, updated_at = $7
+		WHERE couple_id = $1 AND id = $2
+	`, coupleID, id, in.Title, in.Date, nullIfEmpty(in.Location), nullIfEmpty(in.Note), at)
+	if err != nil {
+		return fmt.Errorf("updating memory: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // SetPhoto records or clears the picture location; the id is server-derived (photos.PublicID), never a client's.
 func (r *PostgresRepository) SetPhoto(ctx context.Context, coupleID, id uuid.UUID, photoID string, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
