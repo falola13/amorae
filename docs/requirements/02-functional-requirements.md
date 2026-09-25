@@ -2473,7 +2473,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-PWA-006 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-007 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-008 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |
-| FR-PWA-009 | G-05 | TBD | Not started | None yet |
+| FR-PWA-009 | G-05 | `Idempotency-Key` on every authed write | Implemented | Go unit tests for the middleware and for the router ordering it depends on; verified in production 2026-09-25 — a create made in airplane mode queued, synced on reconnect and landed once |
 | FR-PWA-010 | G-05 | TBD | Not started | None yet |
 | FR-PWA-011 | G-05 | — (client) | Implemented | Browser check 2026-09-22 (undo hidden and not queued offline) |
 | FR-PWA-012 | G-05 | TBD — Blocked by Q-01 | Not started | None yet |

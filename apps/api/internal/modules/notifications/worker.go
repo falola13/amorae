@@ -410,6 +410,7 @@ type WorkerRepository interface {
 	BothPrayedWeeks(ctx context.Context, now, since time.Time) ([]BothPrayedCandidate, error)
 	MemoriesOnThisDay(ctx context.Context) ([]MemoryAnniversaryCandidate, error)
 	EndedEvents(ctx context.Context, now time.Time) ([]EventCandidate, error)
+	GoalsJustMovedOn(ctx context.Context, since time.Time) ([]GoalCrossingCandidate, error)
 	BudgetFor(ctx context.Context, userID uuid.UUID, now time.Time) (Budget, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
@@ -512,6 +513,16 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	}
 	for _, c := range bothPrayed {
 		if n, ok := ForBothPrayed(c); ok {
+			due = append(due, n)
+		}
+	}
+
+	moved, err := w.repo.GoalsJustMovedOn(ctx, now.Add(-mutualGrace))
+	if err != nil {
+		return 0, err
+	}
+	for _, c := range moved {
+		if n, ok := ForGoalCrossing(c); ok {
 			due = append(due, n)
 		}
 	}
