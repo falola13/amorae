@@ -262,6 +262,17 @@ export const togetherWrites = {
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
+  // Nothing to write and nothing to reply to, so there is nothing to queue
+  // either: a thought delivered tomorrow is a different thought.
+  nudge: defineWrite({
+    mutationKey: ["nudge"],
+    mutationFn: () => api.nudge(),
+    invalidates: [],
+    onlineOnly: true,
+    // The screen says what happened, including the refusals — that they are
+    // asleep, or that today's are spent.
+    handlesError: true,
+  }),
   deleteMilestone: defineWrite({
     mutationKey: ["milestones", "delete"],
     mutationFn: (id: string) => api.deleteMilestone(id),
@@ -270,10 +281,7 @@ export const togetherWrites = {
   }),
   addMilestone: defineWrite({
     mutationKey: ["milestones", "add"],
-    mutationFn: ({
-      idempotencyKey,
-      ...m
-    }: Omit<Milestone, "id"> & { idempotencyKey?: string }) =>
+    mutationFn: ({ idempotencyKey, ...m }: Omit<Milestone, "id"> & { idempotencyKey?: string }) =>
       api.addMilestone(m, idempotencyKey),
     invalidates: [keys.milestones],
     keyed: K,

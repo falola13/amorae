@@ -15,6 +15,7 @@ type service interface {
 	Get(ctx context.Context, userID uuid.UUID) (Preferences, error)
 	Update(ctx context.Context, userID uuid.UUID, patch Patch) (Preferences, error)
 	Subscribe(ctx context.Context, userID uuid.UUID, endpoint, p256dh, auth string) error
+	Nudge(ctx context.Context, senderID uuid.UUID) error
 }
 
 type Handler struct {
@@ -29,6 +30,7 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /notifications/preferences", http.HandlerFunc(h.get))
 	r.HandleAuthed("PATCH /notifications/preferences", http.HandlerFunc(h.update))
 	r.HandleAuthed("POST /notifications/subscribe", http.HandlerFunc(h.subscribe))
+	r.HandleAuthed("POST /nudge", http.HandlerFunc(h.nudge))
 }
 
 // The shape in apps/web/src/lib/api/types.ts.
@@ -154,4 +156,16 @@ func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 		return uuid.UUID{}, false
 	}
 	return userID, true
+}
+
+func (h *Handler) nudge(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Nudge(r.Context(), userID); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
 }

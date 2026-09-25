@@ -16,8 +16,7 @@ import type { EventInput, GoalInput } from "@/lib/api/schemas";
 /** A create's idempotency key, as a request header. The API stores the reply
  *  against it, so a queued write replayed after a dropped response gets the
  *  first answer back rather than making a second row (FR-PWA-009). */
-const withKey = (key?: string) =>
-  key ? { headers: { "Idempotency-Key": key } } : undefined;
+const withKey = (key?: string) => (key ? { headers: { "Idempotency-Key": key } } : undefined);
 
 export const togetherApi = {
   events: () => http.get<Event[]>("/events").then((r) => r.data),
@@ -78,4 +77,6 @@ export const togetherApi = {
   addMilestone: (m: Omit<Milestone, "id">, key?: string) =>
     http.post<Milestone>("/milestones", m, withKey(key)).then((r) => r.data),
   deleteMilestone: (id: string) => http.delete(apiPath`/milestones/${id}`).then(() => undefined),
+
+  nudge: () => http.post("/nudge", {}).then(() => undefined),
 };

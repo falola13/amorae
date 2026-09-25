@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
 import {
+  Button,
   Initial,
   LinkButton,
   Micro,
@@ -17,11 +19,12 @@ import {
 } from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
 import { isAbsence } from "@/lib/api/envelope";
+import { readableMessage } from "@/lib/query/client";
 import { useCouple } from "@/features/couple/hooks";
 import { setterWord } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
-import { useEvents, useGoals } from "@/features/together/hooks";
+import { useEvents, useGoals, useNudge } from "@/features/together/hooks";
 import type { PrayerWeek } from "@/lib/api/types";
 import {
   activeGoal,
@@ -300,7 +303,44 @@ export function HomeScreen() {
       {w ? (
         <PrayerFooter week={w} partner={partner} reminder={prefs.data ? reminder : null} />
       ) : null}
+      {coupleData.partner ? <Nudge partner={partner} /> : null}
     </Main>
+  );
+}
+
+/**
+ * One tap, no message, nothing to reply to. It says what happened in place
+ * rather than as a toast, including the refusals — that they are asleep, or
+ * that today's three are spent — because those are the answer, not errors.
+ */
+function Nudge({ partner }: { partner: string }) {
+  const nudge = useNudge();
+  const [said, setSaid] = useState<string | null>(null);
+  const first = partner.split(" ")[0];
+
+  if (said) {
+    return (
+      <p className="m-0 pb-4 pt-1 text-support text-stone" role="status">
+        {said}
+      </p>
+    );
+  }
+  return (
+    <div className="pb-4 pt-1">
+      <Button
+        variant="text"
+        icon="together"
+        loading={nudge.isPending}
+        onClick={() =>
+          nudge.mutate(undefined, {
+            onSuccess: () => setSaid(`${first} will know you were thinking of them.`),
+            onError: (e) => setSaid(readableMessage(e)),
+          })
+        }
+      >
+        Thinking of {first}
+      </Button>
+    </div>
   );
 }
 

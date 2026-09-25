@@ -149,3 +149,40 @@ func (r *PostgresRepository) BudgetFor(ctx context.Context, userID uuid.UUID, no
 	}
 	return b, nil
 }
+
+// NudgeTarget answers who the other partner is, and what this one is called
+// — the only two facts a nudge carries. A person with no live partner gets
+// the zero id rather than an error: not being paired yet is a state, not a
+// fault.
+func (r *PostgresRepository) NudgeTarget(ctx context.Context, senderID uuid.UUID) (uuid.UUID, string, error) {
+	var partnerID uuid.UUID
+	var name string
+	err := r.db.Q(ctx).QueryRow(ctx, `
+		SELECT COALESCE(other.user_id, '00000000-0000-0000-0000-000000000000'::uuid), u.display_name
+		FROM users u
+		LEFT JOIN couple_members mine ON mine.user_id = u.id AND mine.ended_at IS NULL
+		LEFT JOIN couples c ON c.id = mine.couple_id AND c.dissolved_at IS NULL
+		LEFT JOIN couple_members other ON other.couple_id = c.id
+		                              AND other.ended_at IS NULL
+		                              AND other.user_id <> u.id
+		WHERE u.id = $1
+	`, senderID).Scan(&partnerID, &name)
+	if err != nil {
+		return uuid.Nil, "", fmt.Errorf("finding who to nudge: %w", err)
+	}
+	return partnerID, name, nil
+}
+
+// CountSends counts one kind of notification already sent to somebody since
+// a moment — the day's allowance, for anything that has one.
+func (r *PostgresRepository) CountSends(ctx context.Context, userID uuid.UUID, kind string, since time.Time) (int, error) {
+	var n int
+	err := r.db.Q(ctx).QueryRow(ctx, `
+		SELECT count(*) FROM notification_sends
+		 WHERE user_id = $1 AND kind = $2 AND sent_at >= $3
+	`, userID, kind, since).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("counting notifications: %w", err)
+	}
+	return n, nil
+}

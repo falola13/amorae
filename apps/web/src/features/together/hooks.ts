@@ -45,4 +45,5 @@ export const useRemovePhoto = () => useWrite(w.removePhoto);
 export const useUploadPhoto = () => useWrite(w.uploadPhoto);
 export const useDeleteMemory = () => useWrite(w.deleteMemory);
 export const useDeleteMilestone = () => useWrite(w.deleteMilestone);
+export const useNudge = () => useWrite(w.nudge);
 export const useAddMilestone = () => useWrite(w.addMilestone);

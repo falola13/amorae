@@ -2,9 +2,12 @@ package notifications
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/falola13/amorae/apps/api/internal/platform/push"
 )
 
 // Repository is what this service needs of storage, named by the consumer.
@@ -12,15 +15,23 @@ type Repository interface {
 	PreferencesFor(ctx context.Context, userID uuid.UUID) (Preferences, bool, error)
 	SavePreferences(ctx context.Context, userID uuid.UUID, p Preferences, at time.Time) error
 	Subscribe(ctx context.Context, sub Subscription, at time.Time) error
+
+	// For a nudge, which is sent from a request rather than from the tick.
+	DeliveryRepository
+	NudgeTarget(ctx context.Context, senderID uuid.UUID) (uuid.UUID, string, error)
+	BudgetFor(ctx context.Context, userID uuid.UUID, now time.Time) (Budget, error)
+	CountSends(ctx context.Context, userID uuid.UUID, kind string, since time.Time) (int, error)
 }
 
 type Service struct {
-	repo Repository
-	now  func() time.Time
+	repo   Repository
+	sender push.Sender
+	log    *slog.Logger
+	now    func() time.Time
 }
 
-func NewService(repo Repository, now func() time.Time) *Service {
-	return &Service{repo: repo, now: now}
+func NewService(repo Repository, sender push.Sender, log *slog.Logger, now func() time.Time) *Service {
+	return &Service{repo: repo, sender: sender, log: log, now: now}
 }
 
 // Get returns this person's settings, or the defaults if unset. Reading

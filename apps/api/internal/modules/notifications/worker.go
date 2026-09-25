@@ -2,7 +2,6 @@ package notifications
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -555,53 +554,8 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	return sent, nil
 }
 
-// deliver claims the notification, then sends to every device this person
-// has; a subscription the push service reports gone is deleted (FR-NOTF-004).
 func (w *Worker) deliver(ctx context.Context, n Notification, now time.Time) (bool, error) {
-	claimed, err := w.repo.ClaimSend(ctx, n.UserID, n.Kind, n.Key, now)
-	if err != nil {
-		return false, err
-	}
-	if !claimed {
-		return false, nil // somebody already sent this one
-	}
-
-	devices, err := w.repo.SubscriptionsFor(ctx, n.UserID)
-	if err != nil {
-		return false, w.release(ctx, n, err)
-	}
-	if len(devices) == 0 {
-		// Claim stands even with no devices — stale by the time they resubscribe.
-		return false, nil
-	}
-
-	delivered := false
-	for _, d := range devices {
-		err := w.sender.Send(ctx, push.Device{Endpoint: d.Endpoint, P256dh: d.P256dh, Auth: d.Auth}, n.Message)
-		switch {
-		case errors.Is(err, push.ErrGone):
-			w.log.Info("a subscription is gone; removing it", "service", pushService(d.Endpoint))
-			if err := w.repo.Unsubscribe(ctx, d.Endpoint); err != nil {
-				w.log.Warn("could not remove a dead subscription", "error", err)
-			}
-		case err != nil:
-			// Which service refused matters: distinguishes a platform outage
-			// from one bad device.
-			w.log.Warn("a device did not take the notification",
-				"service", pushService(d.Endpoint), "kind", n.Kind, "error", err)
-		default:
-			delivered = true
-			if err := w.repo.MarkSent(ctx, d.Endpoint, now); err != nil {
-				w.log.Warn("could not record a send", "error", err)
-			}
-		}
-	}
-
-	if !delivered {
-		// All devices failed; release the claim so the next tick retries.
-		return false, w.release(ctx, n, nil)
-	}
-	return true, nil
+	return Deliver(ctx, w.repo, w.sender, w.log, n, now)
 }
 
 // pushService names the service behind an endpoint without logging the
@@ -621,11 +575,4 @@ func pushService(endpoint string) string {
 	default:
 		return host
 	}
-}
-
-func (w *Worker) release(ctx context.Context, n Notification, cause error) error {
-	if err := w.repo.ReleaseSend(ctx, n.UserID, n.Kind, n.Key); err != nil {
-		w.log.Warn("could not release a notification claim", "error", err)
-	}
-	return cause
 }

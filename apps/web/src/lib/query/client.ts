@@ -17,7 +17,7 @@ declare module "@tanstack/react-query" {
 
 /** Prefer the API's per-field messages over the generic wrapper message
  *  ("Some fields are invalid."); joined, since a form wrong twice should say so once. */
-function readableMessage(error: unknown): string {
+export function readableMessage(error: unknown): string {
   if (!isApiError(error)) return GENERIC_ERROR_MESSAGE;
   const fields = Object.values(error.fields ?? {}).filter(Boolean);
   return fields.length > 0 ? fields.join(" ") : error.message;
