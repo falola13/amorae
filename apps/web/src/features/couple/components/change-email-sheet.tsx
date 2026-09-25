@@ -21,7 +21,7 @@ export function ChangeEmailSheet({ open, onClose }: { open: boolean; onClose: ()
     handleSubmit,
     setError,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ChangeEmailInput>({
     resolver: zodResolver(changeEmailSchema),
     defaultValues: { email: "", current_password: "" },
@@ -49,7 +49,13 @@ export function ChangeEmailSheet({ open, onClose }: { open: boolean; onClose: ()
     });
 
   return (
-    <Sheet open={open} onClose={close} title="Change your email" labelledBy="change-email-h">
+    <Sheet
+      open={open}
+      onClose={close}
+      dirty={isDirty}
+      title="Change your email"
+      labelledBy="change-email-h"
+    >
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
         <Para size="support">
           You&rsquo;ll log in with the new email from now on. Enter your password so we know

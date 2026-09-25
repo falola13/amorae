@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
 import {
   useChallenge,
   useChallengeDay,
   useChallengeTemplates,
+  useLeaveChallenge,
   useStartChallenge,
 } from "@/features/together/hooks";
 import { isApiError } from "@/lib/api/errors";
@@ -16,6 +18,7 @@ import {
   Button,
   Micro,
   Para,
+  Sheet,
   Skeleton,
   StatusMark,
   Title,
@@ -26,6 +29,9 @@ import {
 export default function Challenges() {
   const ch = useChallenge();
   const set = useChallengeDay();
+  const leave = useLeaveChallenge();
+  // There was no way out of a challenge once started, nor on to another once finished.
+  const [ending, setEnding] = useState(false);
   const couple = useCouple();
   const partner = couple.data?.partner?.display_name ?? "They";
 
@@ -122,14 +128,53 @@ export default function Challenges() {
                   >
                     Skip today
                   </Button>
+                  <Button variant="text" className="text-stone" onClick={() => setEnding(true)}>
+                    End this challenge
+                  </Button>
                 </BottomActions>
               ) : (
                 <BottomActions>
                   <Para size="support" className="text-center">
-                    Seven days, done together. Nicely.
+                    {c.days.length} days, done together. Nicely.
                   </Para>
+                  <Button
+                    variant="secondary"
+                    loading={leave.isPending}
+                    onClick={() => leave.mutate(undefined)}
+                  >
+                    Choose another
+                  </Button>
                 </BottomActions>
               )}
+              <Sheet
+                open={ending}
+                onClose={() => setEnding(false)}
+                title="End this challenge?"
+                labelledBy="end-ch-h"
+              >
+                <Para>
+                  It ends for both of you, and the days you&rsquo;ve each marked go with it. You can
+                  start another straight after.
+                </Para>
+                <div className="flex flex-col gap-1">
+                  <Button
+                    variant="secondary"
+                    className="border-red text-red"
+                    loading={leave.isPending}
+                    onClick={() =>
+                      leave.mutate(undefined, {
+                        onSuccess: () => setEnding(false),
+                        onQueued: () => setEnding(false),
+                      })
+                    }
+                  >
+                    End it
+                  </Button>
+                  <Button variant="text" onClick={() => setEnding(false)}>
+                    Keep going
+                  </Button>
+                </div>
+              </Sheet>
             </>
           );
         }}

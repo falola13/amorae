@@ -51,7 +51,7 @@ export default function GoalDetail() {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ProgressFormInput, unknown, ProgressFormOutput>({
     resolver: zodResolver(progressFormSchema),
     defaultValues: { amount: "" },
@@ -81,7 +81,7 @@ export default function GoalDetail() {
             g.unit === "naira" ? naira(n) : `${n} ${g.unit_label ?? ""}`.trim();
           const partner = couple.data?.partner?.display_name ?? "Partner";
           const onSubmit = (v: ProgressFormOutput) =>
-            add.mutate({ id: g.id, amount: v.amount }, { onSuccess: close });
+            add.mutate({ id: g.id, amount: v.amount }, { onSuccess: close, onQueued: close });
           return (
             <>
               <Main>
@@ -154,7 +154,13 @@ export default function GoalDetail() {
                   </Button>
                 )}
               </BottomActions>
-              <Sheet open={open} onClose={close} title="What did you add?" labelledBy="prog-h">
+              <Sheet
+                open={open}
+                onClose={close}
+                dirty={isDirty}
+                title="What did you add?"
+                labelledBy="prog-h"
+              >
                 <form
                   method="post"
                   onSubmit={handleSubmit(onSubmit)}

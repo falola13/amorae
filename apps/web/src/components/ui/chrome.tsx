@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { useDialog } from "@/lib/hooks/use-dialog";
 import { Spinner } from "./buttons";
@@ -129,28 +129,33 @@ export function Banner({
   );
 }
 
-export function Sheet({
-  open,
-  title,
-  onClose,
-  children,
-  labelledBy,
-}: {
+type SheetProps = {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   labelledBy: string;
-}) {
-  const dialogRef = useDialog(open, onClose);
-  if (!open) return null;
+  /** Something typed and not saved. A stray tap outside or Escape then asks
+   *  before throwing it away; the sheet's own Cancel still closes at once. */
+  dirty?: boolean;
+};
+
+export function Sheet(props: SheetProps) {
+  // Mounted only while open, so the "discard?" question never outlives one opening.
+  return props.open ? <OpenSheet {...props} /> : null;
+}
+
+function OpenSheet({ title, onClose, children, labelledBy, dirty = false }: SheetProps) {
+  const [asking, setAsking] = useState(false);
+  const dismiss = () => (dirty ? setAsking(true) : onClose());
+  const dialogRef = useDialog(true, dismiss);
   // Bottom sheet on a phone; centred dialog from `md`.
   return (
     <div className="fixed inset-0 z-40 md:flex md:items-center md:justify-center md:p-6">
       <button
         type="button"
         aria-label="Close"
-        onClick={onClose}
+        onClick={dismiss}
         className="absolute inset-0 animate-fade bg-ink/40"
       />
       <div
@@ -168,6 +173,26 @@ export function Sheet({
         >
           {title}
         </h2>
+        {asking ? (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-2 rounded-input bg-faint px-3.5 py-2 text-support font-semibold"
+          >
+            Discard what you typed?
+            <span className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setAsking(false)}
+                className="press h-11 px-2.5 text-ink"
+              >
+                Keep it
+              </button>
+              <button type="button" onClick={onClose} className="press h-11 px-2.5 text-red">
+                Discard
+              </button>
+            </span>
+          </div>
+        ) : null}
         {children}
       </div>
     </div>

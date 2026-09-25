@@ -36,7 +36,7 @@ function MilestoneActions({ date, onClose }: { date: Milestone | null; onClose: 
           variant="secondary"
           className="border-red text-red"
           loading={remove.isPending}
-          onClick={() => remove.mutate(date.id, { onSuccess: onClose })}
+          onClick={() => remove.mutate(date.id, { onSuccess: onClose, onQueued: onClose })}
         >
           Remove it
         </Button>

@@ -80,7 +80,10 @@ export default function SetPrayers() {
         const items = drag.items ?? w.points;
         const shared = w.status === "published";
         const doPublish = () =>
-          publish.mutate(undefined, { onSuccess: () => router.replace(routes.home) });
+          publish.mutate(undefined, {
+            onSuccess: () => router.replace(routes.home),
+            onQueued: () => router.replace(routes.home),
+          });
         return (
           <>
             <div className="flex h-11 shrink-0 items-center justify-between px-3">

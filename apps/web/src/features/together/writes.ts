@@ -9,7 +9,7 @@ import type {
 } from "@/lib/api/types";
 import { keys } from "@/lib/query/keys";
 import { defineWrite } from "@/lib/query/mutations";
-import { togetherApi as api } from "./api";
+import { togetherApi as api, type MemoryText } from "./api";
 
 /** Ten megabytes, the cap Q-06 chose. Checked before anything is sent. */
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -190,6 +190,20 @@ export const togetherWrites = {
     invalidates: [keys.journal],
     keyed: K,
   }),
+  // Author-only on the server; the partner's entries never offer it.
+  updateJournal: defineWrite({
+    mutationKey: ["journal", "update"],
+    mutationFn: ({ id, tag, text }: { id: string; tag: JournalEntry["tag"]; text: string }) =>
+      api.updateJournal(id, tag, text),
+    invalidates: [keys.journal],
+    idempotent: "the same tag and text set twice is the same entry.",
+  }),
+  deleteJournal: defineWrite({
+    mutationKey: ["journal", "delete"],
+    mutationFn: (id: string) => api.deleteJournal(id),
+    invalidates: [keys.journal],
+    idempotent: "deleting something already gone leaves the same nothing behind.",
+  }),
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
@@ -251,6 +265,14 @@ export const togetherWrites = {
     mutationFn: (id: string) => api.deleteMemory(id),
     invalidates: [keys.memories],
     idempotent: "deleting something already gone leaves the same nothing behind.",
+  }),
+  // The words and the day; the photo has its own writes above.
+  updateMemory: defineWrite({
+    mutationKey: ["memories", "update"],
+    mutationFn: ({ id, title, date, location, note }: MemoryText & { id: string }) =>
+      api.updateMemory(id, { title, date, location, note }),
+    invalidates: [keys.memories],
+    idempotent: "the same fields set twice leave the same moment.",
   }),
   addMemory: defineWrite({
     mutationKey: ["memories", "add"],

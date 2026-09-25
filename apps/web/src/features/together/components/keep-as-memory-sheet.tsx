@@ -40,12 +40,20 @@ export function KeepAsMemorySheet({
           onClose();
           onKept?.();
         },
+        // Queued offline, the event is left open: it closes only once the memory is known to have landed.
+        onQueued: onClose,
       },
     );
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="Keep this?" labelledBy="keep-h">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      dirty={note !== (e.notes ?? "")}
+      title="Keep this?"
+      labelledBy="keep-h"
+    >
       <form method="post" onSubmit={keep} className="contents" noValidate>
         <p className="m-0 -mt-2 text-support text-stone">
           {e.title} &middot; {longDate(e.date)} {e.date.slice(0, 4)}

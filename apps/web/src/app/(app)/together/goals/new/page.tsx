@@ -35,7 +35,10 @@ export default function NewGoalPage() {
   const onSubmit = (v: GoalInput) =>
     create.mutate(
       { ...v, why: v.why || undefined },
-      { onSuccess: () => router.replace(routes.goals) },
+      {
+        onSuccess: () => router.replace(routes.goals),
+        onQueued: () => router.replace(routes.goals),
+      },
     );
   return (
     <>

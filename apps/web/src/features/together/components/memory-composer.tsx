@@ -43,7 +43,7 @@ export function MemoryComposer({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<MemoryFormInput>({
     resolver: zodResolver(memorySchema),
     defaultValues: { title: "", location: "", note: "" },
@@ -83,7 +83,13 @@ export function MemoryComposer({
     );
 
   return (
-    <Sheet open={open} onClose={close} title="Save a moment from today." labelledBy="m-h">
+    <Sheet
+      open={open}
+      onClose={close}
+      dirty={isDirty || !!photo}
+      title="Save a moment from today."
+      labelledBy="m-h"
+    >
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
         <BareInput
           label="What happened"
