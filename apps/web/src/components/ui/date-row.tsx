@@ -22,11 +22,7 @@ export function DateRow({
   past?: boolean;
   action?: string;
   right?: string;
-  /**
-   * What else can be done to this row, behind a button at its end. Only for
-   * rows that are not themselves a link: a button inside a link is a target
-   * inside a target, and on a phone that is a coin toss.
-   */
+  /** Only rendered when the row is not itself a link — no button inside a link. */
   onAction?: () => void;
   last?: boolean;
 }) {

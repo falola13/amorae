@@ -22,25 +22,10 @@ import { Main } from "@/components/layout/screen";
 import { Para, Row, Section, Title } from "@/components/ui/kit";
 
 /**
- * What a row says under its title, and whether it says anything yet.
- *
- * A row here is the way into a screen; the line under it only summarises
- * what is behind it. So a summary that fails must not take the row with it —
- * which is exactly what happened when the events endpoint broke: the only
- * way through to Events and Calendar disappeared from the page whose whole
- * job is to be the way through.
- *
- * Three states, and the row stays where it is through all of them. Nothing
- * while it loads, because the row is a fixed height and nothing moves when
- * the line arrives. The summary once there is one. And a plain sentence if
- * it genuinely broke — short, because the screen the row leads to shows the
- * error properly and offers the retry, which is where somebody would go to
- * do anything about it anyway.
- *
- * An absence is not a break. A couple that has not formed yet gets a 404
- * from nearly all of this, and reading that as breakage would write "this
- * didn't load" across a page that loaded perfectly and is merely new. Those
- * fall through to the summary, which already knows how to say "nothing yet".
+ * A row's second line. Undefined while loading, the summary once there is
+ * one, and a short line if it broke — the screen the row leads to shows the
+ * real error. An absence is not a break: an unpaired couple gets 404 from
+ * most of the API, which is "nothing yet", not damage.
  */
 function summary(
   query: { data: unknown; error: unknown; isError: boolean },
@@ -64,9 +49,6 @@ export default function Together() {
   const partner = couple.data?.partner?.display_name ?? "your partner";
   const todayIso = iso(today());
 
-  // Every summary on this page, worked out from whatever has arrived. A
-  // source that has not answered reads as empty here, and `summary` decides
-  // whether that empty means "nothing yet" or "this broke".
   const upcoming = (events.data ?? [])
     .filter((e) => !e.done && e.date >= todayIso)
     .sort((a, b) => a.date.localeCompare(b.date));

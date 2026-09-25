@@ -79,16 +79,8 @@ func (s *Service) AttachPhoto(ctx context.Context, userID, id uuid.UUID) (Memory
 	return s.repo.ByID(ctx, coupleID, id)
 }
 
-// RemovePhoto deletes the picture and then forgets it.
-//
-// That order matters. Deleting first means a failure at Cloudinary changes
-// nothing here and can be reported as what it is — the photo is still on the
-// screen, and asking again will try again. The other order would tell
-// somebody their picture was gone while it was still stored, which is the one
-// outcome worth ruling out.
-//
-// The memory itself stays. Taking a photo off a moment is not the same as not
-// wanting the moment.
+// RemovePhoto deletes the file before clearing the pointer, so a refusal at
+// Cloudinary leaves the photo visible rather than claiming it is gone.
 func (s *Service) RemovePhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -107,11 +99,8 @@ func (s *Service) RemovePhoto(ctx context.Context, userID, id uuid.UUID) (Memory
 	return s.repo.ByID(ctx, coupleID, id)
 }
 
-// Delete forgets a moment entirely, picture included.
-//
-// The row would take the photo's name with it and leave the file behind, paid
-// for and unreachable, so the picture goes first — for the same reason and in
-// the same order as RemovePhoto.
+// Delete removes a moment and its picture. The photo goes first: the row
+// holds the only reference to it.
 func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -127,9 +116,6 @@ func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	return s.repo.Delete(ctx, coupleID, id)
 }
 
-// destroyPhoto removes a memory's file if it has one and there is anywhere to
-// remove it from. A memory with no picture, or an app with no Cloudinary, has
-// nothing to do here rather than something to complain about.
 func (s *Service) destroyPhoto(ctx context.Context, m Memory) error {
 	if s.photos == nil || !m.HasPhoto() {
 		return nil
@@ -148,9 +134,7 @@ func (s *Service) PhotoURL(m Memory) string {
 	if s.photos == nil || !m.HasPhoto() {
 		return ""
 	}
-	// Versioned by when the memory last changed, which is when the photo was
-	// attached or replaced. Same picture, same address; new picture, new
-	// address, and nothing in between serves the old one.
+	// updated_at moves when the photo does, which is what versions the URL.
 	url, err := s.photos.URL(m.PhotoID, m.UpdatedAt.Unix())
 	if err != nil {
 		return ""

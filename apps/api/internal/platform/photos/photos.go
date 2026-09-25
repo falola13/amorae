@@ -118,16 +118,8 @@ func (s *Store) Ticket(publicID string, at time.Time) (Ticket, error) {
 	}, nil
 }
 
-// Destroy deletes a picture from Cloudinary, for good.
-//
-// Removing a photo has to mean removing the photo. Clearing the pointer in
-// our own database and leaving the file sitting in an account somewhere is a
-// deletion that is true on the screen and false everywhere else, which is
-// not a distinction to make on somebody's behalf about their own pictures.
-//
-// A file that has already gone is not a failure. Cloudinary answers "not
-// found", the world is in the state that was asked for, and a removal
-// interrupted halfway can be finished by asking again.
+// Destroy deletes a picture from Cloudinary. A file that has already gone is
+// not an error, so an interrupted removal can be retried.
 func (s *Store) Destroy(ctx context.Context, publicID string) error {
 	if s == nil {
 		return ErrNotConfigured
@@ -138,21 +130,15 @@ func (s *Store) Destroy(ctx context.Context, publicID string) error {
 	}
 	res, err := cld.Upload.Destroy(ctx, uploader.DestroyParams{
 		PublicID: publicID,
-		// Uploaded as authenticated, so deleted as authenticated: the
-		// delivery type is part of which asset this names.
+		// Part of which asset this names, so it must match the upload.
 		Type: "authenticated",
-		// Ask for the CDN's copies to go as well. Cloudinary does this in
-		// its own time, so an edge can still answer with a cached picture
-		// for a while after the original has stopped existing — which is
-		// why this asks rather than waits. The address is unguessable and
-		// only ever handed to the two people it belongs to.
+		// Cloudinary drops cached CDN copies in its own time, not now.
 		Invalidate: cldapi.Bool(true),
 	})
 	if err != nil {
 		return fmt.Errorf("deleting photo: %w", err)
 	}
-	// The SDK reports a refusal in the body rather than as an error, so a
-	// deletion that did not happen looks like success unless this is read.
+	// The SDK returns refusals in the body, not as an error.
 	if res.Error.Message != "" {
 		return fmt.Errorf("deleting photo: %s", res.Error.Message)
 	}
@@ -175,15 +161,6 @@ func (s *Store) Destroy(ctx context.Context, publicID string) error {
 //
 // f_auto and q_auto re-encode on delivery, which also drops whatever EXIF and
 // GPS the camera wrote into the original (Q-06 again).
-//
-// The version is the `v123` in the path, and it is what makes replacing a
-// photo work. Every picture for a memory is stored under the same derived
-// name, so a replacement has the same address as the picture before it — and
-// the CDN, holding a copy of that address, went on serving the old one.
-// Changing a photo appeared to do nothing, and a photo removed and replaced
-// came back. Cloudinary ignores this value when finding the asset and the
-// signature does not cover it: its whole job is to be different when the
-// picture is different, so the edge has to go and ask.
 func (s *Store) URL(publicID string, version int64) (string, error) {
 	if s == nil {
 		return "", ErrNotConfigured
@@ -200,6 +177,8 @@ func (s *Store) URL(publicID string, version int64) (string, error) {
 	}
 	img.DeliveryType = cldapi.Authenticated
 	img.Transformation = "f_auto,q_auto"
+	// Every photo for a memory shares one name, so without this the CDN keeps
+	// serving the picture before it. Not covered by the signature.
 	img.Version = int(version)
 
 	out, err := img.String()

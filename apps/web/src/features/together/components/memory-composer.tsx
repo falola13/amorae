@@ -21,7 +21,7 @@ export function MemoryComposer({
 }: {
   open: boolean;
   onClose: () => void;
-  /** The moment was kept and the picture was not. The screen says so. */
+  /** The moment was kept and the picture was not. */
   onPhotoFailed: () => void;
 }) {
   const add = useAddMemoryWithPhoto();
@@ -73,9 +73,8 @@ export function MemoryComposer({
         photo,
       },
       {
-        // Closing either way is the point. The moment is kept by the time
-        // this runs, so leaving the sheet open with the text still in it
-        // would invite a second press and a second copy of it.
+        // Closes either way: the moment is saved by now, so leaving the
+        // sheet open would invite a second copy of it.
         onSuccess: (result) => {
           close();
           if (result.photoFailed) onPhotoFailed();

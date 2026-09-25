@@ -11,8 +11,6 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/photos"
 )
 
-// A repository held in memory, so these tests are about what the service
-// decides rather than what Postgres does with it.
 type fakeRepo struct {
 	m       Memory
 	deleted bool
@@ -109,10 +107,6 @@ func TestRemovePhoto(t *testing.T) {
 		}
 	})
 
-	// The reason the delete comes before the database write. Saying the
-	// picture is gone while it is still stored is the one outcome worth
-	// ruling out; a refusal here has to leave the photo on the screen so
-	// that asking again tries again.
 	t.Run("a refusal at Cloudinary changes nothing here", func(t *testing.T) {
 		boom := errors.New("cloudinary is having a day")
 		svc, repo := newService(t, &fakePhotos{refuse: boom})
@@ -140,8 +134,6 @@ func TestDelete(t *testing.T) {
 		if !repo.deleted {
 			t.Error("the memory is still there")
 		}
-		// Otherwise the row that held the file's name is gone and the file
-		// is not: paid for, and reachable by nobody.
 		if len(pics.destroyed) != 1 || pics.destroyed[0] != want {
 			t.Errorf("destroyed %v, want [%s]", pics.destroyed, want)
 		}

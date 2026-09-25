@@ -129,8 +129,6 @@ func TestURL_IsSignedAndStripsCameraMetadata(t *testing.T) {
 	if !strings.Contains(got, "f_auto") {
 		t.Errorf("url = %q, want the re-encoding that strips metadata", got)
 	}
-	// Every photo for a memory is stored under the same derived name, so
-	// without this the CDN answers a replacement with the picture before it.
 	if !strings.Contains(got, "/v1790300717/") {
 		t.Errorf("url = %q, want the version that makes a new photo a new address", got)
 	}

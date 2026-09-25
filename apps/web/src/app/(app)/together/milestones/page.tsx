@@ -23,11 +23,6 @@ import {
 } from "@/components/ui/kit";
 import type { Milestone } from "@/lib/api/types";
 
-/**
- * A date could be added and never taken back, which turns a typo — or a year
- * somebody would rather not be reminded of — into something permanent. It
- * asks first, because it goes for both of them (DEC-16).
- */
 function MilestoneActions({ date, onClose }: { date: Milestone | null; onClose: () => void }) {
   const remove = useDeleteMilestone();
   if (!date) return null;

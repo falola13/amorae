@@ -11,34 +11,21 @@ import { keys } from "@/lib/query/keys";
 import { defineWrite } from "@/lib/query/mutations";
 import { togetherApi as api } from "./api";
 
-/**
- * Ten megabytes, the cap Q-06 chose. Checked before anything is sent, so
- * somebody choosing a 40MB photo is told at once rather than after a long
- * upload that was never going to be accepted.
- */
+/** Ten megabytes, the cap Q-06 chose. Checked before anything is sent. */
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
-/**
- * Put one file where a memory's picture goes.
- *
- * Three calls that only make sense together: ask for permission, use it, and
- * record that it was used. Written once because both the composer and a
- * memory that already exists need exactly this, and a second copy would be
- * the copy that forgets the last step.
- */
+/** Ask for permission, upload, then record it — the three steps only work together. */
 async function putPhoto(memoryID: string, photo: File): Promise<Memory> {
   const ticket = await api.photoTicket(memoryID);
   const form = new FormData();
-  // Exactly what the server signed, then the file. Nothing added, nothing
-  // renamed — the signature covers this list.
+  // Exactly what the server signed: the signature covers this list.
   for (const [key, value] of Object.entries(ticket.fields)) form.append(key, value);
   form.append("file", photo);
 
   const upload = await fetch(ticket.upload_url, { method: "POST", body: form });
   if (!upload.ok) {
-    // Cloudinary says why in the body, and its reasons are specific enough
-    // to act on — a wrong cloud name and a refused signature look identical
-    // from a status code alone.
+    // The body says why; the status alone cannot tell a wrong cloud name
+    // from a refused signature.
     throw new Error(`photo upload refused (${upload.status}): ${await upload.text()}`);
   }
   return api.attachPhoto(memoryID);
@@ -190,19 +177,8 @@ export const togetherWrites = {
     invalidates: [keys.appreciations],
     onlineOnly: true,
   }),
-  // Keeping a moment and attaching a picture to it are one act to the person
-  // doing it, and three steps underneath: create the memory, ask for
-  // permission to upload, put the file where the permission points, then say
-  // it landed.
-  //
-  // The steps fail separately, and for a while this reported the whole thing
-  // as failed when only the last part was — leaving the moment saved, the
-  // sheet open, and the text still in it, so pressing the button again made
-  // a second copy of a memory that had been kept the first time.
-  //
-  // So a failed upload is not a failed write. The moment was kept; say so,
-  // and say the picture did not arrive, which is the one thing left to do
-  // something about.
+  // A failed upload is not a failed write: the moment is already saved, so
+  // report that and say the photo did not arrive.
   addMemoryWithPhoto: defineWrite({
     mutationKey: ["memories", "add-with-photo"],
     mutationFn: async ({
@@ -217,28 +193,20 @@ export const togetherWrites = {
       try {
         return { memory: await putPhoto(saved.id, photo), photoFailed: false };
       } catch (err) {
-        // Kept out of the caller's way but not thrown away: whatever
-        // Cloudinary refused is the only clue to why, and the screen can
-        // only say that it happened.
         console.error("photo upload failed", err);
         return { memory: saved, photoFailed: true };
       }
     },
     invalidates: [keys.memories],
-    // A create with no key of its own: replayed after a dropped response it
-    // would make a second one. Online-only until the endpoint takes an
-    // idempotency key (FR-PWA-009). A File would not survive the queue
-    // either.
+    // A create with no key of its own, and a File cannot survive the queue
+    // (FR-PWA-009).
     onlineOnly: true,
   }),
-  // Adding a picture to a moment already kept — the way back from an upload
-  // that failed, and the way to change one's mind about which photo it was.
   uploadPhoto: defineWrite({
     mutationKey: ["memories", "photo", "upload"],
     mutationFn: ({ id, photo }: { id: string; photo: File }) => putPhoto(id, photo),
     invalidates: [keys.memories],
-    // A File cannot be put in the queue and taken out again later, so this
-    // is a write that happens now or says it did not.
+    // A File cannot survive the offline queue.
     onlineOnly: true,
   }),
   removePhoto: defineWrite({

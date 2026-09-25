@@ -104,9 +104,6 @@ func (r *PostgresRepository) SetPhoto(ctx context.Context, coupleID, id uuid.UUI
 	return nil
 }
 
-// Delete removes one of this couple's memories. Scoped by couple like every
-// other query here, so another couple's memory is not found rather than
-// deleted.
 func (r *PostgresRepository) Delete(ctx context.Context, coupleID, id uuid.UUID) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		DELETE FROM memories WHERE couple_id = $1 AND id = $2

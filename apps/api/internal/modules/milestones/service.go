@@ -63,9 +63,6 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Miles
 	return s.repo.ByID(ctx, coupleID, id)
 }
 
-// Delete removes a date. Either partner may, for the same reason either may
-// add one: it belongs to them both (DEC-16), and a date nobody wants to be
-// reminded of is worse than no date.
 func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {

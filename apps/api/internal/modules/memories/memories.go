@@ -42,9 +42,7 @@ type Memory struct {
 	// derived. Empty means no photo. There is no separate "has a photo" flag
 	// to fall out of step with it (FR-MEM-003).
 	PhotoID string
-	// When this memory last changed, which for a photo is when it was
-	// attached or replaced. It ends up in the delivery address so that a new
-	// picture is asked for at a new URL — see Service.PhotoURL.
+	// Versions the photo's delivery URL (Service.PhotoURL).
 	UpdatedAt time.Time
 }
 

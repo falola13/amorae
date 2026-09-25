@@ -87,19 +87,7 @@ function Photo({ label, src }: { label: string; src?: string }) {
   );
 }
 
-/**
- * What can be done to a moment once it is kept.
- *
- * None of this existed: a picture could be added at the instant a memory was
- * written and never afterwards, and nothing could be taken back. An upload
- * that failed — or a photo somebody would rather not keep — had no way out
- * of the app at all, which is not a reasonable thing to do with somebody
- * else's pictures.
- *
- * It is a sheet rather than a row of buttons under each entry, because the
- * page is an album. Controls on every photograph would be the loudest thing
- * on a screen whose whole job is to be quiet.
- */
+/** A sheet rather than controls on every entry: the page is an album. */
 function MomentActions({ memory, onClose }: { memory: Memory | null; onClose: () => void }) {
   const upload = useUploadPhoto();
   const removePhoto = useRemovePhoto();
