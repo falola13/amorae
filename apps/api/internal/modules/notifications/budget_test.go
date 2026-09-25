@@ -85,18 +85,18 @@ func TestBudget_Allows(t *testing.T) {
 	// A nudge held until morning is a nudge about a moment that has gone, so
 	// it is dropped rather than queued; something a partner did is still
 	// worth reading at breakfast.
-	if send, keep := quiet.Allows(KindPrayerReminder, at("23:00")); send || keep {
+	if send, keep, _ := quiet.Allows(KindPrayerReminder, at("23:00")); send || keep {
 		t.Errorf("perishable during quiet hours: send=%v keep=%v", send, keep)
 	}
-	if send, keep := quiet.Allows(KindAppreciation, at("23:00")); send || !keep {
+	if send, keep, _ := quiet.Allows(KindAppreciation, at("23:00")); send || !keep {
 		t.Errorf("keepable during quiet hours: send=%v keep=%v", send, keep)
 	}
-	if send, _ := quiet.Allows(KindPrayerReminder, at("12:00")); !send {
+	if send, _, _ := quiet.Allows(KindPrayerReminder, at("12:00")); !send {
 		t.Error("the middle of the day was treated as quiet hours")
 	}
 
 	full := Budget{Prefs: Preferences{DailyCap: 2}, Timezone: "UTC", SentToday: 2}
-	if send, keep := full.Allows(KindBothMarked, at("12:00")); send || !keep {
+	if send, keep, _ := full.Allows(KindBothMarked, at("12:00")); send || !keep {
 		t.Errorf("over cap: send=%v keep=%v", send, keep)
 	}
 }

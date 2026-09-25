@@ -572,11 +572,17 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 			}
 			budgets[n.UserID] = budget
 		}
-		if send, keep := budget.Allows(n.Kind, now); !send {
+		if send, keep, why := budget.Allows(n.Kind, now); !send {
 			// Nothing is recorded either way. A kept one is still due on the
 			// next tick, once the window opens or the day turns over; a
 			// perishable one stops being due by itself.
-			w.log.Info("holding a notification", "kind", n.Kind, "user", n.UserID, "keep", keep)
+			//
+			// Which rule, and the numbers behind it. "Held" on its own sent
+			// somebody reading four files to discover it was the cap, on a
+			// day when the cap had just arrived and nobody had chosen it.
+			w.log.Info("holding a notification",
+				"kind", n.Kind, "user", n.UserID, "keep", keep, "because", why,
+				"sent_today", budget.SentToday, "cap", budget.Prefs.DailyCap)
 			continue
 		}
 
