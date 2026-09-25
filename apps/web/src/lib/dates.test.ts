@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { partOfDay, time12 } from "./dates";
+import { addMonths, iso, monthGrid, parse, partOfDay, sameMonth, time12 } from "./dates";
 
 describe("partOfDay", () => {
   // The card used to say "Tonight" over everything happening today, so an
@@ -45,5 +45,49 @@ describe("time12", () => {
   it("gives nothing back for no time, so a caller can skip the clause", () => {
     expect(time12()).toBe("");
     expect(time12("")).toBe("");
+  });
+});
+
+describe("monthGrid", () => {
+  it("covers the whole month in whole weeks, starting Sunday", () => {
+    const grid = monthGrid(new Date(2026, 8, 15)); // September 2026
+    expect(grid.length % 7).toBe(0);
+    expect(parse(grid[0]).getDay()).toBe(0);
+    expect(grid).toContain("2026-09-01");
+    expect(grid).toContain("2026-09-30");
+    // and it spills into the neighbouring months, which is what makes it a grid
+    expect(grid[0] < "2026-09-01").toBe(true);
+    expect(grid[grid.length - 1] > "2026-09-30").toBe(true);
+  });
+
+  it("handles a month that starts on a Sunday without an empty leading week", () => {
+    // 1 Feb 2026 is a Sunday: the grid must not open with seven days of January.
+    const grid = monthGrid(new Date(2026, 1, 10));
+    expect(grid[0]).toBe("2026-02-01");
+  });
+
+  it("crosses a year boundary", () => {
+    const grid = monthGrid(new Date(2026, 11, 1)); // December
+    expect(grid).toContain("2026-12-31");
+    expect(grid.some((d) => d.startsWith("2027-01"))).toBe(true);
+  });
+});
+
+describe("addMonths", () => {
+  it("does not roll over from a long month to a short one", () => {
+    // Naive date arithmetic turns 31 Jan + 1 month into 3 March.
+    expect(iso(addMonths(new Date(2026, 0, 31), 1))).toBe("2026-02-01");
+  });
+
+  it("steps backwards across a year", () => {
+    expect(iso(addMonths(new Date(2026, 0, 15), -1))).toBe("2025-12-01");
+  });
+});
+
+describe("sameMonth", () => {
+  it("compares month, not day", () => {
+    expect(sameMonth("2026-09-01", "2026-09-30")).toBe(true);
+    expect(sameMonth("2026-09-30", "2026-10-01")).toBe(false);
+    expect(sameMonth("2025-09-15", "2026-09-15")).toBe(false);
   });
 });

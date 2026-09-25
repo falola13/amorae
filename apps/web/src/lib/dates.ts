@@ -27,6 +27,36 @@ export const addDays = (d: Date, n: number) => {
 };
 export const startOfWeek = (d: Date) => addDays(d, -d.getDay()); // Sunday
 
+export const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+/** The 1st of the month `n` months away. Day-of-month is dropped on purpose:
+ *  "a month after the 31st" has no answer worth guessing at. */
+export const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+
+/**
+ * Whole weeks covering a month, Sunday first — what a month grid is made of.
+ *
+ * Always whole weeks, so the grid is rectangular, which means it runs into
+ * the month either side. Those days are real dates and are returned as such;
+ * it is the screen's job to draw them quietly, not this function's to lie
+ * about them.
+ */
+export const monthGrid = (anchor: Date): string[] => {
+  const first = startOfMonth(anchor);
+  const from = startOfWeek(first);
+  const lastOfMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+  const to = addDays(startOfWeek(lastOfMonth), 6);
+  const out: string[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) out.push(iso(d));
+  return out;
+};
+
+/** "September 2026" — the thing the calendar never said. */
+export const monthLabel = (isoDate: string) => `${monthName(isoDate)} ${isoDate.slice(0, 4)}`;
+
+/** Same calendar month, by the only part of an ISO date that says so. */
+export const sameMonth = (a: string, b: string) => a.slice(0, 7) === b.slice(0, 7);
+
 export const dayName = (isoDate: string) => DAYS[parse(isoDate).getDay()];
 export const monthName = (isoDate: string) => MONTHS[parse(isoDate).getMonth()];
 export const shortMonth = (isoDate: string) => MONTHS[parse(isoDate).getMonth()].slice(0, 3);

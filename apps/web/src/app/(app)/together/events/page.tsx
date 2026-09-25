@@ -98,7 +98,13 @@ export default function Events() {
                         }
                         past
                         href={routes.event(e.id)}
-                        action={e.done ? "Save a moment from it" : undefined}
+                        // No action here. This used to read "Save a moment
+                        // from it" — an instruction rendered as a label, on a
+                        // row that already goes somewhere else, inviting a tap
+                        // it could not answer. "Kept" would be no better:
+                        // `done` means somebody marked it, not that anything
+                        // was kept. The row says what happened; keeping it is
+                        // a real action and lives on the event itself.
                       />
                     ))}
                   </Section>
