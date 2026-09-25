@@ -15,6 +15,7 @@ import {
   ComposeBar,
   LinkButton,
   Para,
+  Sheet,
   Skeleton,
 } from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
@@ -66,6 +67,8 @@ function EditPrayer() {
   const [verse, setVerse] = useState<Scripture | null | undefined>(undefined);
   const [looking, setLooking] = useState(false);
   const [failure, setFailure] = useState<LookupFailure | null>(null);
+  // One tap on the trash used to delete the prayer outright, notes and verse with it.
+  const [confirming, setConfirming] = useState(false);
 
   const saved = point?.verse
     ? { reference: point.scripture ?? "", text: point.verse, translation: "" }
@@ -139,12 +142,18 @@ function EditPrayer() {
           };
           const next =
             idx === -1 ? [...points, p] : points.map((x) => (x.id === id ? { ...x, ...p } : x));
-          save.mutate(next, { onSuccess: () => router.replace(routes.prayersSet) });
+          save.mutate(next, {
+            onSuccess: () => router.replace(routes.prayersSet),
+            onQueued: () => router.replace(routes.prayersSet),
+          });
         };
         const remove = () =>
           save.mutate(
             points.filter((x) => x.id !== id),
-            { onSuccess: () => router.replace(routes.prayersSet) },
+            {
+              onSuccess: () => router.replace(routes.prayersSet),
+              onQueued: () => router.replace(routes.prayersSet),
+            },
           );
         const done = () => {
           if (!isDirty && idx !== -1) {
@@ -252,13 +261,37 @@ function EditPrayer() {
                   <Button
                     variant="danger"
                     icon="trash"
-                    onClick={remove}
+                    onClick={() => setConfirming(true)}
                     className="w-auto justify-start px-0"
                   >
                     Delete this prayer
                   </Button>
                 </div>
               ) : null}
+              <Sheet
+                open={confirming}
+                onClose={() => setConfirming(false)}
+                title="Delete this prayer?"
+                labelledBy="del-prayer-h"
+              >
+                <Para>
+                  “{points[idx]?.title}” goes for both of you, with its words and scripture. There
+                  is no undo.
+                </Para>
+                <div className="flex flex-col gap-1">
+                  <Button
+                    variant="secondary"
+                    className="border-red text-red"
+                    loading={save.isPending}
+                    onClick={remove}
+                  >
+                    Delete it
+                  </Button>
+                  <Button variant="text" onClick={() => setConfirming(false)}>
+                    Keep it
+                  </Button>
+                </div>
+              </Sheet>
               <button type="submit" className="sr-only">
                 Done
               </button>

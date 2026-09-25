@@ -42,7 +42,7 @@ export function EditCoupleSheet({
     handleSubmit,
     setError,
     reset,
-    formState: { errors, dirtyFields },
+    formState: { errors, dirtyFields, isDirty },
   } = useForm<CoupleInput>({ resolver: zodResolver(coupleSchema), defaultValues: initial });
 
   useEffect(() => {
@@ -64,6 +64,12 @@ export function EditCoupleSheet({
   };
 
   const onSubmit = async (v: CoupleInput) => {
+    // The server needs 1–32 characters, so a cleared role can't be saved — and
+    // used to be skipped silently while the sheet still said "Saved."
+    if (dirtyFields.role && !v.role) {
+      setError("role", { message: "This can’t be blank. Change it rather than clearing it." });
+      return;
+    }
     try {
       if (dirtyFields.name || dirtyFields.relationship_start_date || dirtyFields.timezone)
         await updateCouple.mutateAsync({
@@ -71,7 +77,7 @@ export function EditCoupleSheet({
           relationship_start_date: v.relationship_start_date || undefined,
           timezone: dirtyFields.timezone ? v.timezone : undefined,
         });
-      if (dirtyFields.role && v.role) await updateRole.mutateAsync(v.role);
+      if (dirtyFields.role) await updateRole.mutateAsync(v.role ?? "");
       notify("Saved.");
       onClose();
     } catch (e) {
@@ -80,7 +86,13 @@ export function EditCoupleSheet({
   };
 
   return (
-    <Sheet open={open} onClose={close} title="Your space" labelledBy="edit-couple-h">
+    <Sheet
+      open={open}
+      onClose={close}
+      dirty={isDirty}
+      title="Your space"
+      labelledBy="edit-couple-h"
+    >
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
         {errors.root?.message ? <Alert message={errors.root.message} /> : null}
         <Field label="Name of your space" error={errors.name?.message} {...register("name")} />

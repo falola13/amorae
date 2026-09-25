@@ -16,6 +16,8 @@ import type { EventInput, GoalInput } from "@/lib/api/schemas";
 /** A create's idempotency key, as a request header. The API stores the reply
  *  against it, so a queued write replayed after a dropped response gets the
  *  first answer back rather than making a second row (FR-PWA-009). */
+export type MemoryText = Pick<Memory, "title" | "date" | "location" | "note">;
+
 const withKey = (key?: string) => (key ? { headers: { "Idempotency-Key": key } } : undefined);
 
 export const togetherApi = {
@@ -55,6 +57,9 @@ export const togetherApi = {
   journal: () => http.get<JournalEntry[]>("/journal").then((r) => r.data),
   addJournal: (tag: JournalEntry["tag"], text: string, key?: string) =>
     http.post<JournalEntry>("/journal", { tag, text }, withKey(key)).then((r) => r.data),
+  updateJournal: (id: string, tag: JournalEntry["tag"], text: string) =>
+    http.patch<JournalEntry>(apiPath`/journal/${id}`, { tag, text }).then((r) => r.data),
+  deleteJournal: (id: string) => http.delete(apiPath`/journal/${id}`).then(() => undefined),
 
   appreciations: () => http.get<Appreciation[]>("/appreciations").then((r) => r.data),
   sendAppreciation: (text: string, key?: string) =>
@@ -72,6 +77,9 @@ export const togetherApi = {
   removePhoto: (id: string) =>
     http.delete<Memory>(apiPath`/memories/${id}/photo`).then((r) => r.data),
   deleteMemory: (id: string) => http.delete(apiPath`/memories/${id}`).then(() => undefined),
+  // Only the four fields: the API refuses unknown ones, and photo_url is one.
+  updateMemory: (id: string, m: MemoryText) =>
+    http.put<Memory>(apiPath`/memories/${id}`, m).then((r) => r.data),
 
   milestones: () => http.get<Milestone[]>("/milestones").then((r) => r.data),
   addMilestone: (m: Omit<Milestone, "id">, key?: string) =>

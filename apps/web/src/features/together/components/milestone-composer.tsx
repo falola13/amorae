@@ -23,7 +23,7 @@ export function MilestoneComposer({ open, onClose }: { open: boolean; onClose: (
     handleSubmit,
     control,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<MilestoneFormInput>({
     resolver: zodResolver(milestoneFormSchema),
     defaultValues: { title: "", date: iso(today()), sub: "", reminder: true },
@@ -36,11 +36,17 @@ export function MilestoneComposer({ open, onClose }: { open: boolean; onClose: (
   const onSubmit = (v: MilestoneFormInput) =>
     add.mutate(
       { title: v.title, date: v.date, sub: v.sub || undefined, reminder: v.reminder },
-      { onSuccess: close },
+      { onSuccess: close, onQueued: close },
     );
 
   return (
-    <Sheet open={open} onClose={close} title="A date worth keeping." labelledBy="d-h">
+    <Sheet
+      open={open}
+      onClose={close}
+      dirty={isDirty}
+      title="A date worth keeping."
+      labelledBy="d-h"
+    >
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
         <BareInput
           label="What is it"

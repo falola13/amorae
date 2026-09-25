@@ -1,39 +1,84 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import type { z } from "zod";
 
-import { useAddJournal } from "@/features/together/hooks";
+import { useAddJournal, useDeleteJournal, useUpdateJournal } from "@/features/together/hooks";
 import { journalSchema } from "@/lib/api/schemas";
 import type { JournalEntry } from "@/lib/api/types";
-import { BareTextarea, Button, Sheet, cx } from "@/components/ui/kit";
+import { BareTextarea, Button, Para, Sheet, cx } from "@/components/ui/kit";
 
 const TAGS: JournalEntry["tag"][] = ["Gratitude", "Reflection", "Memory", "Appreciation", "Plans"];
 
 type JournalFormInput = z.infer<typeof journalSchema>;
 
-export function JournalComposer({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** Writes a new entry, or — given one of your own — edits or deletes it. Keyed
+ *  by the entry where it's used, so each opening starts from that entry. */
+export function JournalComposer({
+  open,
+  onClose,
+  entry,
+}: {
+  open: boolean;
+  onClose: () => void;
+  entry?: JournalEntry | null;
+}) {
   const add = useAddJournal();
+  const update = useUpdateJournal();
+  const remove = useDeleteJournal();
+  const [deleting, setDeleting] = useState(false);
   const {
     register,
     handleSubmit,
     control,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<JournalFormInput>({
     resolver: zodResolver(journalSchema),
-    defaultValues: { tag: "Gratitude", text: "" },
+    defaultValues: entry ? { tag: entry.tag, text: entry.text } : { tag: "Gratitude", text: "" },
   });
 
   const close = () => {
     reset();
+    setDeleting(false);
     onClose();
   };
-  const onSubmit = (v: JournalFormInput) => add.mutate(v, { onSuccess: close });
+  const onSubmit = (v: JournalFormInput) =>
+    entry
+      ? update.mutate({ id: entry.id, ...v }, { onSuccess: close, onQueued: close })
+      : add.mutate(v, { onSuccess: close, onQueued: close });
+
+  if (entry && deleting) {
+    return (
+      <Sheet open={open} onClose={close} title="Delete this entry?" labelledBy="j-del-h">
+        <Para>It goes for both of you. There is no undo.</Para>
+        <div className="flex flex-col gap-1">
+          <Button
+            variant="secondary"
+            className="border-red text-red"
+            loading={remove.isPending}
+            onClick={() => remove.mutate(entry.id, { onSuccess: close, onQueued: close })}
+          >
+            Delete it
+          </Button>
+          <Button variant="text" onClick={() => setDeleting(false)}>
+            Keep it
+          </Button>
+        </div>
+      </Sheet>
+    );
+  }
 
   return (
-    <Sheet open={open} onClose={close} title="Write something for us." labelledBy="j-h">
+    <Sheet
+      open={open}
+      onClose={close}
+      dirty={isDirty}
+      title={entry ? "Your entry" : "Write something for us."}
+      labelledBy="j-h"
+    >
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
         <Controller
           name="tag"
@@ -73,12 +118,17 @@ export function JournalComposer({ open, onClose }: { open: boolean; onClose: () 
           {...register("text")}
         />
         <div className="flex flex-col gap-1">
-          <Button type="submit" loading={add.isPending}>
-            Save to our journal
+          <Button type="submit" loading={add.isPending || update.isPending}>
+            {entry ? "Save changes" : "Save to our journal"}
           </Button>
           <Button type="button" variant="text" onClick={close}>
             Not now
           </Button>
+          {entry ? (
+            <Button type="button" variant="danger" icon="trash" onClick={() => setDeleting(true)}>
+              Delete this entry
+            </Button>
+          ) : null}
         </div>
       </form>
     </Sheet>

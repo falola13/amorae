@@ -88,7 +88,12 @@ export default function HistoryDetail() {
                         variant="text"
                         className="w-auto px-0"
                         onClick={() => {
-                          save.mutate({ weekId: w.id, text: draft.trim() });
+                          // Closes at once so an offline save can queue, but a failed
+                          // one reopens with the draft — it used to vanish with the box.
+                          save.mutate(
+                            { weekId: w.id, text: draft.trim() },
+                            { onError: () => setEditing(true) },
+                          );
                           setEditing(false);
                         }}
                       >

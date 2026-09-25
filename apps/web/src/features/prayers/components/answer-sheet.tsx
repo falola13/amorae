@@ -26,11 +26,17 @@ export function AnswerSheet({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    answer.mutate({ pointId, note: text }, { onSuccess: onClose });
+    answer.mutate({ pointId, note: text }, { onSuccess: onClose, onQueued: onClose });
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="What happened?" labelledBy="answer-h">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      dirty={text !== (note ?? "")}
+      title="What happened?"
+      labelledBy="answer-h"
+    >
       <form method="post" onSubmit={submit} className="contents" noValidate>
         <p className="m-0 -mt-2 text-support text-stone">{title}</p>
         <BareTextarea

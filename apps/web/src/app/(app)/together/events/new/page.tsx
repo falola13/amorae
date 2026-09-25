@@ -104,7 +104,10 @@ function EventComposer({
     };
     save.mutate(
       { id: editId, input },
-      { onSuccess: () => router.replace(editId ? routes.event(editId) : routes.events) },
+      {
+        onSuccess: () => router.replace(editId ? routes.event(editId) : routes.events),
+        onQueued: () => router.replace(editId ? routes.event(editId) : routes.events),
+      },
     );
   };
 

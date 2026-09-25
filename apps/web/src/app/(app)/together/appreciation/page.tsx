@@ -46,13 +46,18 @@ export default function Appreciation() {
     defaultValues: { text: "" },
   });
   const onSubmit = (v: AppreciationFormInput) =>
-    send.mutate({ text: v.text }, {
-      onSuccess: (a) => {
-        setSentId(a.id);
-        reset();
-        setTimeout(() => setSentId(null), UNDO_VISIBLE_MS);
+    send.mutate(
+      { text: v.text },
+      {
+        onSuccess: (a) => {
+          setSentId(a.id);
+          reset();
+          setTimeout(() => setSentId(null), UNDO_VISIBLE_MS);
+        },
+        // No undo for a queued note: undo is online-only, and there's no id yet.
+        onQueued: () => reset(),
       },
-    });
+    );
   return (
     <>
       <ComposeBar

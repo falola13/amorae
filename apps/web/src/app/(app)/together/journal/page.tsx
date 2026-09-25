@@ -5,8 +5,10 @@ import { useCouple } from "@/features/couple/hooks";
 import { useJournal } from "@/features/together/hooks";
 import { JournalComposer } from "@/features/together/components/journal-composer";
 import { iso, relativeDay } from "@/lib/dates";
+import type { JournalEntry } from "@/lib/api/types";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
+import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
 import { QueryState } from "@/components/ui/query-state";
 import {
@@ -27,6 +29,8 @@ export default function Journal() {
   const hasAny = (journal.data?.length ?? 0) > 0;
   const couple = useCouple();
   const [open, setOpen] = useState(false);
+  // Set when editing one of your own; null means writing a new one.
+  const [editing, setEditing] = useState<JournalEntry | null>(null);
   const me = couple.data?.me;
   const partner = couple.data?.partner?.display_name ?? "Partner";
   const todayIso = iso(today());
@@ -79,6 +83,20 @@ export default function Journal() {
                         <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
                           {j.tag}
                         </span>
+                        {/* Only your own: the server refuses edits to your partner's. */}
+                        {j.author_id === me?.id ? (
+                          <button
+                            type="button"
+                            aria-label="Edit this entry"
+                            onClick={() => {
+                              setEditing(j);
+                              setOpen(true);
+                            }}
+                            className="press -mr-2 flex h-11 w-11 items-center justify-center text-stone"
+                          >
+                            <Icon name="pencil" size={18} />
+                          </button>
+                        ) : null}
                       </div>
                       <p className="m-0 text-bodylg leading-[1.6]" data-selectable>
                         {j.text}
@@ -93,12 +111,26 @@ export default function Journal() {
       </Main>
       {hasAny ? (
         <BottomActions>
-          <Button icon="pencil" onClick={() => setOpen(true)}>
+          <Button
+            icon="pencil"
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+          >
             Write something for us
           </Button>
         </BottomActions>
       ) : null}
-      <JournalComposer open={open} onClose={() => setOpen(false)} />
+      <JournalComposer
+        key={editing?.id ?? "new"}
+        open={open}
+        entry={editing}
+        onClose={() => {
+          setOpen(false);
+          setEditing(null);
+        }}
+      />
     </>
   );
 }

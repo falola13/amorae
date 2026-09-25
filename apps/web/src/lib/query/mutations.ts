@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  onlineManager,
   useMutation,
   useQueryClient,
+  type MutateOptions,
   type MutationKey,
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
+import { notify } from "@/lib/store/toast";
 
 /**
  * One write the app can make, declared once (features/<name>/writes.ts) and
@@ -88,23 +91,41 @@ export function useWrite<A, R>(def: WriteDef<A, R>) {
     onSettled: () => invalidate(qc, def.invalidates),
   });
 
-  if (!def.keyed) return mutation;
-
   // Stamped here, never inside mutationFn: mutationFn runs again on a replay
   // and would mint a new key each time, which is the one thing that must not
   // happen. In the variables it is saved with the write and comes back with it.
   const stamp = (args: A): A => {
+    if (!def.keyed) return args;
     const a = (args ?? {}) as { idempotencyKey?: string };
     return { ...a, idempotencyKey: a.idempotencyKey ?? crypto.randomUUID() } as A;
   };
+
+  // Offline, a resumable write pauses and its onSuccess waits for the
+  // connection — which left every "close when saved" sheet spinning. onQueued
+  // is the screen's "done for now". onSuccess is dropped: firing hours later it
+  // would close, or clear, whatever the person has opened since.
+  const mutate = (args: A, opts?: WriteOptions<A, R>) => {
+    const { onQueued, ...rest } = opts ?? {};
+    if (def.onlineOnly || onlineManager.isOnline()) {
+      mutation.mutate(stamp(args), rest);
+      return;
+    }
+    mutation.mutate(stamp(args), { ...rest, onSuccess: undefined });
+    notify("Saved on this phone. It’ll send when you’re back online.");
+    onQueued?.();
+  };
   return {
     ...mutation,
-    mutate: (args: A, opts?: Parameters<typeof mutation.mutate>[1]) =>
-      mutation.mutate(stamp(args), opts),
+    mutate,
     mutateAsync: (args: A, opts?: Parameters<typeof mutation.mutateAsync>[1]) =>
       mutation.mutateAsync(stamp(args), opts),
   };
 }
+
+/** TanStack's per-call options, plus what to do when the write is queued offline. */
+export type WriteOptions<A, R> = MutateOptions<R, Error, A, (() => void) | undefined> & {
+  onQueued?: () => void;
+};
 
 /** Applies a write's optimistic change and hands back the undo. The cancel is
  *  load-bearing: without it, an in-flight refetch can land after and silently revert it. */

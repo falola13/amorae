@@ -9,6 +9,7 @@ import {
 } from "@/features/together/hooks";
 import { MAX_PHOTO_BYTES } from "@/features/together/writes";
 import { MemoryComposer } from "@/features/together/components/memory-composer";
+import { MemoryEditSheet } from "@/features/together/components/memory-edit-sheet";
 import type { Memory } from "@/lib/api/types";
 import { longDate, monthName } from "@/lib/dates";
 import { routes } from "@/lib/routes";
@@ -70,10 +71,12 @@ function MomentActions({ memory, onClose }: { memory: Memory | null; onClose: ()
   const remove = useDeleteMemory();
   const fileInput = useRef<HTMLInputElement>(null);
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [tooBig, setTooBig] = useState(false);
 
   const close = () => {
     setConfirming(false);
+    setEditing(false);
     setTooBig(false);
     onClose();
   };
@@ -90,6 +93,8 @@ function MomentActions({ memory, onClose }: { memory: Memory | null; onClose: ()
   };
   const busy = upload.isPending || removePhoto.isPending;
 
+  if (editing) return <MemoryEditSheet memory={memory} onClose={close} />;
+
   if (confirming) {
     return (
       <Sheet open onClose={close} title="Delete this moment?" labelledBy="del-mem-h">
@@ -102,7 +107,7 @@ function MomentActions({ memory, onClose }: { memory: Memory | null; onClose: ()
             variant="secondary"
             className="border-red text-red"
             loading={remove.isPending}
-            onClick={() => remove.mutate(memory.id, { onSuccess: close })}
+            onClick={() => remove.mutate(memory.id, { onSuccess: close, onQueued: close })}
           >
             Delete it
           </Button>
@@ -125,6 +130,9 @@ function MomentActions({ memory, onClose }: { memory: Memory | null; onClose: ()
       />
       {tooBig ? <Alert message="That photo is over 10MB. Pick a smaller one." /> : null}
       <div className="flex flex-col gap-1">
+        <Button variant="secondary" icon="pencil" disabled={busy} onClick={() => setEditing(true)}>
+          Edit the words or the day
+        </Button>
         <Button
           variant="secondary"
           icon="image"
@@ -138,7 +146,7 @@ function MomentActions({ memory, onClose }: { memory: Memory | null; onClose: ()
             variant="text"
             disabled={busy}
             loading={removePhoto.isPending}
-            onClick={() => removePhoto.mutate(memory.id, { onSuccess: close })}
+            onClick={() => removePhoto.mutate(memory.id, { onSuccess: close, onQueued: close })}
           >
             Remove the photo
           </Button>

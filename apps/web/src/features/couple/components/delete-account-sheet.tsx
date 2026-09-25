@@ -33,7 +33,7 @@ export function DeleteAccountSheet({
     setError,
     reset,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<DeleteAccountInput>({
     resolver: zodResolver(deleteAccountSchema),
     defaultValues: { confirm: "", current_password: "" },
@@ -59,7 +59,13 @@ export function DeleteAccountSheet({
     });
 
   return (
-    <Sheet open={open} onClose={close} title="Delete your account?" labelledBy="del-h">
+    <Sheet
+      open={open}
+      onClose={close}
+      dirty={isDirty}
+      title="Delete your account?"
+      labelledBy="del-h"
+    >
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
         <Para>
           This removes you from your space with {partner ?? "your partner"} and deletes everything

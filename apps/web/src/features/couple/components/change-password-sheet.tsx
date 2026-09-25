@@ -21,7 +21,7 @@ export function ChangePasswordSheet({ open, onClose }: { open: boolean; onClose:
     handleSubmit,
     setError,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ChangePasswordInput>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { current_password: "", new_password: "" },
@@ -49,7 +49,13 @@ export function ChangePasswordSheet({ open, onClose }: { open: boolean; onClose:
     });
 
   return (
-    <Sheet open={open} onClose={close} title="Change your password" labelledBy="change-password-h">
+    <Sheet
+      open={open}
+      onClose={close}
+      dirty={isDirty}
+      title="Change your password"
+      labelledBy="change-password-h"
+    >
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="contents" noValidate>
         <Para size="support">Your other devices will be signed out. This one stays signed in.</Para>
         {errors.root?.message ? <Alert message={errors.root.message} /> : null}

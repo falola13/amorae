@@ -155,7 +155,10 @@ export default function EventDetail() {
                     onClick={() =>
                       complete.mutate(
                         { id: e.id, done: true },
-                        { onSuccess: () => router.replace(routes.events) },
+                        {
+                          onSuccess: () => router.replace(routes.events),
+                          onQueued: () => router.replace(routes.events),
+                        },
                       )
                     }
                   >
@@ -169,7 +172,10 @@ export default function EventDetail() {
                     onClick={() =>
                       complete.mutate(
                         { id: e.id, done: true },
-                        { onSuccess: () => router.replace(routes.events) },
+                        {
+                          onSuccess: () => router.replace(routes.events),
+                          onQueued: () => router.replace(routes.events),
+                        },
                       )
                     }
                   >
@@ -207,7 +213,10 @@ export default function EventDetail() {
                     className="border-red text-red"
                     loading={remove.isPending}
                     onClick={() =>
-                      remove.mutate(e.id, { onSuccess: () => router.replace(routes.events) })
+                      remove.mutate(e.id, {
+                        onSuccess: () => router.replace(routes.events),
+                        onQueued: () => router.replace(routes.events),
+                      })
                     }
                   >
                     Delete it
