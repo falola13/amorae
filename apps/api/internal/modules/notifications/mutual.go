@@ -16,17 +16,22 @@ type Budget struct {
 	SentToday int
 }
 
-// Allows reports whether this kind may be sent to this person now, and if
-// not, whether it is worth keeping for later.
-func (b Budget) Allows(kind string, now time.Time) (send bool, keep bool) {
+// Allows reports whether this kind may be sent to this person now, whether it
+// is worth keeping for later, and — when it is not sent — which rule stopped
+// it. The reason comes from the same branch that makes the decision, so a log
+// line cannot disagree with what actually happened.
+func (b Budget) Allows(kind string, now time.Time) (send bool, keep bool, why string) {
 	zone, err := time.LoadLocation(b.Timezone)
 	if err != nil {
 		zone = time.UTC
 	}
-	if Quiet(b.Prefs, zone, now) || OverCap(b.Prefs, b.SentToday) {
-		return false, !Perishable(kind)
+	switch {
+	case Quiet(b.Prefs, zone, now):
+		return false, !Perishable(kind), "quiet_hours"
+	case OverCap(b.Prefs, b.SentToday):
+		return false, !Perishable(kind), "daily_cap"
 	}
-	return true, true
+	return true, true, ""
 }
 
 // ForBothMarked is the second of the two of them finishing a day. Sent to
