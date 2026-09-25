@@ -169,10 +169,13 @@ export default function Calendar() {
             for (const items of byDay.values())
               items.sort((a, b) => a.at.localeCompare(b.at) || a.rank - b.rank);
 
-            // Lists the selected day, or (with none selected) every visible day that has items.
+            // Nothing selected means "what's ahead": a week containing today
+            // opens on today, not on the start of the week, so the first
+            // thing read is not yesterday. Paging to a past week, or tapping
+            // a day, is a deliberate look back and shows everything.
             const list = selected
               ? [selected]
-              : days.filter((d) => (byDay.get(d)?.length ?? 0) > 0);
+              : days.filter((d) => (byDay.get(d)?.length ?? 0) > 0 && (!atToday || d >= todayIso));
 
             const cell = (d: string) => {
               const isToday = d === todayIso;
@@ -211,13 +214,17 @@ export default function Calendar() {
                   >
                     {dayNum(d)}
                   </span>
-                  <span
-                    aria-hidden="true"
-                    className={cx(
-                      "h-1 w-1 rounded-full",
-                      count ? (outside ? "bg-edge" : "bg-plum") : "bg-transparent",
-                    )}
-                  />
+                  {/* One mark per thing, to three. A single dot said "something"
+                      for a day with one errand and a day with an anniversary,
+                      a dinner and the week's prayers on it. */}
+                  <span aria-hidden="true" className="flex h-1 items-center gap-[3px]">
+                    {Array.from({ length: Math.min(count, 3) }, (_, i) => (
+                      <span
+                        key={i}
+                        className={cx("h-1 w-1 rounded-full", outside ? "bg-edge" : "bg-plum")}
+                      />
+                    ))}
+                  </span>
                 </button>
               );
             };
@@ -231,14 +238,26 @@ export default function Calendar() {
                         <span
                           key={i}
                           aria-hidden="true"
-                          className="grow basis-0 text-center text-[12px] font-semibold text-stone"
+                          className={cx(
+                            "grow basis-0 text-center text-[12px] font-semibold",
+                            i === 0 || i === 6 ? "text-edge" : "text-stone",
+                          )}
                         >
                           {w}
                         </span>
                       ))}
                     </div>
+                    {/* Ruled, not boxed. Numbers floating in space read as a
+                        list; full boxes read as a spreadsheet. A line under
+                        each week is what a printed calendar does. */}
                     {Array.from({ length: days.length / 7 }, (_, r) => (
-                      <div key={r} className="mt-1.5 flex">
+                      <div
+                        key={r}
+                        className={cx(
+                          "flex pt-2",
+                          r < days.length / 7 - 1 && "border-b border-line pb-2",
+                        )}
+                      >
                         {days.slice(r * 7, r * 7 + 7).map(cell)}
                       </div>
                     ))}
@@ -256,11 +275,14 @@ export default function Calendar() {
                 ) : null}
 
                 {list.map((d) => (
-                  <section key={d} className="flex flex-col border-b border-line pb-2.5 pt-3.5">
-                    <Micro tone={d === todayIso ? "plum" : "stone"} className="pb-1">
-                      {d === todayIso ? "Today, " : ""}
-                      {weekdayDate(d)}
-                    </Micro>
+                  <section key={d} className="flex flex-col pb-2.5 pt-3.5">
+                    <div className="flex items-center gap-3 pb-1.5">
+                      <Micro tone={d === todayIso ? "plum" : "stone"}>
+                        {d === todayIso ? "Today, " : ""}
+                        {weekdayDate(d)}
+                      </Micro>
+                      <span className="h-px grow bg-line" />
+                    </div>
                     {(byDay.get(d) ?? []).map((it) => (
                       <Link
                         key={it.href}
