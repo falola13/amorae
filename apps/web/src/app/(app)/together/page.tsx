@@ -14,23 +14,48 @@ import {
 import { useAnswered } from "@/features/prayers/hooks";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
 import { iso, longDate, relativeDay, time12 } from "@/lib/dates";
-import { isApiError } from "@/lib/api/errors";
+import { isAbsence } from "@/lib/api/envelope";
 import { routes } from "@/lib/routes";
 import { Icon } from "@/components/icons";
 import { today } from "@/lib/today";
 import { Main } from "@/components/layout/screen";
-import { QueryState } from "@/components/ui/query-state";
-import { Para, Row, Section, Skeleton, Title } from "@/components/ui/kit";
+import { Para, Row, Section, Title } from "@/components/ui/kit";
+
+/**
+ * What a row says under its title, and whether it says anything yet.
+ *
+ * A row here is the way into a screen; the line under it only summarises
+ * what is behind it. So a summary that fails must not take the row with it —
+ * which is exactly what happened when the events endpoint broke: the only
+ * way through to Events and Calendar disappeared from the page whose whole
+ * job is to be the way through.
+ *
+ * Three states, and the row stays where it is through all of them. Nothing
+ * while it loads, because the row is a fixed height and nothing moves when
+ * the line arrives. The summary once there is one. And a plain sentence if
+ * it genuinely broke — short, because the screen the row leads to shows the
+ * error properly and offers the retry, which is where somebody would go to
+ * do anything about it anyway.
+ *
+ * An absence is not a break. A couple that has not formed yet gets a 404
+ * from nearly all of this, and reading that as breakage would write "this
+ * didn't load" across a page that loaded perfectly and is merely new. Those
+ * fall through to the summary, which already knows how to say "nothing yet".
+ */
+function summary(
+  query: { data: unknown; error: unknown; isError: boolean },
+  line: string,
+): string | undefined {
+  if (query.data !== undefined) return line;
+  if (!query.isError) return undefined;
+  return isAbsence(query.error) ? line : "Couldn’t load just now";
+}
 
 export default function Together() {
   const couple = useCouple();
   const events = useEvents();
   const goals = useGoals();
   const challenge = useChallenge();
-  // A couple who has never started one has no challenge to fetch, so the 404
-  // is the answer rather than a failure (the challenges screen reads it the
-  // same way).
-  const noChallenge = isApiError(challenge.error) && challenge.error.code === "challenge_not_found";
   const journal = useJournal();
   const memories = useMemories();
   const milestones = useMilestones();
@@ -38,6 +63,30 @@ export default function Together() {
   const appr = useAppreciations();
   const partner = couple.data?.partner?.display_name ?? "your partner";
   const todayIso = iso(today());
+
+  // Every summary on this page, worked out from whatever has arrived. A
+  // source that has not answered reads as empty here, and `summary` decides
+  // whether that empty means "nothing yet" or "this broke".
+  const upcoming = (events.data ?? [])
+    .filter((e) => !e.done && e.date >= todayIso)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const nextEvent = upcoming[0];
+  const activeGoals = (goals.data ?? []).filter((g) => !g.done).length;
+  const challengeDay = challenge.data?.days.find((d) => !d.done && !d.skipped);
+  const challengeLine = challenge.data
+    ? challengeDay
+      ? `${challenge.data.title}, day ${challengeDay.n}`
+      : `${challenge.data.title}, finished`
+    : "Something short, together";
+  const lastWritten = (journal.data ?? [])[0];
+  const lastAppreciated = (appr.data ?? [])[0];
+  const lastMemory = (memories.data ?? [])[0];
+  const soonestDate = (milestones.data ?? [])
+    .filter((d) => d.reminder)
+    .map((d) => ({ ...d, next: nextOccurrence(d.date, todayIso) }))
+    .sort((a, b) => a.next.localeCompare(b.next))[0];
+  const answeredCount = (answered.data ?? []).length;
+
   return (
     <Main>
       <div className="flex items-start justify-between pt-1.5">
@@ -58,170 +107,104 @@ export default function Together() {
           screen empty. */}
       <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-x-8">
         <Section label="Plan" className="mt-[22px]">
-          <QueryState queries={[events]} loading={<Skeleton lines={2} />}>
-            {(eventsData) => {
-              const up = eventsData
-                .filter((e) => !e.done && e.date >= todayIso)
-                .sort((a, b) => a.date.localeCompare(b.date));
-              const next = up[0];
-              return (
-                <>
-                  <Row
-                    icon="calendar"
-                    title="Calendar"
-                    sub={
-                      next
-                        ? `${next.title} ${relativeDay(next.date, todayIso).toLowerCase()}${next.start_time ? ` at ${time12(next.start_time)}` : ""}`
-                        : "Nothing planned yet"
-                    }
-                    href={routes.calendar}
-                  />
-                  <Row
-                    icon="pin"
-                    title="Events"
-                    sub={up.length ? `${up.length} coming up` : "Add something you’d love to do"}
-                    href={routes.events}
-                    last
-                  />
-                </>
-              );
-            }}
-          </QueryState>
+          <Row
+            icon="calendar"
+            title="Calendar"
+            sub={summary(
+              events,
+              nextEvent
+                ? `${nextEvent.title} ${relativeDay(nextEvent.date, todayIso).toLowerCase()}${nextEvent.start_time ? ` at ${time12(nextEvent.start_time)}` : ""}`
+                : "Nothing planned yet",
+            )}
+            href={routes.calendar}
+          />
+          <Row
+            icon="pin"
+            title="Events"
+            sub={summary(
+              events,
+              upcoming.length ? `${upcoming.length} coming up` : "Add something you’d love to do",
+            )}
+            href={routes.events}
+            last
+          />
         </Section>
         <Section label="Grow" className="mt-[22px]">
-          <QueryState queries={[goals]} loading={<Skeleton lines={1} />}>
-            {(goalsData) => {
-              const active = goalsData.filter((g) => !g.done).length;
-              return (
-                <Row
-                  icon="target"
-                  title="Goals"
-                  sub={
-                    active ? `${active} we’re working on` : "What would you like to build together?"
-                  }
-                  href={routes.goals}
-                />
-              );
-            }}
-          </QueryState>
-          {/* Having no challenge is an answer, not a failure — the same
-              reading the challenges screen takes of the same 404. Sharing one
-              QueryState with Goals put "This isn't here anymore" over both
-              rows for every couple who had simply never started one. */}
-          {noChallenge ? (
-            <Row
-              icon="flag"
-              title="Challenges"
-              sub="Something short, together"
-              href={routes.challenges}
-              last
-            />
-          ) : (
-            <QueryState queries={[challenge]} loading={<Skeleton lines={1} />}>
-              {(challengeData) => {
-                const day = challengeData.days.find((d) => !d.done && !d.skipped);
-                return (
-                  <Row
-                    icon="flag"
-                    title="Challenges"
-                    sub={
-                      day
-                        ? `${challengeData.title}, day ${day.n}`
-                        : `${challengeData.title}, finished`
-                    }
-                    href={routes.challenges}
-                    last
-                  />
-                );
-              }}
-            </QueryState>
-          )}
+          <Row
+            icon="target"
+            title="Goals"
+            sub={summary(
+              goals,
+              activeGoals
+                ? `${activeGoals} we’re working on`
+                : "What would you like to build together?",
+            )}
+            href={routes.goals}
+          />
+          <Row
+            icon="flag"
+            title="Challenges"
+            sub={summary(challenge, challengeLine)}
+            href={routes.challenges}
+            last
+          />
         </Section>
         <Section label="Connect" className="mt-[22px]">
-          <QueryState queries={[journal, appr]} loading={<Skeleton lines={2} />}>
-            {(journalData, apprData) => {
-              const j = journalData[0];
-              const lastAppr = apprData[0];
-              return (
-                <>
-                  <Row
-                    icon="pencil"
-                    title="Journal"
-                    sub={
-                      j
-                        ? `${j.author_id === couple.data?.me.id ? "You" : partner} wrote ${relativeDay(j.date, todayIso).toLowerCase()}`
-                        : "Write something for us"
-                    }
-                    href={routes.journal}
-                  />
-                  <Row
-                    icon="note"
-                    title="Appreciation"
-                    sub={
-                      lastAppr
-                        ? `${lastAppr.from_id === couple.data?.me.id ? "You" : partner}, ${relativeDay(lastAppr.date, todayIso).toLowerCase()}`
-                        : "Something I appreciate about you"
-                    }
-                    href={routes.appreciation}
-                    last
-                  />
-                </>
-              );
-            }}
-          </QueryState>
-        </Section>
-        {/* One QueryState each, as this component asks for: these two rows
-            need nothing from each other, and sharing one meant the module
-            that is not built yet hid the one that is. */}
-        <Section label="Remember" className="mb-4 mt-[22px]">
-          <QueryState queries={[memories]} loading={<Skeleton lines={1} />}>
-            {(memoriesData) => {
-              const m = memoriesData[0];
-              return (
-                <Row
-                  icon="image"
-                  title="Memories"
-                  sub={m ? `Last saved ${longDate(m.date)}` : "Your story starts here"}
-                  href={routes.memories}
-                />
-              );
-            }}
-          </QueryState>
-          <QueryState queries={[milestones]} loading={<Skeleton lines={1} />}>
-            {(milestonesData) => {
-              const soonest = milestonesData
-                .filter((d) => d.reminder)
-                .map((d) => ({ ...d, next: nextOccurrence(d.date, todayIso) }))
-                .sort((a, b) => a.next.localeCompare(b.next))[0];
-              return (
-                <Row
-                  icon="bookmark"
-                  title="Milestones"
-                  sub={
-                    soonest
-                      ? `${soonest.title} ${countdown(soonest.next, today()).toLowerCase()}`
-                      : "The dates that matter to us"
-                  }
-                  href={routes.milestones}
-                />
-              );
-            }}
-          </QueryState>
-          <QueryState queries={[answered]} loading={<Skeleton lines={1} />}>
-            {(answeredData) => (
-              <Row
-                icon="check"
-                title="Answered prayers"
-                sub={
-                  answeredData.length
-                    ? `${answeredData.length} so far`
-                    : "What you've prayed for, and seen happen"
-                }
-                href={routes.prayersAnswered}
-                last
-              />
+          <Row
+            icon="pencil"
+            title="Journal"
+            sub={summary(
+              journal,
+              lastWritten
+                ? `${lastWritten.author_id === couple.data?.me.id ? "You" : partner} wrote ${relativeDay(lastWritten.date, todayIso).toLowerCase()}`
+                : "Write something for us",
             )}
-          </QueryState>
+            href={routes.journal}
+          />
+          <Row
+            icon="note"
+            title="Appreciation"
+            sub={summary(
+              appr,
+              lastAppreciated
+                ? `${lastAppreciated.from_id === couple.data?.me.id ? "You" : partner}, ${relativeDay(lastAppreciated.date, todayIso).toLowerCase()}`
+                : "Something I appreciate about you",
+            )}
+            href={routes.appreciation}
+            last
+          />
+        </Section>
+        <Section label="Remember" className="mb-4 mt-[22px]">
+          <Row
+            icon="image"
+            title="Memories"
+            sub={summary(
+              memories,
+              lastMemory ? `Last saved ${longDate(lastMemory.date)}` : "Your story starts here",
+            )}
+            href={routes.memories}
+          />
+          <Row
+            icon="bookmark"
+            title="Milestones"
+            sub={summary(
+              milestones,
+              soonestDate
+                ? `${soonestDate.title} ${countdown(soonestDate.next, today()).toLowerCase()}`
+                : "The dates that matter to us",
+            )}
+            href={routes.milestones}
+          />
+          <Row
+            icon="check"
+            title="Answered prayers"
+            sub={summary(
+              answered,
+              answeredCount ? `${answeredCount} so far` : "What you’ve prayed for, and seen happen",
+            )}
+            href={routes.prayersAnswered}
+            last
+          />
         </Section>
       </div>
     </Main>

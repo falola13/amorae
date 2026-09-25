@@ -1,4 +1,4 @@
-import { ApiError } from "./errors";
+import { ApiError, isApiError } from "./errors";
 
 // The Go API's response envelopes (docs/API.md), parsed in one place for both
 // HTTP clients: lib/api/client.ts (server) and lib/api/http.ts (browser).
@@ -9,6 +9,28 @@ export const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 /** The endpoint doesn't exist in the Go API yet, as opposed to a failure. */
 export const NOT_AVAILABLE_CODE = "not_available";
 export const NOT_AVAILABLE_MESSAGE = "This part of Amorae isn't available yet.";
+
+/**
+ * Codes that mean "there isn't one yet", not "something went wrong".
+ *
+ * A couple that has not formed, a week that cannot start until both people
+ * are here, a module still being built. The request failed, but nothing is
+ * broken — and the two deserve opposite answers on screen: an empty state,
+ * or an error with a way to retry.
+ */
+const ABSENCE_CODES = new Set([NOT_AVAILABLE_CODE, "couple_not_found", "waiting_for_partner"]);
+
+/**
+ * Whether a failure is really an absence.
+ *
+ * Worth telling apart anywhere a failed request decides what somebody reads.
+ * A brand-new account gets 404 couple_not_found from most of the API — it has
+ * no couple yet — and reading that as breakage puts "this didn't load" across
+ * a home screen that loaded perfectly well and simply has nothing in it.
+ */
+export function isAbsence(error: unknown): boolean {
+  return isApiError(error) && (error.status === 404 || ABSENCE_CODES.has(error.code));
+}
 
 interface ErrorEnvelope {
   error?: { code?: string; message?: string; fields?: Record<string, string>; request_id?: string };

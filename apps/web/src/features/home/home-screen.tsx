@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
 import { isApiError } from "@/lib/api/errors";
+import { isAbsence } from "@/lib/api/envelope";
 import { useCouple } from "@/features/couple/hooks";
 import { setterWord } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
@@ -52,6 +53,14 @@ export function HomeScreen() {
   const waitingForPartner = isApiError(week.error) && week.error.code === "waiting_for_partner";
   const events = useEvents();
   const goals = useGoals();
+  // A source that broke, as opposed to one with nothing in it. Worth telling
+  // apart here more than anywhere: this screen reads `data ?? []`, so a
+  // failed list used to look exactly like an empty week — the plan and the
+  // next event simply were not there, and nothing said why. Quietly
+  // reporting a smaller life than somebody actually has is worse than an
+  // error, because there is nothing to notice and nothing to retry.
+  const eventsBroke = events.isError && !isAbsence(events.error);
+  const goalsBroke = goals.isError && !isAbsence(goals.error);
   const history = useHistory();
   const prefs = usePrefs();
   const now = today();
@@ -253,7 +262,14 @@ export function HomeScreen() {
               )}
             </QueryState>
           )}
-          {nextEvent ? (
+          {eventsBroke ? (
+            <Row
+              icon="alert"
+              title="Plans didn’t load"
+              sub="Open events to try again"
+              href={routes.events}
+            />
+          ) : nextEvent ? (
             <Row
               icon="calendar"
               title={nextEvent.title}
@@ -261,7 +277,14 @@ export function HomeScreen() {
               href={routes.event(nextEvent.id)}
             />
           ) : null}
-          {goal ? (
+          {goalsBroke ? (
+            <Row
+              icon="alert"
+              title="Goals didn’t load"
+              sub="Open goals to try again"
+              href={routes.goals}
+            />
+          ) : goal ? (
             <Row
               icon="target"
               title={goal.goal.title}
