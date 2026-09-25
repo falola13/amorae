@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMilestones } from "@/features/together/hooks";
+import { useDeleteMilestone, useMilestones } from "@/features/together/hooks";
 import { MilestoneComposer } from "@/features/together/components/milestone-composer";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
 import { iso } from "@/lib/dates";
@@ -16,13 +16,46 @@ import {
   EmptyState,
   Para,
   Section,
+  Sheet,
   Skeleton,
   Title,
   TopBar,
 } from "@/components/ui/kit";
+import type { Milestone } from "@/lib/api/types";
+
+/**
+ * A date could be added and never taken back, which turns a typo — or a year
+ * somebody would rather not be reminded of — into something permanent. It
+ * asks first, because it goes for both of them (DEC-16).
+ */
+function MilestoneActions({ date, onClose }: { date: Milestone | null; onClose: () => void }) {
+  const remove = useDeleteMilestone();
+  if (!date) return null;
+  return (
+    <Sheet open onClose={onClose} title="Remove this date?" labelledBy="del-date-h">
+      <Para>
+        “{date.title}” goes for both of you, and any reminder with it. You can always add it again.
+      </Para>
+      <div className="flex flex-col gap-1">
+        <Button
+          variant="secondary"
+          className="border-red text-red"
+          loading={remove.isPending}
+          onClick={() => remove.mutate(date.id, { onSuccess: onClose })}
+        >
+          Remove it
+        </Button>
+        <Button variant="text" onClick={onClose}>
+          Keep it
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
 
 export default function Milestones() {
   const ms = useMilestones();
+  const [acting, setActing] = useState<Milestone | null>(null);
   // The empty state already offers this, centred, with a line saying what
   // it is for. Showing the bar as well put two buttons for the same thing
   // on one screen, one under the other. The bar is for when there is a
@@ -72,6 +105,7 @@ export default function Milestones() {
                         title={d.title}
                         sub={d.sub}
                         right={countdown(d.next, today())}
+                        onAction={() => setActing(d)}
                       />
                     ))}
                   </Section>
@@ -84,6 +118,7 @@ export default function Milestones() {
                         date={d.date}
                         title={d.title}
                         sub={d.sub ?? d.date.slice(0, 4)}
+                        onAction={() => setActing(d)}
                       />
                     ))}
                   </Section>
@@ -101,6 +136,7 @@ export default function Milestones() {
         </BottomActions>
       ) : null}
       <MilestoneComposer open={open} onClose={() => setOpen(false)} />
+      <MilestoneActions date={acting} onClose={() => setActing(null)} />
     </>
   );
 }

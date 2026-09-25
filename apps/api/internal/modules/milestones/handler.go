@@ -15,6 +15,7 @@ import (
 type service interface {
 	List(ctx context.Context, userID uuid.UUID) ([]Milestone, error)
 	Create(ctx context.Context, userID uuid.UUID, in Input) (Milestone, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 }
 
 type Handler struct {
@@ -28,6 +29,7 @@ func NewHandler(svc service) *Handler {
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /milestones", http.HandlerFunc(h.list))
 	r.HandleAuthed("POST /milestones", http.HandlerFunc(h.create))
+	r.HandleAuthed("DELETE /milestones/{id}", http.HandlerFunc(h.delete))
 }
 
 // The shape in apps/web/src/lib/api/types.ts.
@@ -113,4 +115,21 @@ func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 		return uuid.UUID{}, false
 	}
 	return userID, true
+}
+
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		httpx.Error(w, r, ErrNotFound)
+		return
+	}
+	if err := h.svc.Delete(r.Context(), userID, id); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
 }

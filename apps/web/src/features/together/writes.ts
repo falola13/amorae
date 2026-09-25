@@ -11,6 +11,39 @@ import { keys } from "@/lib/query/keys";
 import { defineWrite } from "@/lib/query/mutations";
 import { togetherApi as api } from "./api";
 
+/**
+ * Ten megabytes, the cap Q-06 chose. Checked before anything is sent, so
+ * somebody choosing a 40MB photo is told at once rather than after a long
+ * upload that was never going to be accepted.
+ */
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Put one file where a memory's picture goes.
+ *
+ * Three calls that only make sense together: ask for permission, use it, and
+ * record that it was used. Written once because both the composer and a
+ * memory that already exists need exactly this, and a second copy would be
+ * the copy that forgets the last step.
+ */
+async function putPhoto(memoryID: string, photo: File): Promise<Memory> {
+  const ticket = await api.photoTicket(memoryID);
+  const form = new FormData();
+  // Exactly what the server signed, then the file. Nothing added, nothing
+  // renamed — the signature covers this list.
+  for (const [key, value] of Object.entries(ticket.fields)) form.append(key, value);
+  form.append("file", photo);
+
+  const upload = await fetch(ticket.upload_url, { method: "POST", body: form });
+  if (!upload.ok) {
+    // Cloudinary says why in the body, and its reasons are specific enough
+    // to act on — a wrong cloud name and a refused signature look identical
+    // from a status code alone.
+    throw new Error(`photo upload refused (${upload.status}): ${await upload.text()}`);
+  }
+  return api.attachPhoto(memoryID);
+}
+
 // Every write the Together feature makes, declared once (see lib/query/mutations.ts).
 export const togetherWrites = {
   // A create with no key of its own: replayed after a dropped response it would
@@ -157,36 +190,55 @@ export const togetherWrites = {
     invalidates: [keys.appreciations],
     onlineOnly: true,
   }),
-  // A create with no key of its own: replayed after a dropped response it would
-  // make a second one. Online-only until the endpoint takes an idempotency key
-  // (FR-PWA-009), which is a smaller loss than silent duplicates.
   // Keeping a moment and attaching a picture to it are one act to the person
   // doing it, and three steps underneath: create the memory, ask for
   // permission to upload, put the file where the permission points, then say
-  // it landed. One write so a half-finished upload cannot leave a memory that
-  // claims a photo it has not got.
+  // it landed.
+  //
+  // The steps fail separately, and for a while this reported the whole thing
+  // as failed when only the last part was — leaving the moment saved, the
+  // sheet open, and the text still in it, so pressing the button again made
+  // a second copy of a memory that had been kept the first time.
+  //
+  // So a failed upload is not a failed write. The moment was kept; say so,
+  // and say the picture did not arrive, which is the one thing left to do
+  // something about.
   addMemoryWithPhoto: defineWrite({
     mutationKey: ["memories", "add-with-photo"],
-    mutationFn: async ({ memory, photo }: { memory: Omit<Memory, "id">; photo?: File | null }) => {
+    mutationFn: async ({
+      memory,
+      photo,
+    }: {
+      memory: Omit<Memory, "id">;
+      photo?: File | null;
+    }): Promise<{ memory: Memory; photoFailed: boolean }> => {
       const saved = await api.addMemory(memory);
-      if (!photo) return saved;
-
-      const ticket = await api.photoTicket(saved.id);
-      const form = new FormData();
-      // Exactly what the server signed, then the file. Nothing added, nothing
-      // renamed — the signature covers this list.
-      for (const [key, value] of Object.entries(ticket.fields)) form.append(key, value);
-      form.append("file", photo);
-
-      const upload = await fetch(ticket.upload_url, { method: "POST", body: form });
-      if (!upload.ok) {
-        // The moment is saved; only the picture failed. Say which, rather
-        // than letting it read as having lost the whole thing.
-        throw new Error("The moment was saved, but the photo didn’t upload.");
+      if (!photo) return { memory: saved, photoFailed: false };
+      try {
+        return { memory: await putPhoto(saved.id, photo), photoFailed: false };
+      } catch (err) {
+        // Kept out of the caller's way but not thrown away: whatever
+        // Cloudinary refused is the only clue to why, and the screen can
+        // only say that it happened.
+        console.error("photo upload failed", err);
+        return { memory: saved, photoFailed: true };
       }
-      return api.attachPhoto(saved.id);
     },
     invalidates: [keys.memories],
+    // A create with no key of its own: replayed after a dropped response it
+    // would make a second one. Online-only until the endpoint takes an
+    // idempotency key (FR-PWA-009). A File would not survive the queue
+    // either.
+    onlineOnly: true,
+  }),
+  // Adding a picture to a moment already kept — the way back from an upload
+  // that failed, and the way to change one's mind about which photo it was.
+  uploadPhoto: defineWrite({
+    mutationKey: ["memories", "photo", "upload"],
+    mutationFn: ({ id, photo }: { id: string; photo: File }) => putPhoto(id, photo),
+    invalidates: [keys.memories],
+    // A File cannot be put in the queue and taken out again later, so this
+    // is a write that happens now or says it did not.
     onlineOnly: true,
   }),
   removePhoto: defineWrite({
@@ -194,6 +246,12 @@ export const togetherWrites = {
     mutationFn: (id: string) => api.removePhoto(id),
     invalidates: [keys.memories],
     idempotent: "removing a photo that is already gone leaves the same memory behind.",
+  }),
+  deleteMemory: defineWrite({
+    mutationKey: ["memories", "delete"],
+    mutationFn: (id: string) => api.deleteMemory(id),
+    invalidates: [keys.memories],
+    idempotent: "deleting something already gone leaves the same nothing behind.",
   }),
   addMemory: defineWrite({
     mutationKey: ["memories", "add"],
@@ -204,6 +262,12 @@ export const togetherWrites = {
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
+  deleteMilestone: defineWrite({
+    mutationKey: ["milestones", "delete"],
+    mutationFn: (id: string) => api.deleteMilestone(id),
+    invalidates: [keys.milestones],
+    idempotent: "deleting something already gone leaves the same nothing behind.",
+  }),
   addMilestone: defineWrite({
     mutationKey: ["milestones", "add"],
     mutationFn: (m: Omit<Milestone, "id">) => api.addMilestone(m),

@@ -12,6 +12,7 @@ export function DateRow({
   past,
   action,
   right,
+  onAction,
   last,
 }: {
   date: string;
@@ -21,6 +22,12 @@ export function DateRow({
   past?: boolean;
   action?: string;
   right?: string;
+  /**
+   * What else can be done to this row, behind a button at its end. Only for
+   * rows that are not themselves a link: a button inside a link is a target
+   * inside a target, and on a phone that is a coin toss.
+   */
+  onAction?: () => void;
   last?: boolean;
 }) {
   const inner = (
@@ -47,6 +54,16 @@ export function DateRow({
         <span className="shrink-0 text-support font-semibold text-plum">{right}</span>
       ) : href ? (
         <Icon name="right" size={18} className="text-stone" />
+      ) : null}
+      {onAction && !href ? (
+        <button
+          type="button"
+          onClick={onAction}
+          aria-label={`What to do with ${title}`}
+          className="press -mr-2.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-btn text-stone"
+        >
+          <Icon name="more" size={20} />
+        </button>
       ) : null}
     </>
   );

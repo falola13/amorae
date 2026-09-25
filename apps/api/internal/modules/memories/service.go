@@ -14,6 +14,7 @@ type Repository interface {
 	ByID(ctx context.Context, coupleID, id uuid.UUID) (Memory, error)
 	Create(ctx context.Context, m Memory, at time.Time) (uuid.UUID, error)
 	SetPhoto(ctx context.Context, coupleID, id uuid.UUID, photoID string, at time.Time) error
+	Delete(ctx context.Context, coupleID, id uuid.UUID) error
 }
 
 // Photos is what this module needs of picture storage. Nil when Cloudinary is
@@ -22,6 +23,7 @@ type Repository interface {
 type Photos interface {
 	Ticket(publicID string, at time.Time) (photos.Ticket, error)
 	URL(publicID string) (string, error)
+	Destroy(ctx context.Context, publicID string) error
 }
 
 // Couples answers the one question this module asks of pairing.
@@ -77,18 +79,62 @@ func (s *Service) AttachPhoto(ctx context.Context, userID, id uuid.UUID) (Memory
 	return s.repo.ByID(ctx, coupleID, id)
 }
 
-// RemovePhoto forgets the picture. The file itself is left where it is: the
-// next upload to this memory overwrites it, and a photo nothing points at is
-// not reachable through this app.
+// RemovePhoto deletes the picture and then forgets it.
+//
+// That order matters. Deleting first means a failure at Cloudinary changes
+// nothing here and can be reported as what it is — the photo is still on the
+// screen, and asking again will try again. The other order would tell
+// somebody their picture was gone while it was still stored, which is the one
+// outcome worth ruling out.
+//
+// The memory itself stays. Taking a photo off a moment is not the same as not
+// wanting the moment.
 func (s *Service) RemovePhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
+		return Memory{}, err
+	}
+	m, err := s.repo.ByID(ctx, coupleID, id)
+	if err != nil {
+		return Memory{}, err
+	}
+	if err := s.destroyPhoto(ctx, m); err != nil {
 		return Memory{}, err
 	}
 	if err := s.repo.SetPhoto(ctx, coupleID, id, "", s.now()); err != nil {
 		return Memory{}, err
 	}
 	return s.repo.ByID(ctx, coupleID, id)
+}
+
+// Delete forgets a moment entirely, picture included.
+//
+// The row would take the photo's name with it and leave the file behind, paid
+// for and unreachable, so the picture goes first — for the same reason and in
+// the same order as RemovePhoto.
+func (s *Service) Delete(ctx context.Context, userID, id uuid.UUID) error {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return err
+	}
+	m, err := s.repo.ByID(ctx, coupleID, id)
+	if err != nil {
+		return err
+	}
+	if err := s.destroyPhoto(ctx, m); err != nil {
+		return err
+	}
+	return s.repo.Delete(ctx, coupleID, id)
+}
+
+// destroyPhoto removes a memory's file if it has one and there is anywhere to
+// remove it from. A memory with no picture, or an app with no Cloudinary, has
+// nothing to do here rather than something to complain about.
+func (s *Service) destroyPhoto(ctx context.Context, m Memory) error {
+	if s.photos == nil || !m.HasPhoto() {
+		return nil
+	}
+	return s.photos.Destroy(ctx, m.PhotoID)
 }
 
 // PhotoURL is a delivery address for one memory's picture, or "" if it has

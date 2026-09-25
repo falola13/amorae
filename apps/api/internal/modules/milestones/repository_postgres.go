@@ -88,3 +88,19 @@ func nullIfEmpty(s string) any {
 	}
 	return s
 }
+
+// Delete removes one of this couple's dates. Scoped by couple like every
+// other query here, so another couple's date is not found rather than
+// deleted.
+func (r *PostgresRepository) Delete(ctx context.Context, coupleID, id uuid.UUID) error {
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		DELETE FROM milestones WHERE couple_id = $1 AND id = $2
+	`, coupleID, id)
+	if err != nil {
+		return fmt.Errorf("deleting date: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

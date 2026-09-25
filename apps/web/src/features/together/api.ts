@@ -63,8 +63,10 @@ export const togetherApi = {
   attachPhoto: (id: string) => http.put<Memory>(apiPath`/memories/${id}/photo`).then((r) => r.data),
   removePhoto: (id: string) =>
     http.delete<Memory>(apiPath`/memories/${id}/photo`).then((r) => r.data),
+  deleteMemory: (id: string) => http.delete(apiPath`/memories/${id}`).then(() => undefined),
 
   milestones: () => http.get<Milestone[]>("/milestones").then((r) => r.data),
   addMilestone: (m: Omit<Milestone, "id">) =>
     http.post<Milestone>("/milestones", m).then((r) => r.data),
+  deleteMilestone: (id: string) => http.delete(apiPath`/milestones/${id}`).then(() => undefined),
 };

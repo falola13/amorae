@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
 
 import { useAddMemoryWithPhoto } from "@/features/together/hooks";
+import { MAX_PHOTO_BYTES } from "@/features/together/writes";
 import { memorySchema } from "@/lib/api/schemas";
 import { iso } from "@/lib/dates";
 import { today } from "@/lib/today";
@@ -13,7 +14,16 @@ import { BareInput, BareTextarea, Button, Sheet } from "@/components/ui/kit";
 
 type MemoryFormInput = z.infer<typeof memorySchema>;
 
-export function MemoryComposer({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function MemoryComposer({
+  open,
+  onClose,
+  onPhotoFailed,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** The moment was kept and the picture was not. The screen says so. */
+  onPhotoFailed: () => void;
+}) {
   const add = useAddMemoryWithPhoto();
   // The file itself, not a form field: it never goes to our API, only to
   // Cloudinary, and only after the memory it belongs to exists.
@@ -46,12 +56,9 @@ export function MemoryComposer({ open, onClose }: { open: boolean; onClose: () =
     onClose();
   };
 
-  // Ten megabytes, the cap Q-06 chose. Checked here so somebody choosing a
-  // 40MB photo is told at once rather than after a long upload that fails.
-  const MAX_BYTES = 10 * 1024 * 1024;
   const choose = (file: File | null) => {
-    setTooBig(!!file && file.size > MAX_BYTES);
-    setPhoto(file && file.size <= MAX_BYTES ? file : null);
+    setTooBig(!!file && file.size > MAX_PHOTO_BYTES);
+    setPhoto(file && file.size <= MAX_PHOTO_BYTES ? file : null);
   };
   const onSubmit = (v: MemoryFormInput) =>
     add.mutate(
@@ -65,7 +72,15 @@ export function MemoryComposer({ open, onClose }: { open: boolean; onClose: () =
         },
         photo,
       },
-      { onSuccess: close },
+      {
+        // Closing either way is the point. The moment is kept by the time
+        // this runs, so leaving the sheet open with the text still in it
+        // would invite a second press and a second copy of it.
+        onSuccess: (result) => {
+          close();
+          if (result.photoFailed) onPhotoFailed();
+        },
+      },
     );
 
   return (

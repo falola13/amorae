@@ -14,13 +14,16 @@
 package photos
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/cloudinary/cloudinary-go/v2"
 	cldapi "github.com/cloudinary/cloudinary-go/v2/api"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/cloudinary/cloudinary-go/v2/asset"
 	"github.com/cloudinary/cloudinary-go/v2/config"
 	"github.com/google/uuid"
@@ -113,6 +116,47 @@ func (s *Store) Ticket(publicID string, at time.Time) (Ticket, error) {
 		UploadURL: fmt.Sprintf("https://api.cloudinary.com/v1_1/%s/image/upload", s.cloudName),
 		Fields:    fields,
 	}, nil
+}
+
+// Destroy deletes a picture from Cloudinary, for good.
+//
+// Removing a photo has to mean removing the photo. Clearing the pointer in
+// our own database and leaving the file sitting in an account somewhere is a
+// deletion that is true on the screen and false everywhere else, which is
+// not a distinction to make on somebody's behalf about their own pictures.
+//
+// A file that has already gone is not a failure. Cloudinary answers "not
+// found", the world is in the state that was asked for, and a removal
+// interrupted halfway can be finished by asking again.
+func (s *Store) Destroy(ctx context.Context, publicID string) error {
+	if s == nil {
+		return ErrNotConfigured
+	}
+	cld, err := cloudinary.NewFromParams(s.cloudName, s.apiKey, s.apiSecret)
+	if err != nil {
+		return fmt.Errorf("configuring deletion: %w", err)
+	}
+	res, err := cld.Upload.Destroy(ctx, uploader.DestroyParams{
+		PublicID: publicID,
+		// Uploaded as authenticated, so deleted as authenticated: the
+		// delivery type is part of which asset this names.
+		Type: "authenticated",
+		// Drop the CDN's copies too, or the picture keeps being served from
+		// the edge after it stops existing at the origin.
+		Invalidate: cldapi.Bool(true),
+	})
+	if err != nil {
+		return fmt.Errorf("deleting photo: %w", err)
+	}
+	// The SDK reports a refusal in the body rather than as an error, so a
+	// deletion that did not happen looks like success unless this is read.
+	if res.Error.Message != "" {
+		return fmt.Errorf("deleting photo: %s", res.Error.Message)
+	}
+	if res.Result != "ok" && res.Result != "not found" {
+		return fmt.Errorf("deleting photo: %s", res.Result)
+	}
+	return nil
 }
 
 // URL is a delivery address for an authenticated asset.

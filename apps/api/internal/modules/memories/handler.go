@@ -19,6 +19,7 @@ type service interface {
 	PhotoTicket(ctx context.Context, userID, id uuid.UUID) (photos.Ticket, error)
 	AttachPhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error)
 	RemovePhoto(ctx context.Context, userID, id uuid.UUID) (Memory, error)
+	Delete(ctx context.Context, userID, id uuid.UUID) error
 	PhotoURL(m Memory) string
 }
 
@@ -38,6 +39,7 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("POST /memories/{id}/photo/ticket", http.HandlerFunc(h.photoTicket))
 	r.HandleAuthed("PUT /memories/{id}/photo", http.HandlerFunc(h.attachPhoto))
 	r.HandleAuthed("DELETE /memories/{id}/photo", http.HandlerFunc(h.removePhoto))
+	r.HandleAuthed("DELETE /memories/{id}", http.HandlerFunc(h.delete))
 }
 
 // The shape in apps/web/src/lib/api/types.ts.
@@ -165,6 +167,18 @@ func (h *Handler) removePhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.Data(w, http.StatusOK, toDTO(m, h.svc.PhotoURL(m)))
+}
+
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
+	userID, id, ok := callerAndMemory(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(r.Context(), userID, id); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
 }
 
 func callerAndMemory(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {

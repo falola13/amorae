@@ -42,4 +42,7 @@ export const useUndoAppreciation = () => useWrite(w.undoAppreciation);
 export const useAddMemory = () => useWrite(w.addMemory);
 export const useAddMemoryWithPhoto = () => useWrite(w.addMemoryWithPhoto);
 export const useRemovePhoto = () => useWrite(w.removePhoto);
+export const useUploadPhoto = () => useWrite(w.uploadPhoto);
+export const useDeleteMemory = () => useWrite(w.deleteMemory);
+export const useDeleteMilestone = () => useWrite(w.deleteMilestone);
 export const useAddMilestone = () => useWrite(w.addMilestone);
