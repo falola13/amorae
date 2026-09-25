@@ -3,6 +3,8 @@ package middleware_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -68,6 +70,8 @@ func (f *fakeStore) Release(_ context.Context, userID uuid.UUID, key string) err
 
 func fixedNow() time.Time { return time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC) }
 
+func quietLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
 // A handler that counts how many times it actually ran — which is the whole
 // question this middleware answers.
 func countingHandler(runs *int, status int, body string) http.Handler {
@@ -96,7 +100,7 @@ func TestIdempotent_SecondSendDoesNotRunTheHandlerAgain(t *testing.T) {
 	// must answer with the first result, not make a second row.
 	store, user := newFakeStore(), uuid.New()
 	runs := 0
-	h := middleware.Idempotent(store, fixedNow)(countingHandler(&runs, http.StatusCreated, `{"data":{"id":"a"}}`))
+	h := middleware.Idempotent(store, fixedNow, quietLog())(countingHandler(&runs, http.StatusCreated, `{"data":{"id":"a"}}`))
 
 	first := send(h, http.MethodPost, "/v1/events", "key-abcdef123", user)
 	second := send(h, http.MethodPost, "/v1/events", "key-abcdef123", user)
@@ -121,7 +125,7 @@ func TestIdempotent_KeysAreScopedToTheirOwner(t *testing.T) {
 	// answered with the other's reply would be a data leak, not a bug.
 	store := newFakeStore()
 	runs := 0
-	h := middleware.Idempotent(store, fixedNow)(countingHandler(&runs, http.StatusCreated, `{"data":{}}`))
+	h := middleware.Idempotent(store, fixedNow, quietLog())(countingHandler(&runs, http.StatusCreated, `{"data":{}}`))
 
 	send(h, http.MethodPost, "/v1/events", "same-key-here", uuid.New())
 	send(h, http.MethodPost, "/v1/events", "same-key-here", uuid.New())
@@ -134,7 +138,7 @@ func TestIdempotent_KeysAreScopedToTheirOwner(t *testing.T) {
 func TestIdempotent_SameKeyOnADifferentRequestIsRefused(t *testing.T) {
 	store, user := newFakeStore(), uuid.New()
 	runs := 0
-	h := middleware.Idempotent(store, fixedNow)(countingHandler(&runs, http.StatusCreated, `{"data":{}}`))
+	h := middleware.Idempotent(store, fixedNow, quietLog())(countingHandler(&runs, http.StatusCreated, `{"data":{}}`))
 
 	send(h, http.MethodPost, "/v1/events", "key-abcdef123", user)
 	other := send(h, http.MethodPost, "/v1/memories", "key-abcdef123", user)
@@ -155,7 +159,7 @@ func TestIdempotent_SecondSendWhileTheFirstIsStillRunning(t *testing.T) {
 		t.Fatalf("Claim() error = %v", err)
 	}
 	runs := 0
-	h := middleware.Idempotent(store, fixedNow)(countingHandler(&runs, http.StatusCreated, `{}`))
+	h := middleware.Idempotent(store, fixedNow, quietLog())(countingHandler(&runs, http.StatusCreated, `{}`))
 
 	res := send(h, http.MethodPost, "/v1/events", "key-abcdef123", user)
 	if res.Code != http.StatusConflict {
@@ -171,12 +175,12 @@ func TestIdempotent_AHandlerThatWroteNothingGivesTheKeyBack(t *testing.T) {
 	// never retry it — worse than the duplicate this exists to prevent.
 	store, user := newFakeStore(), uuid.New()
 	silent := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
-	h := middleware.Idempotent(store, fixedNow)(silent)
+	h := middleware.Idempotent(store, fixedNow, quietLog())(silent)
 
 	send(h, http.MethodPost, "/v1/events", "key-abcdef123", user)
 
 	runs := 0
-	retry := middleware.Idempotent(store, fixedNow)(countingHandler(&runs, http.StatusCreated, `{}`))
+	retry := middleware.Idempotent(store, fixedNow, quietLog())(countingHandler(&runs, http.StatusCreated, `{}`))
 	res := send(retry, http.MethodPost, "/v1/events", "key-abcdef123", user)
 
 	if runs != 1 || res.Code != http.StatusCreated {
@@ -199,7 +203,7 @@ func TestIdempotent_PassesThroughWhatItDoesNotGuard(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runs := 0
-			h := middleware.Idempotent(store, fixedNow)(countingHandler(&runs, http.StatusOK, `{}`))
+			h := middleware.Idempotent(store, fixedNow, quietLog())(countingHandler(&runs, http.StatusOK, `{}`))
 			if res := send(h, tc.method, "/v1/events", tc.key, tc.user); res.Code != http.StatusOK {
 				t.Errorf("status = %d, want the handler's own 200", res.Code)
 			}
@@ -213,12 +217,33 @@ func TestIdempotent_PassesThroughWhatItDoesNotGuard(t *testing.T) {
 func TestIdempotent_RefusesAKeyOfTheWrongShape(t *testing.T) {
 	store, user := newFakeStore(), uuid.New()
 	runs := 0
-	h := middleware.Idempotent(store, fixedNow)(countingHandler(&runs, http.StatusCreated, `{}`))
+	h := middleware.Idempotent(store, fixedNow, quietLog())(countingHandler(&runs, http.StatusCreated, `{}`))
 
 	if res := send(h, http.MethodPost, "/v1/events", "short", user); res.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 for a key that is too short", res.Code)
 	}
 	if runs != 0 {
 		t.Error("a malformed key still reached the handler")
+	}
+}
+
+func TestIdempotent_AStoreThatIsDownDoesNotStopTheWrite(t *testing.T) {
+	// The guard is against a duplicate, not a condition of saving anything.
+	// Refusing the write because the mechanism protecting a retry is down is a
+	// worse failure than the one it prevents — it degrades to how the app
+	// behaved before any of this existed.
+	store, user := newFakeStore(), uuid.New()
+	store.fail = true
+	runs := 0
+	h := middleware.Idempotent(store, fixedNow, quietLog())(
+		countingHandler(&runs, http.StatusCreated, `{"data":{}}`))
+
+	res := send(h, http.MethodPost, "/v1/memories", "key-abcdef123", user)
+
+	if res.Code != http.StatusCreated {
+		t.Errorf("status = %d, want the handler's own 201 — a broken guard must not break the write", res.Code)
+	}
+	if runs != 1 {
+		t.Errorf("handler ran %d times, want 1", runs)
 	}
 }

@@ -93,7 +93,15 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	couplesSvc := couples.NewService(couplesRepo, now, joinAttempts, m)
 
 	notificationsRepo := notifications.NewPostgresRepository(db)
-	notificationsSvc := notifications.NewService(notificationsRepo, now)
+	// One sender for both ways a notification leaves: the tick, and a nudge
+	// a partner sends by hand.
+	var pushSender push.Sender = push.NewLog(log)
+	if cfg.VAPIDPrivateKey != "" {
+		pushSender = push.NewWebPush(cfg.VAPIDPublicKey, cfg.VAPIDPrivateKey, cfg.VAPIDSubject)
+	} else {
+		log.Warn("no VAPID keys: notifications will be logged, not sent")
+	}
+	notificationsSvc := notifications.NewService(notificationsRepo, pushSender, log, now)
 
 	togetherCouples := prayersCouples{couples: couplesSvc}
 
@@ -159,14 +167,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	// a long-lived process (docs/DEPLOYMENT.md). nil unless TICK_SECRET is set.
 	var tickHandler *notifications.TickHandler
 	if cfg.TickSecret != "" {
-		var sender push.Sender = push.NewLog(log)
-		if cfg.VAPIDPrivateKey != "" {
-			sender = push.NewWebPush(cfg.VAPIDPublicKey, cfg.VAPIDPrivateKey, cfg.VAPIDSubject)
-		} else {
-			log.Warn("no VAPID keys: /internal/tick will log notifications, not send them")
-		}
 		tickHandler = notifications.NewTickHandler(
-			notifications.NewWorker(notificationsRepo, sender, now, log), cfg.TickSecret, log)
+			notifications.NewWorker(notificationsRepo, pushSender, now, log), cfg.TickSecret, log)
 	}
 	eventsHandler := events.NewHandler(eventsSvc)
 	goalsHandler := goals.NewHandler(goalsSvc)
@@ -195,7 +197,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	// requests without the header, so carrying it on every authed route costs
 	// nothing, and a new endpoint is covered without anybody remembering to.
 	v1 := router.Version(httpx.V1).
-		WithAuthed(middleware.Idempotent(idempotency.NewPostgresStore(db), time.Now))
+		WithAuthed(middleware.Idempotent(idempotency.NewPostgresStore(db), time.Now, log))
 	userHandler.RegisterRoutes(v1)
 	authHandler.RegisterRoutes(v1.With(middleware.RateLimit(authRequests, "auth")))
 	couplesHandler.RegisterRoutes(v1.With(middleware.RateLimit(coupleRequests, "couples")))

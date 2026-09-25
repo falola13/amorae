@@ -2050,6 +2050,11 @@ The client stamps the key into the mutation's **variables**, never inside `mutat
 runs again on a replay and would mint a new key each time, which is the one thing that must not
 happen. Variables are what TanStack persists, so the key survives a reload with the queued write.
 
+*If the store itself is unreachable the write still happens*, and the log says so. This is a
+guard against a duplicate, not a condition of saving anything: refusing to save a memory because
+the mechanism that protects a retry is down is a worse failure than the one it prevents. It
+degrades to how the app behaved before any of this existed.
+
 *What moved:* seven writes left `onlineOnly` for `keyed` — creating an event, a goal, goal
 progress, a journal entry, an appreciation, a memory and a kept date. `addProgress` is the one
 that most needed it: it adds an amount rather than setting one, so a replay used to double-count.

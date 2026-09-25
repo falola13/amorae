@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -71,7 +72,13 @@ var (
 //
 // Safe methods and requests without the header pass straight through, so this
 // costs nothing on reads or on clients that do not use it.
-func Idempotent(store IdempotencyStore, now func() time.Time) func(http.Handler) http.Handler {
+//
+// If the store itself is unreachable the write still happens. This is a guard
+// against a duplicate, not a condition of saving anything: refusing the write
+// would break creating a memory because the mechanism that protects a retry is
+// down, which is a worse failure than the one it prevents. It degrades to how
+// the app behaved before any of this existed, loudly.
+func Idempotent(store IdempotencyStore, now func() time.Time, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get(IdempotencyHeader)
@@ -94,14 +101,18 @@ func Idempotent(store IdempotencyStore, now func() time.Time) func(http.Handler)
 			path := r.URL.Path
 			claimed, err := store.Claim(r.Context(), userID, key, r.Method, path, now())
 			if err != nil {
-				httpx.Error(w, r, err)
+				log.Error("idempotency store unavailable; the write proceeds unguarded",
+					"error", err, "path", path)
+				next.ServeHTTP(w, r)
 				return
 			}
 
 			if !claimed {
 				rec, done, err := store.Lookup(r.Context(), userID, key)
 				if err != nil {
-					httpx.Error(w, r, err)
+					log.Error("idempotency store unavailable; cannot replay",
+						"error", err, "path", path)
+					next.ServeHTTP(w, r)
 					return
 				}
 				if !done {
