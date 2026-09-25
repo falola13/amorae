@@ -1832,6 +1832,41 @@ Every category FR-NOTF-007.AC1 names is now sent.
   important-date reminder), when it occurs, then the worker shall send exactly one push per
   subscribed device for that user, and none for a category the user has turned off.
 
+#### FR-NOTF-008 Answered prayer
+
+| Priority | Release | Status | Verification |
+|---|---|---|---|
+| Should | MVP | Implemented | Test |
+
+The system shall tell one partner when the other marks a prayer answered (FR-PRAY-011), subject
+to a `prayer_answered` preference that defaults on.
+
+**Acceptance criteria**
+
+- **FR-NOTF-008.AC1** Given a prayer marked answered, when the undo window has passed, then the
+  worker shall notify the *other* partner once, keyed on the prayer point, and shall never notify
+  the person who marked it.
+- **FR-NOTF-008.AC2** Given a prayer marked answered and then unmarked inside the undo window,
+  when the worker next runs, then no notification shall be sent.
+- **FR-NOTF-008.AC3** Given an answered prayer, when the notification is composed, then neither
+  its title nor its body shall name the prayer or quote the note (FR-NOTF-005.AC1).
+
+*On AC3, which was nearly got wrong:* the first version of this named the prayer, on the
+reasoning that "a prayer was answered" without saying which is a riddle. That reasoning is the
+event exception (FR-NOTF-005.AC2) borrowed where it does not belong. An event is a plan the two
+of them made; a prayer point is something one of them wrote, and the realistic ones are a
+parent's illness, a pregnancy, a debt, a marriage under strain. A lock screen in a crowded room
+is exactly where the cost of getting that wrong lands. The subject is carried on the candidate
+and deliberately unused, and a test asserts it stays out of both fields.
+
+*Defaults on*, with appreciation and journal rather than with goals and challenges: those are off
+because following one is something you opt into, whereas this is your partner telling you
+something good happened to the two of you.
+
+*The undo window* is a minute, because the screen offers Undo beside the mark. Unmarking clears
+`answered_at`, which removes the row from the worker's search entirely — so a mistaken tap never
+reaches a phone rather than being raced against.
+
 ### 3.14 PWA — Install, offline and updates
 
 Amorae is a Progressive Web App first, iPhone-first: installable, tolerant of weak or absent
@@ -2408,6 +2443,7 @@ its own (a client-only behaviour, or one composed from other requirements' endpo
 | FR-NOTF-004 | G-03 | `cmd/worker` — deletes on 404/410 from the push service | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-NOTF-005 | G-05 | — (notification copy) | Not started | None yet |
 | FR-NOTF-006 | G-03 | Onboarding and settings screens | Implemented | Browser check 2026-09-24: both paths explain before asking |
+| FR-NOTF-008 | G-03 | `cmd/worker` — `prayer_answered`, off the `RecentlyWritten` path | Implemented | Go unit tests incl. an FR-NOTF-005.AC1 assertion; worker discovery SQL run against Postgres 2026-09-25 |
 | FR-NOTF-007 | G-03 | `cmd/worker` — hourly tick, `notification_sends` for exactly-once | Implemented | Go unit tests with a fake push service; worker run against Postgres 2026-09-24 |
 | FR-PWA-001 | G-05 | — (web manifest) | Implemented | Manual demo 2026-09-22 |
 | FR-PWA-002 | G-05 | — (client) | Implemented | Manual demo 2026-09-22 |

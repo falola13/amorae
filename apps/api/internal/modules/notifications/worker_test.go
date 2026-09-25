@@ -936,3 +936,70 @@ func TestPushService_NamesThePlatformNotThePerson(t *testing.T) {
 		}
 	}
 }
+
+func TestForWritten_PrayerAnswered(t *testing.T) {
+	author, partner := uuid.New(), uuid.New()
+	point := uuid.New()
+	marked := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
+	answered := WrittenCandidate{
+		UserID: partner, AuthorID: author, AuthorName: "Ada",
+		ItemID: point, Kind: KindPrayerAnswered, WrittenAt: marked,
+		Settles: answeredUndoWindow, Subject: "His new job",
+		Prefs: Preferences{PrayerAnswered: true},
+	}
+
+	t.Run("the partner is told, and where to read it", func(t *testing.T) {
+		n, ok := ForWritten(answered, marked.Add(answeredUndoWindow+time.Second))
+		if !ok {
+			t.Fatal("nobody was told a prayer had been answered")
+		}
+		if !strings.Contains(n.Message.Title, "Ada") {
+			t.Errorf("title = %q, should say who", n.Message.Title)
+		}
+		if n.Message.Path != "/prayers/answered" {
+			t.Errorf("path = %q", n.Message.Path)
+		}
+		if n.Key != point.String() {
+			t.Errorf("key = %q, want the point's own id so a re-mark cannot send twice", n.Key)
+		}
+	})
+
+	t.Run("never says which prayer (FR-NOTF-005.AC1)", func(t *testing.T) {
+		// The subject is deliberately carried on the candidate and
+		// deliberately not used. Prayer points are private writing — a
+		// parent's illness, a pregnancy, a debt — and this assertion is what
+		// stops a later edit putting one on a lock screen because naming it
+		// would read better.
+		n, ok := ForWritten(answered, marked.Add(answeredUndoWindow+time.Second))
+		if !ok {
+			t.Fatal("nobody was told a prayer had been answered")
+		}
+		for _, text := range []string{n.Message.Title, n.Message.Body} {
+			if strings.Contains(text, answered.Subject) {
+				t.Errorf("%q names the prayer; FR-NOTF-005.AC1 forbids it", text)
+			}
+		}
+	})
+
+	t.Run("not while Undo is still on the screen", func(t *testing.T) {
+		if _, ok := ForWritten(answered, marked.Add(5*time.Second)); ok {
+			t.Error("an answered prayer was announced inside its undo window")
+		}
+	})
+
+	t.Run("not to the person who marked it", func(t *testing.T) {
+		own := answered
+		own.UserID = author
+		if _, ok := ForWritten(own, marked.Add(answeredUndoWindow+time.Second)); ok {
+			t.Error("the person who marked it was told about their own mark")
+		}
+	})
+
+	t.Run("not when they have turned it off", func(t *testing.T) {
+		off := answered
+		off.Prefs.PrayerAnswered = false
+		if _, ok := ForWritten(off, marked.Add(answeredUndoWindow+time.Second)); ok {
+			t.Error("a switch that is off still sent a notification")
+		}
+	})
+}

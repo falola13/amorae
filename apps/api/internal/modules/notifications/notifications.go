@@ -34,6 +34,7 @@ type Preferences struct {
 	Journal        bool
 	Goals          bool
 	Challenges     bool
+	PrayerAnswered bool
 }
 
 // Defaults are what someone gets before they have ever opened the screen.
@@ -52,6 +53,7 @@ func Defaults() Preferences {
 		Journal:        true,
 		Goals:          false,
 		Challenges:     false,
+		PrayerAnswered: true,
 	}
 }
 
@@ -67,6 +69,7 @@ type Patch struct {
 	Journal        *bool
 	Goals          *bool
 	Challenges     *bool
+	PrayerAnswered *bool
 }
 
 var clockTime = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -90,6 +93,7 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.Appreciation, patch.Appreciation)
 	setBool(&p.Journal, patch.Journal)
 	setBool(&p.Goals, patch.Goals)
+	setBool(&p.PrayerAnswered, patch.PrayerAnswered)
 	setBool(&p.Challenges, patch.Challenges)
 	return p, nil
 }
@@ -257,6 +261,7 @@ const (
 	KindJournal        = "journal"
 	KindGoal           = "goal"
 	KindChallenge      = "challenge"
+	KindPrayerAnswered = "prayer_answered"
 )
 
 // OccursOn reports whether a kept date comes round on the given day —

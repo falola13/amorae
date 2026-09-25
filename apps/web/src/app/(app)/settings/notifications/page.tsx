@@ -120,8 +120,11 @@ export default function NotificationSettings() {
                 type="time"
                 disabled={!p.prayer_reminder}
                 onChange={(v: string) => v && save.mutate({ reminder_time: v })}
-                last
               />
+              {/* In Faith rather than Together: it is about the prayers, and
+                  it is the one notification in here that carries good news
+                  rather than a reminder. */}
+              {row(p, "prayer_answered", `When ${partner} marks a prayer answered`, true)}
             </Section>
             <Section label="Plans" className="mt-[22px]">
               {row(p, "event_reminders", "Event reminders")}

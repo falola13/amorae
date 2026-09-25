@@ -209,6 +209,15 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			FROM goal_progress gp
 			JOIN goals g ON g.id = gp.goal_id AND NOT g.done
 			WHERE gp.logged_at >= $1
+			UNION ALL
+			-- A prayer one of them marked answered. answered_at is set by an
+			-- update rather than an insert, but it only ever goes from null
+			-- to a time — editing the note deliberately leaves it alone — so
+			-- it behaves like a creation here and cannot re-fire on an edit.
+			SELECT pp.id, pw.couple_id, pp.answered_by, pp.answered_at, $5::text AS kind
+			FROM prayer_points pp
+			JOIN prayer_weeks pw ON pw.id = pp.week_id
+			WHERE pp.answered_at >= $1 AND pp.answered_by IS NOT NULL
 		)
 		SELECT u.id, written.author_id, author.display_name, written.id, written.kind,
 		       written.created_at,
@@ -216,6 +225,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		       -- Goals default to off, unlike the rest: following one is
 		       -- something you opt into (FR-NOTF-006).
 		       COALESCE(p.goals, false),
+		       COALESCE(p.prayer_answered, true),
 		       COALESCE(g.title, '')
 		FROM written
 		LEFT JOIN goal_progress gpr ON gpr.id = written.id AND written.kind = $4
@@ -226,7 +236,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		JOIN users author ON author.id = written.author_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE u.id <> written.author_id
-	`, since, KindAppreciation, KindJournal, KindGoal)
+	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered)
 	if err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
 	}
@@ -237,11 +247,14 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		var c WrittenCandidate
 		if err := rows.Scan(&c.UserID, &c.AuthorID, &c.AuthorName, &c.ItemID, &c.Kind,
 			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal, &c.Prefs.Goals,
-			&c.Subject); err != nil {
+			&c.Prefs.PrayerAnswered, &c.Subject); err != nil {
 			return nil, fmt.Errorf("scanning something written: %w", err)
 		}
 		if c.Kind == KindAppreciation {
 			c.Settles = appreciationUndoWindow
+		}
+		if c.Kind == KindPrayerAnswered {
+			c.Settles = answeredUndoWindow
 		}
 		out = append(out, c)
 	}
@@ -303,6 +316,12 @@ func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCan
 // thing to owe another module than a dependency is — the same trade as
 // statusDraft above. BR-APPR-02 is where the thirty seconds is decided.
 const appreciationUndoWindow = 30 * time.Second
+
+// answeredUndoWindow is the pause before the other partner is told, and it
+// exists because the screen offers Undo right beside the mark. A minute is
+// long enough to catch the wrong prayer tapped, short enough that good news
+// is not sat on.
+const answeredUndoWindow = time.Minute
 
 // ClaimSend records that this notification is being sent, and reports whether
 // this caller is the one that got to send it.

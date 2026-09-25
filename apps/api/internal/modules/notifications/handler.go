@@ -42,6 +42,7 @@ type prefsDTO struct {
 	Journal        bool   `json:"journal"`
 	Goals          bool   `json:"goals"`
 	Challenges     bool   `json:"challenges"`
+	PrayerAnswered bool   `json:"prayer_answered"`
 }
 
 func toDTO(p Preferences) prefsDTO {
@@ -55,6 +56,7 @@ func toDTO(p Preferences) prefsDTO {
 		Journal:        p.Journal,
 		Goals:          p.Goals,
 		Challenges:     p.Challenges,
+		PrayerAnswered: p.PrayerAnswered,
 	}
 }
 
@@ -70,6 +72,7 @@ type patchRequest struct {
 	Journal        *bool   `json:"journal"`
 	Goals          *bool   `json:"goals"`
 	Challenges     *bool   `json:"challenges"`
+	PrayerAnswered *bool   `json:"prayer_answered"`
 }
 
 // The browser's own PushSubscription.toJSON(), posted as it comes.

@@ -28,10 +28,12 @@ func (r *PostgresRepository) PreferencesFor(ctx context.Context, userID uuid.UUI
 	var reminder time.Time
 	err := r.db.Q(ctx).QueryRow(ctx, `
 		SELECT new_week, prayer_reminder, reminder_time, event_reminders,
-		       important_dates, appreciation, journal, goals, challenges
+		       important_dates, appreciation, journal, goals, challenges,
+		       prayer_answered
 		FROM notification_preferences WHERE user_id = $1
 	`, userID).Scan(&p.NewWeek, &p.PrayerReminder, &reminder, &p.EventReminders,
-		&p.ImportantDates, &p.Appreciation, &p.Journal, &p.Goals, &p.Challenges)
+		&p.ImportantDates, &p.Appreciation, &p.Journal, &p.Goals, &p.Challenges,
+		&p.PrayerAnswered)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Defaults(), false, nil
 	}
@@ -49,8 +51,9 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 	if _, err := r.db.Q(ctx).Exec(ctx, `
 		INSERT INTO notification_preferences
 			(user_id, new_week, prayer_reminder, reminder_time, event_reminders,
-			 important_dates, appreciation, journal, goals, challenges, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+			 important_dates, appreciation, journal, goals, challenges,
+			 prayer_answered, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
 		ON CONFLICT (user_id) DO UPDATE SET
 			new_week = EXCLUDED.new_week,
 			prayer_reminder = EXCLUDED.prayer_reminder,
@@ -61,9 +64,11 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 			journal = EXCLUDED.journal,
 			goals = EXCLUDED.goals,
 			challenges = EXCLUDED.challenges,
+			prayer_answered = EXCLUDED.prayer_answered,
 			updated_at = EXCLUDED.updated_at
 	`, userID, p.NewWeek, p.PrayerReminder, p.ReminderTime, p.EventReminders,
-		p.ImportantDates, p.Appreciation, p.Journal, p.Goals, p.Challenges, at); err != nil {
+		p.ImportantDates, p.Appreciation, p.Journal, p.Goals, p.Challenges,
+		p.PrayerAnswered, at); err != nil {
 		return fmt.Errorf("saving notification preferences: %w", err)
 	}
 	return nil

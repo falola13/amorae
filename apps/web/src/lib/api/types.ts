@@ -218,6 +218,7 @@ export interface NotificationPrefs {
   journal: boolean;
   goals: boolean;
   challenges: boolean;
+  prayer_answered: boolean;
 }
 
 /** One row of "where you're signed in" (GET /v1/sessions), for your own account. */

@@ -317,6 +317,21 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 			Path:  "/together/goals",
 			Tag:   KindGoal,
 		}
+	case KindPrayerAnswered:
+		// Nothing about which prayer. FR-NOTF-005.AC1 draws its line between
+		// a shared plan and private writing, and a prayer point is the
+		// second: one person wrote it, and the realistic ones are a parent's
+		// illness, a pregnancy, a debt, a marriage under strain. The event
+		// exception (AC2) does not reach this, however much more useful a
+		// named notification would be — a lock screen in a crowded room is
+		// exactly where the cost of being wrong about that lands.
+		wanted = c.Prefs.PrayerAnswered
+		message = push.Message{
+			Title: c.AuthorName + " marked a prayer answered",
+			Body:  "Something the two of you prayed for.",
+			Path:  "/prayers/answered",
+			Tag:   KindPrayerAnswered,
+		}
 	default:
 		wanted = c.Prefs.Journal
 		message = push.Message{
