@@ -61,14 +61,22 @@ func run() error {
 	// (2026-09-24), so if this cannot be done the process does not start —
 	// an instance that refuses to come up is a visible failure, and the one
 	// still running keeps serving.
+	warn, notice := schemaNotice(cfg.MigrateOnStart, cfg.IsProduction())
+	if warn {
+		log.Warn(notice)
+	} else {
+		log.Info(notice)
+	}
+
 	if cfg.MigrateOnStart {
 		applied, err := migrations.Up(ctx, cfg.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("applying migrations: %w", err)
 		}
-		if applied > 0 {
-			log.Info("migrations applied", "count", applied)
-		}
+		// Logged even when it is zero. "Applied none because none were
+		// pending" and "never looked" are the two states this whole flag
+		// exists to tell apart, and only one of them is safe.
+		log.Info("migrations checked", "applied", applied)
 	}
 
 	a, err := app.New(ctx, cfg, log)
@@ -111,4 +119,27 @@ func portOf(addr string) string {
 		return addr[i:]
 	}
 	return addr
+}
+
+// schemaNotice is what to say at startup about who is looking after the
+// schema, and whether it is worth raising your voice about.
+//
+// Pulled out of the migrating itself because the dangerous case is the quiet
+// one. MIGRATE_ON_START defaults to off and is compared against the exact
+// string "true", so an unset variable and a well-meant "True" both mean the
+// same thing and neither says so. That silence shipped code ahead of its
+// schema twice — the Cloudinary column on 2026-09-24 and the answered-prayer
+// preference on 2026-09-25 — and both times the first sign of it was a 500
+// reaching somebody. A line in the log at boot is the cheapest place to
+// notice, and a pure function is the cheapest place to pin it.
+func schemaNotice(migrateOnStart, production bool) (warn bool, msg string) {
+	switch {
+	case migrateOnStart:
+		return false, "schema managed here: pending migrations run before this process serves"
+	case production:
+		return true, `MIGRATE_ON_START is not "true", so this process will serve whatever schema it finds. ` +
+			"A deploy that adds a migration will answer 500 until something else runs it (docs/DEPLOYMENT.md)"
+	default:
+		return false, "schema not managed here: run cmd/migrate when a migration is added"
+	}
 }
