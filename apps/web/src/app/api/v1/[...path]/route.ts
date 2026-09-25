@@ -38,6 +38,9 @@ async function forward(request: NextRequest, { params }: { params: Promise<{ pat
   if (token) headers.Authorization = `Bearer ${token}`;
   copyHeader(request.headers, headers, "content-type", "Content-Type");
   copyHeader(request.headers, headers, "x-request-id", "X-Request-ID");
+  // Without this the key never reaches the API and the whole thing is a no-op
+  // that passes its own unit tests (FR-PWA-009).
+  copyHeader(request.headers, headers, "idempotency-key", "Idempotency-Key");
 
   let upstream: Response;
   try {
@@ -54,7 +57,14 @@ async function forward(request: NextRequest, { params }: { params: Promise<{ pat
 
   const res = new NextResponse((await upstream.text()) || null, { status: upstream.status });
   res.headers.set("Cache-Control", "no-store");
-  for (const name of ["content-type", "x-request-id", "retry-after", "content-disposition"]) {
+  for (const name of [
+    "content-type",
+    "x-request-id",
+    "retry-after",
+    "content-disposition",
+    // So a caller can tell a replayed reply from the original.
+    "idempotent-replay",
+  ]) {
     const value = upstream.headers.get(name);
     if (value) res.headers.set(name, value);
   }

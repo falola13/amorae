@@ -23,6 +23,7 @@ type Router struct {
 	metrics     *metrics.Metrics
 	prefix      string
 	middleware  []func(http.Handler) http.Handler
+	inner       []func(http.Handler) http.Handler
 }
 
 func NewRouter(mux *http.ServeMux, requireAuth func(http.Handler) http.Handler, m *metrics.Metrics) *Router {
@@ -45,6 +46,18 @@ func (r *Router) With(mw ...func(http.Handler) http.Handler) *Router {
 	return &next
 }
 
+// WithAuthed is With, but inside requireAuth: the middleware runs only once a
+// route has a signed-in user, and can read it. Anything keyed on who is asking
+// needs this — registered the other way it would see an empty context and, at
+// best, quietly do nothing.
+//
+// Public routes are unaffected: there is no user to wait for on one.
+func (r *Router) WithAuthed(mw ...func(http.Handler) http.Handler) *Router {
+	next := *r
+	next.inner = append(append([]func(http.Handler) http.Handler{}, r.inner...), mw...)
+	return &next
+}
+
 // Handle registers a public route.
 func (r *Router) Handle(pattern string, h http.Handler) {
 	pattern = r.fullPattern(pattern)
@@ -55,7 +68,14 @@ func (r *Router) Handle(pattern string, h http.Handler) {
 // before authentication, so a rate limit also covers bad/missing tokens.
 func (r *Router) HandleAuthed(pattern string, h http.Handler) {
 	pattern = r.fullPattern(pattern)
-	r.mux.Handle(pattern, r.instrument(pattern, r.wrap(r.requireAuth(h))))
+	r.mux.Handle(pattern, r.instrument(pattern, r.wrap(r.requireAuth(r.wrapInner(h)))))
+}
+
+func (r *Router) wrapInner(h http.Handler) http.Handler {
+	for i := len(r.inner) - 1; i >= 0; i-- {
+		h = r.inner[i](h)
+	}
+	return h
 }
 
 func (r *Router) wrap(h http.Handler) http.Handler {

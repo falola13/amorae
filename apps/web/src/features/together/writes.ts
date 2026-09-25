@@ -32,17 +32,29 @@ async function putPhoto(memoryID: string, photo: File): Promise<Memory> {
 }
 
 // Every write the Together feature makes, declared once (see lib/query/mutations.ts).
+// Why a client key makes a create safe to queue. One sentence, used by every
+// write that needs it, because it is the same sentence each time.
+const K =
+  "the API keeps the reply against the key, so a second send replays the first answer instead of creating a second row.";
+
 export const togetherWrites = {
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
   saveEvent: defineWrite({
     mutationKey: ["events", "save"],
-    mutationFn: ({ id, input }: { id?: string; input: EventInput }) =>
-      id ? api.updateEvent(id, input) : api.createEvent(input),
+    mutationFn: ({
+      id,
+      input,
+      idempotencyKey,
+    }: {
+      id?: string;
+      input: EventInput;
+      idempotencyKey?: string;
+    }) => (id ? api.updateEvent(id, input) : api.createEvent(input, idempotencyKey)),
     invalidates: [keys.events],
-    // Updating is idempotent, creating is not, and this write does both.
-    onlineOnly: true,
+    // Updating was always idempotent; creating is what needed the key.
+    keyed: K,
   }),
   // Changing one thing about an event that already exists, from the event
   // itself. Separate from saveEvent because that one also creates, which is
@@ -102,9 +114,10 @@ export const togetherWrites = {
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
   createGoal: defineWrite({
     mutationKey: ["goals", "create"],
-    mutationFn: (g: GoalInput) => api.createGoal(g),
+    mutationFn: ({ idempotencyKey, ...g }: GoalInput & { idempotencyKey?: string }) =>
+      api.createGoal(g, idempotencyKey),
     invalidates: [keys.goals],
-    onlineOnly: true,
+    keyed: K,
   }),
   // Adds an amount rather than setting one, so a replay double-counts it.
   // The endpoint should take the new total, not a delta, and then this can
@@ -118,9 +131,19 @@ export const togetherWrites = {
   }),
   addProgress: defineWrite({
     mutationKey: ["goals", "progress"],
-    mutationFn: ({ id, amount }: { id: string; amount: number }) => api.progress(id, amount),
+    mutationFn: ({
+      id,
+      amount,
+      idempotencyKey,
+    }: {
+      id: string;
+      amount: number;
+      idempotencyKey?: string;
+    }) => api.progress(id, amount, idempotencyKey),
     invalidates: [keys.goals],
-    onlineOnly: true,
+    // The one that most needed this: it adds an amount rather than setting
+    // one, so a replay used to double-count. The key is what stops that.
+    keyed: K,
   }),
   startChallenge: defineWrite({
     mutationKey: ["challenge", "start"],
@@ -155,19 +178,27 @@ export const togetherWrites = {
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
   addJournal: defineWrite({
     mutationKey: ["journal", "add"],
-    mutationFn: ({ tag, text }: { tag: JournalEntry["tag"]; text: string }) =>
-      api.addJournal(tag, text),
+    mutationFn: ({
+      tag,
+      text,
+      idempotencyKey,
+    }: {
+      tag: JournalEntry["tag"];
+      text: string;
+      idempotencyKey?: string;
+    }) => api.addJournal(tag, text, idempotencyKey),
     invalidates: [keys.journal],
-    onlineOnly: true,
+    keyed: K,
   }),
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
   // (FR-PWA-009), which is a smaller loss than silent duplicates.
   sendAppreciation: defineWrite({
     mutationKey: ["appreciations", "send"],
-    mutationFn: (text: string) => api.sendAppreciation(text),
+    mutationFn: ({ text, idempotencyKey }: { text: string; idempotencyKey?: string }) =>
+      api.sendAppreciation(text, idempotencyKey),
     invalidates: [keys.appreciations],
-    onlineOnly: true,
+    keyed: K,
   }),
   // Only meaningful within seconds of sending, so it is never queued offline:
   // replayed hours later, it would delete a note the partner has already read.
@@ -223,9 +254,10 @@ export const togetherWrites = {
   }),
   addMemory: defineWrite({
     mutationKey: ["memories", "add"],
-    mutationFn: (m: Omit<Memory, "id">) => api.addMemory(m),
+    mutationFn: ({ idempotencyKey, ...m }: Omit<Memory, "id"> & { idempotencyKey?: string }) =>
+      api.addMemory(m, idempotencyKey),
     invalidates: [keys.memories],
-    onlineOnly: true,
+    keyed: K,
   }),
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
@@ -238,8 +270,12 @@ export const togetherWrites = {
   }),
   addMilestone: defineWrite({
     mutationKey: ["milestones", "add"],
-    mutationFn: (m: Omit<Milestone, "id">) => api.addMilestone(m),
+    mutationFn: ({
+      idempotencyKey,
+      ...m
+    }: Omit<Milestone, "id"> & { idempotencyKey?: string }) =>
+      api.addMilestone(m, idempotencyKey),
     invalidates: [keys.milestones],
-    onlineOnly: true,
+    keyed: K,
   }),
 };

@@ -28,6 +28,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
+	"github.com/falola13/amorae/apps/api/internal/platform/idempotency"
 	"github.com/falola13/amorae/apps/api/internal/platform/mailer"
 	"github.com/falola13/amorae/apps/api/internal/platform/metrics"
 	"github.com/falola13/amorae/apps/api/internal/platform/middleware"
@@ -187,7 +188,14 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 
 	// Routes are versioned here, once; handlers register "/auth/login" etc.
 	// without knowing which version they're mounted on.
-	v1 := router.Version(httpx.V1)
+	//
+	// WithAuthed, not With: idempotency keys are scoped to the person holding
+	// them, so the middleware has to run after authentication or it sees an
+	// empty context and quietly does nothing. It also no-ops on reads and on
+	// requests without the header, so carrying it on every authed route costs
+	// nothing, and a new endpoint is covered without anybody remembering to.
+	v1 := router.Version(httpx.V1).
+		WithAuthed(middleware.Idempotent(idempotency.NewPostgresStore(db), time.Now))
 	userHandler.RegisterRoutes(v1)
 	authHandler.RegisterRoutes(v1.With(middleware.RateLimit(authRequests, "auth")))
 	couplesHandler.RegisterRoutes(v1.With(middleware.RateLimit(coupleRequests, "couples")))

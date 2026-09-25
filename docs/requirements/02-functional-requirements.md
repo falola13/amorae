@@ -2025,7 +2025,7 @@ The client shall warn a user before logging them out if they have unsynced offli
 
 | Priority | Release | Status | Verification |
 |---|---|---|---|
-| Must | MVP | Not started — not yet reachable | Test |
+| Must | MVP | Implemented | Test |
 
 Before a queued, non-idempotent write is sent to the API, the client shall attach
 a client-generated idempotency key so a retried send cannot be applied twice.
@@ -2038,10 +2038,25 @@ a client-generated idempotency key so a retried send cannot be applied twice.
 - **FR-PWA-009.AC2** Given the same write is retried after a partial failure, when it is sent
   again, then the API shall recognise the repeated key and shall not create a second record.
 
-*Status note:* no longer the only thing standing between a dropped response and a duplicate row.
-Under DEC-28 a write may not be queued unless it says why a replay is safe, so the non-idempotent
-writes are `onlineOnly` rather than queued-and-hoped. This requirement is what lets them queue
-again: when an endpoint accepts a key, its write moves from `onlineOnly` to `idempotent`.
+*How it works:* `platform/middleware.Idempotent` runs **inside** `requireAuth` — keys are
+scoped to the person holding them, so registered the other way it would see an empty context and
+quietly do nothing. It claims the key before the handler runs and stores the reply after, so a
+second send replays the first answer. A key reused on a different path is refused rather than
+replaying an answer to a question nobody asked; a send arriving while the first is still running
+is told to wait; and a handler that wrote nothing gives its key back, because a crash that locked
+a key out forever would be worse than the duplicate this prevents.
+
+The client stamps the key into the mutation's **variables**, never inside `mutationFn` — that
+runs again on a replay and would mint a new key each time, which is the one thing that must not
+happen. Variables are what TanStack persists, so the key survives a reload with the queued write.
+
+*What moved:* seven writes left `onlineOnly` for `keyed` — creating an event, a goal, goal
+progress, a journal entry, an appreciation, a memory and a kept date. `addProgress` is the one
+that most needed it: it adds an amount rather than setting one, so a replay used to double-count.
+
+Three stay online-only, and a key does not help any of them: a photo upload (a `File` cannot
+survive JSON in local storage), undoing an appreciation (its meaning depends on landing within
+seconds), and signing other devices out (securing an account is only meaningful now).
 
 None of Step 1's writes needs it. Prayer completion is keyed on (point, person), saving points
 replaces the whole week, publishing is a state transition, and a reflection is one row per person

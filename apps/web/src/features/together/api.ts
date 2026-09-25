@@ -13,10 +13,17 @@ import type {
 } from "@/lib/api/types";
 import type { EventInput, GoalInput } from "@/lib/api/schemas";
 
+/** A create's idempotency key, as a request header. The API stores the reply
+ *  against it, so a queued write replayed after a dropped response gets the
+ *  first answer back rather than making a second row (FR-PWA-009). */
+const withKey = (key?: string) =>
+  key ? { headers: { "Idempotency-Key": key } } : undefined;
+
 export const togetherApi = {
   events: () => http.get<Event[]>("/events").then((r) => r.data),
   event: (id: string) => http.get<Event>(apiPath`/events/${id}`).then((r) => r.data),
-  createEvent: (e: EventInput) => http.post<Event>("/events", e).then((r) => r.data),
+  createEvent: (e: EventInput, key?: string) =>
+    http.post<Event>("/events", e, withKey(key)).then((r) => r.data),
   updateEvent: (id: string, e: Partial<EventInput>) =>
     http.patch<Event>(apiPath`/events/${id}`, e).then((r) => r.data),
   completeEvent: (id: string, done: boolean) =>
@@ -30,11 +37,12 @@ export const togetherApi = {
 
   goals: () => http.get<Goal[]>("/goals").then((r) => r.data),
   goal: (id: string) => http.get<Goal>(apiPath`/goals/${id}`).then((r) => r.data),
-  createGoal: (g: GoalInput) => http.post<Goal>("/goals", g).then((r) => r.data),
+  createGoal: (g: GoalInput, key?: string) =>
+    http.post<Goal>("/goals", g, withKey(key)).then((r) => r.data),
   updateGoal: (id: string, patch: Partial<GoalInput> & { done?: boolean }) =>
     http.patch<Goal>(apiPath`/goals/${id}`, patch).then((r) => r.data),
-  progress: (id: string, amount: number) =>
-    http.post<Goal>(apiPath`/goals/${id}/progress`, { amount }).then((r) => r.data),
+  progress: (id: string, amount: number, key?: string) =>
+    http.post<Goal>(apiPath`/goals/${id}/progress`, { amount }, withKey(key)).then((r) => r.data),
 
   challenge: () => http.get<Challenge>("/challenges/current").then((r) => r.data),
   challengeTemplates: () =>
@@ -46,17 +54,18 @@ export const togetherApi = {
     http.patch<Challenge>(apiPath`/challenges/current/days/${n}`, patch).then((r) => r.data),
 
   journal: () => http.get<JournalEntry[]>("/journal").then((r) => r.data),
-  addJournal: (tag: JournalEntry["tag"], text: string) =>
-    http.post<JournalEntry>("/journal", { tag, text }).then((r) => r.data),
+  addJournal: (tag: JournalEntry["tag"], text: string, key?: string) =>
+    http.post<JournalEntry>("/journal", { tag, text }, withKey(key)).then((r) => r.data),
 
   appreciations: () => http.get<Appreciation[]>("/appreciations").then((r) => r.data),
-  sendAppreciation: (text: string) =>
-    http.post<Appreciation>("/appreciations", { text }).then((r) => r.data),
+  sendAppreciation: (text: string, key?: string) =>
+    http.post<Appreciation>("/appreciations", { text }, withKey(key)).then((r) => r.data),
   undoAppreciation: (id: string) =>
     http.delete(apiPath`/appreciations/${id}`).then(() => undefined),
 
   memories: () => http.get<Memory[]>("/memories").then((r) => r.data),
-  addMemory: (m: Omit<Memory, "id">) => http.post<Memory>("/memories", m).then((r) => r.data),
+  addMemory: (m: Omit<Memory, "id">, key?: string) =>
+    http.post<Memory>("/memories", m, withKey(key)).then((r) => r.data),
   photoTicket: (id: string) =>
     http.post<PhotoTicket>(apiPath`/memories/${id}/photo/ticket`).then((r) => r.data),
   /** Say the upload happened. No body: the server chose the only name it could go to. */
@@ -66,7 +75,7 @@ export const togetherApi = {
   deleteMemory: (id: string) => http.delete(apiPath`/memories/${id}`).then(() => undefined),
 
   milestones: () => http.get<Milestone[]>("/milestones").then((r) => r.data),
-  addMilestone: (m: Omit<Milestone, "id">) =>
-    http.post<Milestone>("/milestones", m).then((r) => r.data),
+  addMilestone: (m: Omit<Milestone, "id">, key?: string) =>
+    http.post<Milestone>("/milestones", m, withKey(key)).then((r) => r.data),
   deleteMilestone: (id: string) => http.delete(apiPath`/milestones/${id}`).then(() => undefined),
 };

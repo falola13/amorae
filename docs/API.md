@@ -261,6 +261,13 @@ joined), `invite_code` (only while a usable code exists and the couple has one m
 `started_on`, `timezone`, `onboarding` flags. A `Couple` is always a live one; a couple that has ended is a
 different shape, `EndedCouple` (below).
 
+An authenticated write may carry an **`Idempotency-Key`** header. The API stores the reply
+against it, so the same key sent twice replays the first answer rather than doing the work again —
+which is what lets the offline queue retry a create without risking a second row (FR-PWA-009).
+Keys are per person, valid for seven days, and refused if reused on a different endpoint. A
+replayed response carries `Idempotent-Replay: true`. Reads and requests without the header are
+untouched.
+
 | Endpoint | Notes |
 | --- | --- |
 | `GET /v1/couples/me` | 200 `Couple`; 404 when you are not in a couple |

@@ -46,7 +46,7 @@ export default function Appreciation() {
     defaultValues: { text: "" },
   });
   const onSubmit = (v: AppreciationFormInput) =>
-    send.mutate(v.text, {
+    send.mutate({ text: v.text }, {
       onSuccess: (a) => {
         setSentId(a.id);
         reset();

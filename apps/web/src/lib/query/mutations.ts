@@ -44,12 +44,24 @@ type Replay =
        *  state) — a string, not a boolean, so the reasoning has to be written out. */
       idempotent: string;
       onlineOnly?: never;
+      keyed?: never;
     }
   | {
       /** Send now or fail — never pause offline and send later. For writes that
        *  would do damage twice, or whose meaning depends on timing. */
       onlineOnly: true;
       idempotent?: never;
+      keyed?: never;
+    }
+  | {
+      /** Why a client key makes a replay safe. For creates, which have no
+       *  natural key of their own: the API stores the reply against the key,
+       *  so a second send replays the first answer instead of making a second
+       *  row (FR-PWA-009). useWrite stamps the key into the variables, which
+       *  is what carries it through storage and replay. */
+      keyed: string;
+      idempotent?: never;
+      onlineOnly?: never;
     };
 
 export type WriteDef<A, R> = BaseWriteDef<A, R> & Replay;
@@ -64,7 +76,7 @@ const invalidate = (qc: QueryClient, keys: readonly QueryKey[]) =>
 
 export function useWrite<A, R>(def: WriteDef<A, R>) {
   const qc = useQueryClient();
-  return useMutation({
+  const mutation = useMutation({
     mutationKey: def.mutationKey,
     mutationFn: def.mutationFn,
     scope: def.scope ? { id: def.scope } : undefined,
@@ -75,6 +87,23 @@ export function useWrite<A, R>(def: WriteDef<A, R>) {
     onError: (_error, _args, rollback) => rollback?.(),
     onSettled: () => invalidate(qc, def.invalidates),
   });
+
+  if (!def.keyed) return mutation;
+
+  // Stamped here, never inside mutationFn: mutationFn runs again on a replay
+  // and would mint a new key each time, which is the one thing that must not
+  // happen. In the variables it is saved with the write and comes back with it.
+  const stamp = (args: A): A => {
+    const a = (args ?? {}) as { idempotencyKey?: string };
+    return { ...a, idempotencyKey: a.idempotencyKey ?? crypto.randomUUID() } as A;
+  };
+  return {
+    ...mutation,
+    mutate: (args: A, opts?: Parameters<typeof mutation.mutate>[1]) =>
+      mutation.mutate(stamp(args), opts),
+    mutateAsync: (args: A, opts?: Parameters<typeof mutation.mutateAsync>[1]) =>
+      mutation.mutateAsync(stamp(args), opts),
+  };
 }
 
 /** Applies a write's optimistic change and hands back the undo. The cancel is
@@ -90,7 +119,9 @@ function applyOptimistic<A, R>(qc: QueryClient, def: WriteDef<A, R>, args: A) {
 
 /**
  * Makes each write resumable after a reload (see lib/query/persist.ts).
- * Online-only writes are skipped: they never pause, so there is nothing to resume.
+ * Online-only writes are skipped: they never pause, so there is nothing to
+ * resume. Keyed writes are registered like idempotent ones — their key travels
+ * in the saved variables, so a restored send carries the same one.
  */
 export function registerWrites(qc: QueryClient, defs: readonly AnyWriteDef[]) {
   for (const def of defs) {
