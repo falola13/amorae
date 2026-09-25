@@ -3,13 +3,17 @@ package notifications
 import "time"
 
 // Perishable reports whether a notification is worthless once its moment has
-// passed. A daily nudge and an event reminder are; something a partner did is
-// not. It decides what happens when a notification cannot be sent right now:
-// a perishable one is skipped and forgotten, because the next tick will find
-// it no longer due, and the rest wait for the window to open.
+// passed: a nudge about today is, something a partner did is not. It decides
+// what happens when one cannot be sent now — a perishable one is skipped and
+// forgotten, because the next tick finds it no longer due, and the rest wait
+// for the window to open.
+//
+// Only kinds the budget governs reach this. The two reminders were listed
+// here until AskedFor began exempting them earlier, and leaving them would
+// have left a rule that can never fire for somebody to later believe.
 func Perishable(kind string) bool {
 	switch kind {
-	case KindPrayerReminder, KindEventReminder, KindChallenge:
+	case KindChallenge:
 		return true
 	default:
 		return false
