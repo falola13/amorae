@@ -32,6 +32,8 @@ type Preferences struct {
 	PrayerAnswered bool
 	// When the second of the two of you finishes something.
 	Together bool
+	// A moment kept on this day in an earlier year.
+	Memories bool
 	// Quiet hours in the person's own zone, as HH:MM. Both empty means off;
 	// the window may wrap midnight.
 	QuietFrom string
@@ -55,6 +57,7 @@ func Defaults() Preferences {
 		Challenges:     false,
 		PrayerAnswered: true,
 		Together:       true,
+		Memories:       true,
 		QuietFrom:      "22:00",
 		QuietTo:        "07:00",
 		DailyCap:       defaultDailyCap,
@@ -83,6 +86,7 @@ type Patch struct {
 	Challenges     *bool
 	PrayerAnswered *bool
 	Together       *bool
+	Memories       *bool
 	QuietFrom      *string
 	QuietTo        *string
 	DailyCap       *int
@@ -112,6 +116,7 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.PrayerAnswered, patch.PrayerAnswered)
 	setBool(&p.Challenges, patch.Challenges)
 	setBool(&p.Together, patch.Together)
+	setBool(&p.Memories, patch.Memories)
 
 	if patch.QuietFrom != nil || patch.QuietTo != nil {
 		from, to := p.QuietFrom, p.QuietTo
@@ -278,18 +283,19 @@ func startOf(day time.Time, hhmm string, zone *time.Location) (time.Time, bool) 
 
 // Kinds of notification, used as notification_sends.kind.
 const (
-	KindNewWeek        = "new_week"
-	KindWeekPublished  = "week_published"
-	KindPrayerReminder = "prayer_reminder"
-	KindEventReminder  = "event_reminder"
-	KindImportantDate  = "important_date"
-	KindAppreciation   = "appreciation"
-	KindJournal        = "journal"
-	KindGoal           = "goal"
-	KindChallenge      = "challenge"
-	KindPrayerAnswered = "prayer_answered"
-	KindBothPrayed     = "both_prayed"
-	KindBothMarked     = "both_marked"
+	KindNewWeek         = "new_week"
+	KindWeekPublished   = "week_published"
+	KindPrayerReminder  = "prayer_reminder"
+	KindEventReminder   = "event_reminder"
+	KindImportantDate   = "important_date"
+	KindAppreciation    = "appreciation"
+	KindJournal         = "journal"
+	KindGoal            = "goal"
+	KindChallenge       = "challenge"
+	KindPrayerAnswered  = "prayer_answered"
+	KindBothPrayed      = "both_prayed"
+	KindBothMarked      = "both_marked"
+	KindMemoryOnThisDay = "memory_on_this_day"
 )
 
 // OccursOn reports whether a date recurs on the given day (same month and

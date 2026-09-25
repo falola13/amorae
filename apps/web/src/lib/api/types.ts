@@ -208,6 +208,8 @@ export interface NotificationPrefs {
   prayer_answered: boolean;
   /** When the second of you finishes something you are both doing. */
   together: boolean;
+  /** A moment kept on this day in an earlier year. */
+  memories: boolean;
   /** HH:MM in your own zone; both empty means no quiet hours. */
   quiet_from: string;
   quiet_to: string;

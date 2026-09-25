@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/falola13/amorae/apps/api/internal/platform/push"
@@ -73,3 +74,67 @@ func ForBothPrayed(c BothPrayedCandidate) (Notification, bool) {
 // mutualGrace bounds how far back a finish counts, so shipping this does not
 // announce every day either of them ever completed.
 const mutualGrace = 24 * time.Hour
+
+// ForMemoriesOnThisDay offers back what this couple kept on this day in an
+// earlier year.
+//
+// One notification for the day rather than one per moment: three
+// anniversaries falling together is a lovely thing to open, and three
+// separate buzzes is not. Keyed by the date, so it arrives once however
+// many there are and however often the worker runs.
+//
+// `all` is one person's candidates, already narrowed to their couple.
+func ForMemoriesOnThisDay(all []MemoryAnniversaryCandidate, now time.Time) (Notification, bool) {
+	if len(all) == 0 || !all[0].Prefs.Memories {
+		return Notification{}, false
+	}
+
+	zone, err := time.LoadLocation(all[0].Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	local := now.In(zone)
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, zone)
+	if local.Before(today.Add(reminderMorning * time.Hour)) {
+		return Notification{}, false
+	}
+
+	var on []MemoryAnniversaryCandidate
+	for _, c := range all {
+		if OccursOn(c.Date, today) {
+			on = append(on, c)
+		}
+	}
+	if len(on) == 0 {
+		return Notification{}, false
+	}
+	// Oldest first: the one furthest back is the one worth naming.
+	sort.Slice(on, func(i, j int) bool { return on[i].Date.Before(on[j].Date) })
+
+	oldest := on[0]
+	body := oldest.Title
+	if len(on) > 1 {
+		body = fmt.Sprintf("%s, and %d more.", oldest.Title, len(on)-1)
+	}
+	return Notification{
+		UserID: oldest.UserID,
+		Kind:   KindMemoryOnThisDay,
+		Key:    today.Format(time.DateOnly),
+		Message: push.Message{
+			Title: yearsAgo(today.Year() - oldest.Date.Year()),
+			Body:  body,
+			Path:  "/together/memories",
+			Tag:   KindMemoryOnThisDay,
+		},
+	}, true
+}
+
+// yearsAgo reads as a person would say it.
+func yearsAgo(years int) string {
+	switch {
+	case years <= 1:
+		return "A year ago today"
+	default:
+		return fmt.Sprintf("%d years ago today", years)
+	}
+}

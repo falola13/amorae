@@ -186,3 +186,51 @@ func (r *PostgresRepository) CountSends(ctx context.Context, userID uuid.UUID, k
 	}
 	return n, nil
 }
+
+// MemoryAnniversaryCandidate is one kept moment, for one of the two people
+// it belongs to.
+type MemoryAnniversaryCandidate struct {
+	UserID   uuid.UUID
+	MemoryID uuid.UUID
+	Title    string
+	Timezone string
+	Date     time.Time
+	Prefs    Preferences
+}
+
+// MemoriesOnThisDay narrows to the right month and to years already past;
+// which day it is, and what to do about the 29th of February, is decided in
+// Go by OccursOn so there is one rule rather than two.
+func (r *PostgresRepository) MemoriesOnThisDay(ctx context.Context) ([]MemoryAnniversaryCandidate, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT u.id, mem.id, mem.title, c.timezone, mem.date,
+		       COALESCE(p.memories, true)
+		FROM memories mem
+		JOIN couples c ON c.id = mem.couple_id
+		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN notification_preferences p ON p.user_id = u.id
+		WHERE c.dissolved_at IS NULL
+		  AND EXTRACT(MONTH FROM mem.date) =
+		      EXTRACT(MONTH FROM (now() AT TIME ZONE c.timezone))
+		  AND mem.date < (now() AT TIME ZONE c.timezone)::date
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("finding moments from this day: %w", err)
+	}
+	defer rows.Close()
+
+	var out []MemoryAnniversaryCandidate
+	for rows.Next() {
+		var c MemoryAnniversaryCandidate
+		if err := rows.Scan(&c.UserID, &c.MemoryID, &c.Title, &c.Timezone,
+			&c.Date, &c.Prefs.Memories); err != nil {
+			return nil, fmt.Errorf("scanning a moment from this day: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("finding moments from this day: %w", err)
+	}
+	return out, nil
+}

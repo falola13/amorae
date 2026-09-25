@@ -28,14 +28,14 @@ func (r *PostgresRepository) PreferencesFor(ctx context.Context, userID uuid.UUI
 	err := r.db.Q(ctx).QueryRow(ctx, `
 		SELECT new_week, prayer_reminder, reminder_time, event_reminders,
 		       important_dates, appreciation, journal, goals, challenges,
-		       prayer_answered, together,
+		       prayer_answered, together, memories,
 		       COALESCE(to_char(quiet_from, 'HH24:MI'), ''),
 		       COALESCE(to_char(quiet_to, 'HH24:MI'), ''),
 		       daily_cap
 		FROM notification_preferences WHERE user_id = $1
 	`, userID).Scan(&p.NewWeek, &p.PrayerReminder, &reminder, &p.EventReminders,
 		&p.ImportantDates, &p.Appreciation, &p.Journal, &p.Goals, &p.Challenges,
-		&p.PrayerAnswered, &p.Together, &p.QuietFrom, &p.QuietTo, &p.DailyCap)
+		&p.PrayerAnswered, &p.Together, &p.Memories, &p.QuietFrom, &p.QuietTo, &p.DailyCap)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Defaults(), false, nil
 	}
@@ -53,10 +53,10 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 		INSERT INTO notification_preferences
 			(user_id, new_week, prayer_reminder, reminder_time, event_reminders,
 			 important_dates, appreciation, journal, goals, challenges,
-			 prayer_answered, together, quiet_from, quiet_to, daily_cap,
+			 prayer_answered, together, memories, quiet_from, quiet_to, daily_cap,
 			 created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-		        NULLIF($13, '')::time, NULLIF($14, '')::time, $15, $16, $16)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+		        NULLIF($14, '')::time, NULLIF($15, '')::time, $16, $17, $17)
 		ON CONFLICT (user_id) DO UPDATE SET
 			new_week = EXCLUDED.new_week,
 			prayer_reminder = EXCLUDED.prayer_reminder,
@@ -69,13 +69,14 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 			challenges = EXCLUDED.challenges,
 			prayer_answered = EXCLUDED.prayer_answered,
 			together = EXCLUDED.together,
+			memories = EXCLUDED.memories,
 			quiet_from = EXCLUDED.quiet_from,
 			quiet_to = EXCLUDED.quiet_to,
 			daily_cap = EXCLUDED.daily_cap,
 			updated_at = EXCLUDED.updated_at
 	`, userID, p.NewWeek, p.PrayerReminder, p.ReminderTime, p.EventReminders,
 		p.ImportantDates, p.Appreciation, p.Journal, p.Goals, p.Challenges,
-		p.PrayerAnswered, p.Together, p.QuietFrom, p.QuietTo, p.DailyCap, at); err != nil {
+		p.PrayerAnswered, p.Together, p.Memories, p.QuietFrom, p.QuietTo, p.DailyCap, at); err != nil {
 		return fmt.Errorf("saving notification preferences: %w", err)
 	}
 	return nil

@@ -407,6 +407,7 @@ type WorkerRepository interface {
 	LiveChallenges(ctx context.Context) ([]ChallengeCandidate, error)
 	BothMarkedDays(ctx context.Context, since time.Time) ([]BothMarkedCandidate, error)
 	BothPrayedWeeks(ctx context.Context, now, since time.Time) ([]BothPrayedCandidate, error)
+	MemoriesOnThisDay(ctx context.Context) ([]MemoryAnniversaryCandidate, error)
 	BudgetFor(ctx context.Context, userID uuid.UUID, now time.Time) (Budget, error)
 	ClaimSend(ctx context.Context, userID uuid.UUID, kind, key string, at time.Time) (bool, error)
 	ReleaseSend(ctx context.Context, userID uuid.UUID, kind, key string) error
@@ -509,6 +510,22 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	}
 	for _, c := range bothPrayed {
 		if n, ok := ForBothPrayed(c); ok {
+			due = append(due, n)
+		}
+	}
+
+	anniversaries, err := w.repo.MemoriesOnThisDay(ctx)
+	if err != nil {
+		return 0, err
+	}
+	// Grouped per person: the notification is about the day, not about each
+	// moment in it.
+	byPerson := map[uuid.UUID][]MemoryAnniversaryCandidate{}
+	for _, c := range anniversaries {
+		byPerson[c.UserID] = append(byPerson[c.UserID], c)
+	}
+	for _, theirs := range byPerson {
+		if n, ok := ForMemoriesOnThisDay(theirs, now); ok {
 			due = append(due, n)
 		}
 	}

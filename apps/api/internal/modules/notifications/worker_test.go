@@ -142,6 +142,7 @@ type fakeRepo struct {
 	challenges []ChallengeCandidate
 	bothMarked []BothMarkedCandidate
 	bothPrayed []BothPrayedCandidate
+	onThisDay  []MemoryAnniversaryCandidate
 	// Zero means an unconfigured person, who gets the defaults.
 	budget   Budget
 	subs     []Subscription
@@ -178,6 +179,9 @@ func (f *fakeRepo) BothMarkedDays(context.Context, time.Time) ([]BothMarkedCandi
 }
 func (f *fakeRepo) BothPrayedWeeks(context.Context, time.Time, time.Time) ([]BothPrayedCandidate, error) {
 	return f.bothPrayed, nil
+}
+func (f *fakeRepo) MemoriesOnThisDay(context.Context) ([]MemoryAnniversaryCandidate, error) {
+	return f.onThisDay, nil
 }
 func (f *fakeRepo) BudgetFor(_ context.Context, _ uuid.UUID, _ time.Time) (Budget, error) {
 	return f.budget, nil

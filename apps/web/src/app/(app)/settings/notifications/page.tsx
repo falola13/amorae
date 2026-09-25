@@ -135,7 +135,8 @@ export default function NotificationSettings() {
               {row(p, "journal", "Journal entries")}
               {row(p, "goals", "Goal updates")}
               {row(p, "challenges", "Challenge reminders")}
-              {row(p, "together", "When you both finish something", true)}
+              {row(p, "together", "When you both finish something")}
+              {row(p, "memories", "A moment from this day last year", true)}
             </Section>
             <Section label="How much" className="mt-[22px]">
               <PickRow

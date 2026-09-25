@@ -46,6 +46,7 @@ type prefsDTO struct {
 	Challenges     bool   `json:"challenges"`
 	PrayerAnswered bool   `json:"prayer_answered"`
 	Together       bool   `json:"together"`
+	Memories       bool   `json:"memories"`
 	QuietFrom      string `json:"quiet_from"`
 	QuietTo        string `json:"quiet_to"`
 	DailyCap       int    `json:"daily_cap"`
@@ -65,6 +66,7 @@ func toDTO(p Preferences) prefsDTO {
 		Challenges:     p.Challenges,
 		PrayerAnswered: p.PrayerAnswered,
 		Together:       p.Together,
+		Memories:       p.Memories,
 		QuietFrom:      p.QuietFrom,
 		QuietTo:        p.QuietTo,
 		DailyCap:       p.DailyCap,
@@ -86,6 +88,7 @@ type patchRequest struct {
 	Challenges     *bool   `json:"challenges"`
 	PrayerAnswered *bool   `json:"prayer_answered"`
 	Together       *bool   `json:"together"`
+	Memories       *bool   `json:"memories"`
 	QuietFrom      *string `json:"quiet_from"`
 	QuietTo        *string `json:"quiet_to"`
 	DailyCap       *int    `json:"daily_cap"`
