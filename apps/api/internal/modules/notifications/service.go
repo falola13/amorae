@@ -18,6 +18,7 @@ type Repository interface {
 
 	// For a nudge, which is sent from a request rather than from the tick.
 	DeliveryRepository
+	InboxRepository
 	NudgeTarget(ctx context.Context, senderID uuid.UUID) (uuid.UUID, string, error)
 	BudgetFor(ctx context.Context, userID uuid.UUID, now time.Time) (Budget, error)
 	CountSends(ctx context.Context, userID uuid.UUID, kind string, since time.Time) (int, error)

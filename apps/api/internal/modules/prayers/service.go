@@ -51,14 +51,20 @@ type Couples interface {
 	ForPrayers(ctx context.Context, userID uuid.UUID) (CoupleContext, error)
 }
 
+// Poker asks the notifications worker to run a pass soon rather than
+// waiting for its next cron tick, without prayers knowing anything about
+// how notifications are put together.
+type Poker interface{ Poke() }
+
 type Service struct {
 	repo    Repository
 	couples Couples
 	now     func() time.Time
+	poker   Poker
 }
 
-func NewService(repo Repository, couples Couples, now func() time.Time) *Service {
-	return &Service{repo: repo, couples: couples, now: now}
+func NewService(repo Repository, couples Couples, now func() time.Time, poker Poker) *Service {
+	return &Service{repo: repo, couples: couples, now: now, poker: poker}
 }
 
 // coupleContext is Couples.ForPrayers plus "today" in the couple's zone,
@@ -166,6 +172,9 @@ func (s *Service) Publish(ctx context.Context, userID uuid.UUID) (Record, Couple
 	if err := s.repo.Publish(ctx, rec.ID, userID, s.now()); err != nil {
 		return Record{}, CoupleContext{}, err
 	}
+	// The partner's "your week is ready" notification (ForPublishedWeek)
+	// needn't wait for the next cron tick.
+	s.poker.Poke()
 
 	rec, err = s.repo.WeekByID(ctx, cc.CoupleID, rec.ID)
 	return rec, cc, err
@@ -209,6 +218,12 @@ func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, 
 	if err := s.repo.SetCompletion(ctx, pointID, userID, cc.Today, done, s.now()); err != nil {
 		return Record{}, CoupleContext{}, err
 	}
+	if done {
+		// Only a mark, not an unmark, can be the one that finishes the day
+		// for both of them (ForBothPrayed) — worth telling them sooner than
+		// the next cron tick.
+		s.poker.Poke()
+	}
 
 	rec, err = s.repo.WeekByID(ctx, cc.CoupleID, weekID)
 	return rec, cc, err
@@ -243,6 +258,13 @@ func (s *Service) SetAnswered(
 
 	if err := s.repo.SetAnswered(ctx, pointID, userID, answered, note, s.now()); err != nil {
 		return Record{}, CoupleContext{}, err
+	}
+	if answered {
+		// Taking the mark back says nothing worth telling the partner;
+		// marking it answered does (ForWritten's KindPrayerAnswered), once
+		// its undo window has passed — no reason to make that wait for the
+		// next cron tick on top of it.
+		s.poker.Poke()
 	}
 	rec, err = s.repo.WeekByID(ctx, cc.CoupleID, weekID)
 	return rec, cc, err

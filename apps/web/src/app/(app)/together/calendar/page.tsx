@@ -21,11 +21,12 @@ import {
   weekdayDate,
 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
-import { Icon } from "@/components/icons";
+import { Icon, type IconName } from "@/components/icons";
 import { today } from "@/lib/today";
 import { Main } from "@/components/layout/screen";
 import { QueryState } from "@/components/ui/query-state";
 import { BottomActions, LinkButton, Micro, Skeleton, Title, TopBar, cx } from "@/components/ui/kit";
+import type { Milestone } from "@/lib/api/types";
 
 // `at` orders items within a day ("" sorts before timed entries); `rank` breaks ties among all-day items.
 type Item = {
@@ -36,6 +37,18 @@ type Item = {
   title: string;
   sub: string;
   href: string;
+  /** Set only for a birthday/anniversary milestone, so it reads apart from a plain event. */
+  icon?: IconName;
+  markerClass?: string;
+};
+
+/** cake/amber for a birthday, heart/green for an anniversary — everything else keeps the plain plum dot. */
+const milestoneMarker = (
+  source: Milestone["source"],
+): { icon?: IconName; markerClass?: string } => {
+  if (source === "birthday") return { icon: "cake", markerClass: "bg-amber" };
+  if (source === "anniversary") return { icon: "heart", markerClass: "bg-green" };
+  return {};
 };
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -158,6 +171,7 @@ export default function Calendar() {
                     title: m.title,
                     sub: yearsBy(m.date, d, m.year_known) || m.sub || "",
                     href: routes.milestones,
+                    ...milestoneMarker(m.source),
                   });
 
             if (week.data)
@@ -186,7 +200,8 @@ export default function Calendar() {
             const cell = (d: string) => {
               const isToday = d === todayIso;
               const sel = d === selected;
-              const count = byDay.get(d)?.length ?? 0;
+              const dayItems = byDay.get(d) ?? [];
+              const count = dayItems.length;
               const outside = month && !sameMonth(d, anchor);
               return (
                 <button
@@ -224,10 +239,13 @@ export default function Calendar() {
                       for a day with one errand and a day with an anniversary,
                       a dinner and the week's prayers on it. */}
                   <span aria-hidden="true" className="flex h-1 items-center gap-[3px]">
-                    {Array.from({ length: Math.min(count, 3) }, (_, i) => (
+                    {dayItems.slice(0, 3).map((it, i) => (
                       <span
                         key={i}
-                        className={cx("h-1 w-1 rounded-full", outside ? "bg-edge" : "bg-plum")}
+                        className={cx(
+                          "h-1 w-1 rounded-full",
+                          outside ? "bg-edge" : (it.markerClass ?? "bg-plum"),
+                        )}
                       />
                     ))}
                   </span>
@@ -302,7 +320,12 @@ export default function Calendar() {
                           ) : null}
                         </span>
                         <span className="flex flex-col">
-                          <span className="text-[16px] font-semibold">{it.title}</span>
+                          <span className="flex items-center gap-1.5 text-[16px] font-semibold">
+                            {it.icon ? (
+                              <Icon name={it.icon} size={15} className="text-stone" />
+                            ) : null}
+                            {it.title}
+                          </span>
                           {it.sub ? (
                             <span className="text-support text-stone">{it.sub}</span>
                           ) : null}

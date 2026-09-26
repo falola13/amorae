@@ -3,6 +3,7 @@ package notifications
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,6 +17,8 @@ type service interface {
 	Update(ctx context.Context, userID uuid.UUID, patch Patch) (Preferences, error)
 	Subscribe(ctx context.Context, userID uuid.UUID, endpoint, p256dh, auth string) error
 	Nudge(ctx context.Context, senderID uuid.UUID) (int, error)
+	Inbox(ctx context.Context, userID uuid.UUID) ([]InboxItem, error)
+	MarkInboxRead(ctx context.Context, userID uuid.UUID) error
 }
 
 type Handler struct {
@@ -31,6 +34,8 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("PATCH /notifications/preferences", http.HandlerFunc(h.update))
 	r.HandleAuthed("POST /notifications/subscribe", http.HandlerFunc(h.subscribe))
 	r.HandleAuthed("POST /nudge", http.HandlerFunc(h.nudge))
+	r.HandleAuthed("GET /notifications/inbox", http.HandlerFunc(h.inbox))
+	r.HandleAuthed("POST /notifications/inbox/read", http.HandlerFunc(h.markInboxRead))
 }
 
 // The shape in apps/web/src/lib/api/types.ts.
@@ -55,6 +60,7 @@ type prefsDTO struct {
 	EventFollowups       bool   `json:"event_followups"`
 	PartnerEvents        bool   `json:"partner_events"`
 	DefaultEventReminder string `json:"default_event_reminder"`
+	Nudges               bool   `json:"nudges"`
 }
 
 func toDTO(p Preferences) prefsDTO {
@@ -79,6 +85,7 @@ func toDTO(p Preferences) prefsDTO {
 		EventFollowups:       p.EventFollowups,
 		PartnerEvents:        p.PartnerEvents,
 		DefaultEventReminder: p.DefaultEventReminder,
+		Nudges:               p.Nudges,
 	}
 }
 
@@ -104,6 +111,7 @@ type patchRequest struct {
 	EventFollowups       *bool   `json:"event_followups"`
 	PartnerEvents        *bool   `json:"partner_events"`
 	DefaultEventReminder *string `json:"default_event_reminder"`
+	Nudges               *bool   `json:"nudges"`
 }
 
 // The browser's own PushSubscription.toJSON(), posted as it comes.
@@ -189,4 +197,58 @@ func (h *Handler) nudge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.Data(w, http.StatusOK, nudgeDTO{Left: left})
+}
+
+// The shape in apps/web/src/lib/api/types.ts.
+type inboxItemDTO struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	Path      string    `json:"path"`
+	CreatedAt time.Time `json:"created_at"`
+	Read      bool      `json:"read"`
+}
+
+type inboxDTO struct {
+	Items []inboxItemDTO `json:"items"`
+	// Counted here rather than asked of the repository separately — the
+	// list already has everything an unread count needs.
+	Unread int `json:"unread"`
+}
+
+func (h *Handler) inbox(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	items, err := h.svc.Inbox(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+
+	dto := inboxDTO{Items: make([]inboxItemDTO, len(items))}
+	for i, it := range items {
+		dto.Items[i] = inboxItemDTO{
+			ID: it.ID.String(), Kind: it.Kind, Title: it.Title, Body: it.Body,
+			Path: it.Path, CreatedAt: it.CreatedAt, Read: it.Read,
+		}
+		if !it.Read {
+			dto.Unread++
+		}
+	}
+	httpx.Data(w, http.StatusOK, dto)
+}
+
+func (h *Handler) markInboxRead(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.MarkInboxRead(r.Context(), userID); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
 }

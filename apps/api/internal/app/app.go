@@ -103,19 +103,25 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 	notificationsSvc := notifications.NewService(notificationsRepo, pushSender, log, now)
 
+	// One worker, built once: the cron endpoint below drives it on a
+	// schedule, and every write path that can produce a partner-facing
+	// notification pokes the same instance to run a pass sooner, through
+	// the small Poker interface each of those modules declares for itself.
+	notificationsWorker := notifications.NewWorker(notificationsRepo, pushSender, now, log)
+
 	togetherCouples := prayersCouples{couples: couplesSvc}
 
 	prayersRepo := prayers.NewPostgresRepository(db)
-	prayersSvc := prayers.NewService(prayersRepo, togetherCouples, now)
+	prayersSvc := prayers.NewService(prayersRepo, togetherCouples, now, notificationsWorker)
 
 	eventsRepo := events.NewPostgresRepository(db)
-	eventsSvc := events.NewService(eventsRepo, togetherCouples, now)
+	eventsSvc := events.NewService(eventsRepo, togetherCouples, now, notificationsWorker)
 
 	goalsRepo := goals.NewPostgresRepository(db)
-	goalsSvc := goals.NewService(goalsRepo, togetherCouples, now)
+	goalsSvc := goals.NewService(goalsRepo, togetherCouples, now, notificationsWorker)
 
 	challengesRepo := challenges.NewPostgresRepository(db)
-	challengesSvc := challenges.NewService(challengesRepo, togetherCouples, now)
+	challengesSvc := challenges.NewService(challengesRepo, togetherCouples, now, notificationsWorker)
 
 	milestonesRepo := milestones.NewPostgresRepository(db)
 	milestonesSvc := milestones.NewService(milestonesRepo, togetherCouples, now)
@@ -131,10 +137,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	memoriesSvc := memories.NewService(memoriesRepo, togetherCouples, pictures, now)
 
 	journalRepo := journal.NewPostgresRepository(db)
-	journalSvc := journal.NewService(journalRepo, togetherCouples, now)
+	journalSvc := journal.NewService(journalRepo, togetherCouples, now, notificationsWorker)
 
 	appreciationRepo := appreciation.NewPostgresRepository(db)
-	appreciationSvc := appreciation.NewService(appreciationRepo, togetherCouples, now)
+	appreciationSvc := appreciation.NewService(appreciationRepo, togetherCouples, now, notificationsWorker)
 
 	// Leaving a couple freezes it; this deletes it once the retention window
 	// for both partners to read/export has passed (FR-PAIR-008).
@@ -164,11 +170,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	notificationsHandler := notifications.NewHandler(notificationsSvc)
 
 	// One pass of the worker, on request, for deployments with nowhere to run
-	// a long-lived process (docs/DEPLOYMENT.md). nil unless TICK_SECRET is set.
+	// a long-lived process (docs/DEPLOYMENT.md). nil unless TICK_SECRET is
+	// set. Shares notificationsWorker with every module's Poke() calls, so a
+	// cron tick and a poked pass can never run at once (Worker.TryTick).
 	var tickHandler *notifications.TickHandler
 	if cfg.TickSecret != "" {
-		tickHandler = notifications.NewTickHandler(
-			notifications.NewWorker(notificationsRepo, pushSender, now, log), cfg.TickSecret, log)
+		tickHandler = notifications.NewTickHandler(notificationsWorker, cfg.TickSecret, log)
 	}
 	eventsHandler := events.NewHandler(eventsSvc)
 	goalsHandler := goals.NewHandler(goalsSvc)

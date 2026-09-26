@@ -19,14 +19,20 @@ type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
 
+// Poker asks the notifications worker to run a pass soon rather than
+// waiting for its next cron tick, without challenges knowing anything about
+// how notifications are put together.
+type Poker interface{ Poke() }
+
 type Service struct {
 	repo    Repository
 	couples Couples
 	now     func() time.Time
+	poker   Poker
 }
 
-func NewService(repo Repository, couples Couples, now func() time.Time) *Service {
-	return &Service{repo: repo, couples: couples, now: now}
+func NewService(repo Repository, couples Couples, now func() time.Time, poker Poker) *Service {
+	return &Service{repo: repo, couples: couples, now: now, poker: poker}
 }
 
 // Viewer is a challenge as one partner sees it: their marks and their
@@ -82,6 +88,12 @@ func (s *Service) Mark(ctx context.Context, userID uuid.UUID, n int, done, skipp
 	}
 	if err != nil {
 		return Viewer{}, err
+	}
+	if marked {
+		// Only a mark, never a clear, can be the one that makes it "both of
+		// you" (ForBothMarked) — worth telling them sooner than the next
+		// cron tick.
+		s.poker.Poke()
 	}
 	return s.Current(ctx, userID)
 }

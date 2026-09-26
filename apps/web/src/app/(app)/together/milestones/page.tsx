@@ -5,10 +5,10 @@ import { useState } from "react";
 import { useCouple, useMe } from "@/features/couple/hooks";
 import { useDeleteMilestone, useMilestones } from "@/features/together/hooks";
 import { MilestoneComposer } from "@/features/together/components/milestone-composer";
-import { countdown, nextOccurrence } from "@/features/together/milestones";
+import { countdown, daysAway, nextOccurrence, occursOn } from "@/features/together/milestones";
 import { iso } from "@/lib/dates";
 import { routes } from "@/lib/routes";
-import { DateRow } from "@/components/ui/date-row";
+import { MilestoneRow } from "./milestone-row";
 import { today } from "@/lib/today";
 import { Main } from "@/components/layout/screen";
 import { QueryState } from "@/components/ui/query-state";
@@ -134,33 +134,49 @@ export default function Milestones() {
                 {prompts}
                 {upcoming.length ? (
                   <Section label="Coming up" className="mt-[18px]">
-                    {upcoming.map((d) => (
-                      <DateRow
-                        key={d.id}
-                        date={d.next}
-                        title={d.title}
-                        sub={derivedSub(d, meId, partner) ?? d.sub}
-                        right={countdown(d.next, today())}
-                        onAction={d.source ? undefined : () => setActing(d)}
-                      />
-                    ))}
+                    {upcoming.map((d, i) => {
+                      const isToday = occursOn(d.date, todayIso);
+                      const days = daysAway(d.date, todayIso);
+                      return (
+                        <MilestoneRow
+                          key={d.id}
+                          date={d.next}
+                          title={d.title}
+                          sub={derivedSub(d, meId, partner) ?? d.sub}
+                          source={d.source}
+                          isToday={isToday}
+                          isSoon={!isToday && days > 0 && days <= 7}
+                          right={countdown(d.next, today())}
+                          onAction={d.source ? undefined : () => setActing(d)}
+                          last={i === upcoming.length - 1}
+                        />
+                      );
+                    })}
                   </Section>
                 ) : null}
                 {story.length ? (
                   <Section label="Our story so far" className="mb-4 mt-6">
-                    {story.map((d) => (
-                      <DateRow
-                        key={d.id}
-                        date={d.date}
-                        title={d.title}
-                        sub={
-                          derivedSub(d, meId, partner) ??
-                          d.sub ??
-                          (d.year_known === false ? "" : d.date.slice(0, 4))
-                        }
-                        onAction={d.source ? undefined : () => setActing(d)}
-                      />
-                    ))}
+                    {story.map((d, i) => {
+                      const isToday = occursOn(d.date, todayIso);
+                      const days = daysAway(d.date, todayIso);
+                      return (
+                        <MilestoneRow
+                          key={d.id}
+                          date={d.date}
+                          title={d.title}
+                          sub={
+                            derivedSub(d, meId, partner) ??
+                            d.sub ??
+                            (d.year_known === false ? "" : d.date.slice(0, 4))
+                          }
+                          source={d.source}
+                          isToday={isToday}
+                          isSoon={!isToday && days > 0 && days <= 7}
+                          onAction={d.source ? undefined : () => setActing(d)}
+                          last={i === story.length - 1}
+                        />
+                      );
+                    })}
                   </Section>
                 ) : null}
               </>

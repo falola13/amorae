@@ -20,4 +20,5 @@ export const keys = {
   milestones: ["milestones"] as const,
   prefs: ["notifications", "preferences"] as const,
   sessions: ["sessions"] as const,
+  inbox: ["notifications", "inbox"] as const,
 };

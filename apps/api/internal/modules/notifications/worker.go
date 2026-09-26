@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -447,7 +448,17 @@ type WorkerRepository interface {
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
 	Unsubscribe(ctx context.Context, endpoint string) error
 	MarkSent(ctx context.Context, endpoint string, at time.Time) error
+	RecordInbox(ctx context.Context, userID uuid.UUID, kind, title, body, path string, at time.Time) error
 }
+
+// pokeTimeout bounds a pass Poke drives, off its own background context —
+// generous like the cron endpoint's tickTimeout, since nothing is waiting on
+// a response either way.
+const pokeTimeout = 60 * time.Second
+
+// Poker lets a write path outside this module ask for an out-of-band pass,
+// without either of them needing to know how the worker is put together.
+type Poker interface{ Poke() }
 
 // Worker decides who to tell what, and tells them.
 type Worker struct {
@@ -455,10 +466,129 @@ type Worker struct {
 	sender push.Sender
 	now    func() time.Time
 	log    *slog.Logger
+
+	// running makes one pass exclusive — the cron endpoint and Poke both go
+	// through TryTick, so a pass either drives can never overlap the
+	// other's.
+	running sync.Mutex
+
+	pokeMu      sync.Mutex
+	pokeRunning bool
+	// pokePending is one poke remembered for later, arrived while pokeLoop
+	// was already going — coalesced, so however many pile up during a pass,
+	// only one more pass follows it.
+	pokePending bool
+	// afterPoke, when set, runs once after every pass Poke drives. Nobody in
+	// production sets it; it is the seam tests use to know a pass has
+	// settled without polling for it.
+	afterPoke func()
+
+	// wake is a pass booked for the moment the earliest undo window closes
+	// (see wakeWhenSettled); wakeFor is when. Guarded by pokeMu.
+	wake    *time.Timer
+	wakeFor time.Time
 }
 
 func NewWorker(repo WorkerRepository, sender push.Sender, now func() time.Time, log *slog.Logger) *Worker {
 	return &Worker{repo: repo, sender: sender, now: now, log: log}
+}
+
+// TryTick runs one pass if nothing else is already running one, reporting
+// whether this call was the one that ran it. Shared by the tick endpoint and
+// Poke, through the same lock, so a cron tick and a poked pass can never run
+// at once.
+func (w *Worker) TryTick(ctx context.Context) (sent int, ran bool, err error) {
+	if !w.running.TryLock() {
+		return 0, false, nil
+	}
+	defer w.running.Unlock()
+	sent, err = w.Tick(ctx)
+	return sent, true, err
+}
+
+// Poke asks for one more pass soon, off whatever request triggered it —
+// something a partner just did, worth telling them about sooner than the
+// next cron tick. Fire-and-forget: it returns at once, and never surfaces an
+// error to the caller, who has already finished their own write.
+//
+// Coalesced: a poke that lands while a pass is already going (whether that
+// pass came from another poke or from the cron endpoint, via TryTick) is
+// remembered as a single pending poke and runs once more when the current
+// pass finishes. However many pokes arrive mid-pass, at most one more pass
+// follows — never two passes running together, and never one pass per poke.
+func (w *Worker) Poke() {
+	w.pokeMu.Lock()
+	if w.pokeRunning {
+		w.pokePending = true
+		w.pokeMu.Unlock()
+		return
+	}
+	w.pokeRunning = true
+	w.pokeMu.Unlock()
+
+	go w.pokeLoop()
+}
+
+func (w *Worker) pokeLoop() {
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), pokeTimeout)
+		_, _, err := w.TryTick(ctx)
+		cancel()
+		if err != nil {
+			w.log.Error("a poked notification pass failed", "error", err)
+		}
+
+		w.pokeMu.Lock()
+		again := w.pokePending
+		w.pokePending = false
+		if !again {
+			w.pokeRunning = false
+		}
+		w.pokeMu.Unlock()
+
+		if hook := w.afterPoke; hook != nil {
+			hook()
+		}
+		if !again {
+			return
+		}
+	}
+}
+
+// maxSettleWake bounds wakeWhenSettled to the short undo windows it exists
+// for; anything further off is the cron's to find.
+const maxSettleWake = 5 * time.Minute
+
+// wakeWhenSettled books one more pass for the moment the earliest undo window
+// among these closes. A poke right after an appreciation or an answered
+// prayer finds it still inside its window and sends nothing, so without this
+// "immediate" meant "at the next cron tick", up to five minutes later —
+// for exactly the kinds that have a window.
+func (w *Worker) wakeWhenSettled(written []WrittenCandidate, now time.Time) {
+	var next time.Time
+	for _, c := range written {
+		if c.UserID == c.AuthorID || c.Settles <= 0 {
+			continue
+		}
+		ready := c.WrittenAt.Add(c.Settles)
+		if ready.After(now) && (next.IsZero() || ready.Before(next)) {
+			next = ready
+		}
+	}
+	if next.IsZero() || next.Sub(now) > maxSettleWake {
+		return
+	}
+	w.pokeMu.Lock()
+	defer w.pokeMu.Unlock()
+	if w.wake != nil && !w.wakeFor.After(next) && w.wakeFor.After(now) {
+		return // one is already booked for then or sooner
+	}
+	if w.wake != nil {
+		w.wake.Stop()
+	}
+	w.wakeFor = next
+	// A second past the window, so the pass lands on the far side of it.
+	w.wake = time.AfterFunc(next.Sub(now)+time.Second, w.Poke)
 }
 
 // Tick does one pass: find who is due, claim each send, and deliver.
@@ -516,6 +646,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 			due = append(due, n)
 		}
 	}
+	w.wakeWhenSettled(written, now)
 
 	challenges, err := w.repo.LiveChallenges(ctx)
 	if err != nil {

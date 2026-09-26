@@ -99,10 +99,32 @@ func (f fakeCouples) CoupleFor(context.Context, uuid.UUID) (uuid.UUID, error) {
 	return f.coupleID, nil
 }
 
+// fakePoker counts pokes so a test can check one happened, without either
+// side knowing anything about how notifications work.
+type fakePoker struct{ pokes int }
+
+func (p *fakePoker) Poke() { p.pokes++ }
+
 func serviceFor(repo Repository) (*Service, uuid.UUID) {
 	coupleID := uuid.New()
 	now := func() time.Time { return time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC) }
-	return NewService(repo, fakeCouples{coupleID: coupleID}, now), coupleID
+	return NewService(repo, fakeCouples{coupleID: coupleID}, now, &fakePoker{}), coupleID
+}
+
+func TestService_Create_PokesTheWorker(t *testing.T) {
+	poker := &fakePoker{}
+	coupleID := uuid.New()
+	now := func() time.Time { return time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC) }
+	svc := NewService(newFakeRepo(), fakeCouples{coupleID: coupleID}, now, poker)
+
+	if _, err := svc.Create(context.Background(), uuid.New(), Input{
+		Title: ptr("Dinner"), Date: ptr("2026-10-10"),
+	}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if poker.pokes != 1 {
+		t.Errorf("pokes = %d, want 1 — a together event shouldn't wait for the next cron tick", poker.pokes)
+	}
 }
 
 func TestService_Create(t *testing.T) {

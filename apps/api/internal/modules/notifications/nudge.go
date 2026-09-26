@@ -26,6 +26,8 @@ var (
 		"You’ve sent all of today’s. There’ll be more tomorrow.")
 	ErrTheyAreResting = apperr.Conflict("their_quiet_hours",
 		"It’s quiet hours where they are. Try again in the morning.")
+	ErrNudgesOff = apperr.Conflict("nudges_off",
+		"They’ve turned these off.")
 	ErrTheyHaveHadEnough = apperr.Conflict("their_day_is_full",
 		"They’ve had their notifications for today. Try again tomorrow.")
 )
@@ -45,6 +47,15 @@ func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID) (int, error) {
 	}
 	if partnerID == uuid.Nil {
 		return 0, ErrNoPartner
+	}
+
+	// Their switch, not ours: told plainly rather than sent into nothing.
+	prefs, _, err := s.repo.PreferencesFor(ctx, partnerID)
+	if err != nil {
+		return 0, err
+	}
+	if !prefs.Nudges {
+		return 0, ErrNudgesOff
 	}
 
 	now := s.now()

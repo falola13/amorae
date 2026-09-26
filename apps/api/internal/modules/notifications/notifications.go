@@ -40,14 +40,17 @@ type Preferences struct {
 	// but it used to ride on EventReminders, so a person who had turned
 	// reminders off keeps the same silence after this one splits away.
 	EventFollowups bool
-	// Whether a partner's own event ("mine", not "together") is announced
-	// to the other partner. Only ever about events somebody else made.
+	// Whether a "together" event the other partner adds is announced. Only
+	// ever about events somebody else made; a "mine" event is never announced.
 	PartnerEvents bool
 	// What the create-event screen offers as already chosen. "1 hour
 	// before" out of the box, matching what the screen always offered
 	// before this was a preference; "" is a real choice — no default —
 	// once somebody picks it, not what an unconfigured person gets.
 	DefaultEventReminder string
+	// Whether the other partner's "thinking of you" nudge may reach this
+	// person. Off, the sender is told so rather than it vanishing.
+	Nudges bool
 	// Quiet hours in the person's own zone, as HH:MM. Both empty means off;
 	// the window may wrap midnight.
 	QuietFrom string
@@ -75,6 +78,7 @@ func Defaults() Preferences {
 		GoalMilestones:       true,
 		EventFollowups:       true,
 		PartnerEvents:        true,
+		Nudges:               true,
 		DefaultEventReminder: "1 hour before",
 		QuietFrom:            "22:00",
 		QuietTo:              "07:00",
@@ -114,6 +118,7 @@ type Patch struct {
 	EventFollowups       *bool
 	PartnerEvents        *bool
 	DefaultEventReminder *string
+	Nudges               *bool
 }
 
 var clockTime = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -153,6 +158,7 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.GoalMilestones, patch.GoalMilestones)
 	setBool(&p.EventFollowups, patch.EventFollowups)
 	setBool(&p.PartnerEvents, patch.PartnerEvents)
+	setBool(&p.Nudges, patch.Nudges)
 
 	if patch.QuietFrom != nil || patch.QuietTo != nil {
 		from, to := p.QuietFrom, p.QuietTo

@@ -411,8 +411,53 @@ week — which is exactly what turns into 409 `prayer_in_use` on a `PUT`.
 | --- | --- |
 | `GET`, `PATCH /v1/notifications/preferences` | `NotificationPrefs`. Every PATCH field is optional and a missing one is left alone, so the client can send one switch. `reminder_time` is `HH:MM` read in the **user's own** timezone, not the couple's (FR-NOTF-002); anything else is 400 `validation_failed` with `fields.reminder_time`. Reading does not create a row — somebody who never opens the screen gets the defaults and leaves no trace of having been asked. `prayer_answered` defaults **on** and controls FR-NOTF-008. `event_followups` gates `event_over` (split off from `event_reminders`, defaults **on**); `partner_events` gates `event_added` (defaults **on**). `default_event_reminder` is what the create-event screen offers as already chosen — one of `""` (no default), `"at the time"`, `"10 minutes before"`, `"30 minutes before"`, `"1 hour before"`, `"2 hours before"`, `"the morning of"`, `"1 day before"`; anything else is 400 `validation_failed` with `fields.default_event_reminder`. Defaults to `"1 hour before"`, matching what the screen always offered before this was a preference |
 | `POST /v1/notifications/subscribe` | The browser's `PushSubscription.toJSON()`; 204. Keyed on `endpoint`, so re-subscribing the same browser replaces its keys rather than collecting a second row that would send everything twice. The endpoint must be `https://`. 400 `validation_failed` naming `endpoint`, `keys.p256dh` or `keys.auth` |
+| `GET /v1/notifications/inbox` | `{ items: NotificationItem[], unread }`, newest first, at most 30 — the server keeps only that many per person (older rows are pruned on the next send). Each item is `{ id, kind, title, body, path, created_at, read }`. Written the moment a notification is decided to go out (claimed), whether or not a device was subscribed or the push itself failed; one still waiting on quiet hours or the daily cap is written only once it actually goes |
+| `POST /v1/notifications/inbox/read` | Marks every one of the caller's rows read at once; 204. There is no per-row "mark this one read" — opening the list is what reading it means |
 
 Preferences are per person, never per couple: partners choose their own, and one
 of them turning something off says nothing about the other. Defaults are on,
 except goals and challenges — following one of those is opted into rather than
 something that starts buzzing on its own (FR-NOTF-006).
+
+### Notification kinds
+
+Every kind the worker (or a direct send, for `nudge`) can produce. "Immediate"
+means the write that causes it also pokes the worker to run a pass right
+away, rather than waiting for the next cron tick (`POST /internal/tick`,
+every five minutes); a kind still waits out its own undo window or budget
+rule regardless of when the worker next runs. "Scheduled" kinds are tied to a
+moment in time (a reminder, a date) rather than to a write, so nothing pokes
+them — the cron tick is the only thing that ever finds them due.
+
+| Kind | Fires when | Recipient | Path | Preference | Timing |
+| --- | --- | --- | --- | --- | --- |
+| `new_week` | A new week is waiting to be set (draft, empty) | The setter, about their own week | `/prayers/set` | `new_week` | Scheduled |
+| `week_published` | A week is published and has points in it | Whoever didn't publish it | `/prayers` | `new_week` (shared with `new_week` — publishing and setting are the same switch) | Immediate — poked by `prayers.Publish` |
+| `prayer_reminder` | Something scheduled today is still unprayed, past the person's own reminder time | Self | `/prayers` | `prayer_reminder` | Scheduled (exempt from quiet hours/daily cap — `AskedFor`, it's a time they chose) |
+| `event_reminder` | An event's reminder lead has arrived | Self (creator only on a `mine` event) | `/together/events/{id}` | `event_reminders` | Scheduled (exempt from quiet hours/daily cap, same reason) |
+| `important_date` | A birthday, anniversary, or kept date is a week out or arrives today | The other partner(s) (never the birthday's own subject) | `/together/milestones` | `important_dates` | Scheduled |
+| `appreciation` | A note settles past its 30s undo window | The other partner | `/together/appreciation` | `appreciation` | Immediate — poked by `appreciation.Send` (still waits out the undo window) |
+| `journal` | A journal entry is written | The other partner | `/together/journal` | `journal` | Immediate — poked by `journal.Add` |
+| `goal` | Progress is logged on a goal that isn't finished | The other partner | `/together/goals` | `goals` (**off** by default — opt-in) | Immediate — poked by `goals.LogProgress` |
+| `goal_crossing` | A contribution just crossed 50% or 100% of a goal's target | Both partners | `/together/goals` | `goal_milestones` | Immediate — poked by `goals.LogProgress` (same write as `goal`) |
+| `challenge` | A live challenge's day isn't marked yet, past the morning | Self | `/together/challenges` | `challenges` (**off** by default — opt-in) | Scheduled (perishable — a held one is simply dropped, not queued) |
+| `prayer_answered` | A prayer is marked answered, past its 1-minute undo window | The other partner | `/prayers/answered` | `prayer_answered` | Immediate — poked by `prayers.SetAnswered` (only on marking answered, not on taking it back) |
+| `both_prayed` | Both partners have prayed everything scheduled for today | Both partners | `/prayers` | `together` | Immediate — poked by `prayers.SetCompletion` (only on marking done, not on unmarking) |
+| `both_marked` | Both partners have marked a challenge day | Both partners | `/together/challenges` | `together` | Immediate — poked by `challenges.Mark` (only on marking, not on clearing) |
+| `memory_on_this_day` | A memory's date recurs today | Both partners (one notification per day, oldest memory named) | `/together/memories` | `memories` | Scheduled |
+| `event_over` | An event has just finished | Both partners on a `together` event, creator only on `mine` | `/together/events/{id}` | `event_followups` | Scheduled |
+| `event_added` | A `together` event is created | The other partner (never the creator, never for a `mine` event) | `/together/events/{id}` | `partner_events` | Immediate — poked by `events.Create` |
+| `nudge` | A partner taps "thinking of you" | The other partner | `/` | *(none — see below)* | Immediate by nature; not part of a worker tick at all |
+
+Two things worth flagging from this audit rather than fixing silently:
+
+- **`nudge` has no preference toggle of its own.** It still respects the
+  recipient's quiet hours and daily cap (checked directly in `Service.Nudge`,
+  the same `Budget.Allows` rules the worker uses), and it has its own
+  three-a-day ceiling on top — but there is no `notifications` field a
+  person can switch off to stop nudges specifically, the way every other
+  kind has one.
+- **`goal` and `goal_crossing` both point at the goals list (`/together/goals`),
+  not at the goal itself (`/together/goals/{id}`)**, unlike every event kind,
+  which links straight to the event. Both routes exist; this is a narrower
+  landing than it could be, not a broken one.

@@ -146,6 +146,7 @@ export default function NotificationSettings() {
             </Section>
             <Section label="Together" className="mt-[22px]">
               {row(p, "appreciation", `Appreciation from ${partner}`)}
+              {row(p, "nudges", `“Thinking of you” from ${partner}`)}
               {row(p, "journal", "Journal entries")}
               {row(p, "goals", "Goal updates")}
               {row(p, "goal_milestones", "Halfway, and done")}
