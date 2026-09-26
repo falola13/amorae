@@ -64,6 +64,11 @@ describe("yearsBy", () => {
   it("says nothing at all the first time round", () => {
     expect(yearsBy("2026-09-30", "2026-09-30")).toBe("");
   });
+
+  it("says nothing for a birthday with no year on file, even years after its placeholder", () => {
+    // 2000 is the placeholder year for a yearless birthday; without the flag this would say "26 years".
+    expect(yearsBy("2000-09-30", "2026-09-30", false)).toBe("");
+  });
 });
 
 describe("countdown", () => {

@@ -1,11 +1,19 @@
 // Mirrors the Go API's JSON contract (snake_case, docs/API.md). Auth/users/couples
 // exist in Go; the rest is a planned contract the screens were built against.
 
+/** A birthday. Month and day are always known; the year is optional. */
+export interface Birthday {
+  month: number; // 1-12
+  day: number; // 1-31
+  year: number | null;
+}
+
 export interface User {
   id: string;
   email: string;
   display_name: string;
   timezone: string;
+  birthday: Birthday | null;
   created_at: string;
   updated_at: string;
 }
@@ -218,6 +226,17 @@ export interface Milestone {
   date: string;
   sub?: string;
   reminder?: boolean;
+  /** Set by the server for one it derived itself — the couple's anniversary or a
+   *  profile's birthday. Absent (not undefined-checked; just not there) on one a
+   *  person added by hand. Optional here only so a hand-added milestone can be
+   *  built without it; the API always sends it back. */
+  source?: null | "anniversary" | "birthday";
+  /** False only for a birthday with no year on file — its `date` then carries
+   *  2000 as a placeholder, which is never shown (see milestones.ts's yearsBy). */
+  year_known?: boolean;
+  /** The user id this is about. Only present on a birthday-sourced milestone;
+   *  tells "From your profile" apart from "From {partner}'s profile". */
+  about?: string;
 }
 
 export interface NotificationPrefs {

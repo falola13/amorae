@@ -24,7 +24,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 }
 
 // userColumns is every column a User is read from, in scanUser's order.
-const userColumns = `id, email, display_name, password_hash, timezone, created_at, updated_at, last_login_at`
+const userColumns = `id, email, display_name, password_hash, timezone, created_at, updated_at, last_login_at, birth_month, birth_day, birth_year`
 
 func (r *PostgresRepository) Create(ctx context.Context, u User) (User, error) {
 	_, err := r.db.Q(ctx).Exec(ctx, `
@@ -58,9 +58,10 @@ func (r *PostgresRepository) UpdateEmail(ctx context.Context, id uuid.UUID, emai
 
 func (r *PostgresRepository) Update(ctx context.Context, u User) (User, error) {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
-		UPDATE users SET display_name = $2, timezone = $3, updated_at = $4
+		UPDATE users SET display_name = $2, timezone = $3, updated_at = $4,
+		       birth_month = $5, birth_day = $6, birth_year = $7
 		WHERE id = $1
-	`, u.ID, u.DisplayName, u.Timezone, u.UpdatedAt)
+	`, u.ID, u.DisplayName, u.Timezone, u.UpdatedAt, u.BirthMonth, u.BirthDay, u.BirthYear)
 	if err != nil {
 		return User{}, translateWriteErr(err)
 	}
@@ -99,7 +100,8 @@ func (r *PostgresRepository) SetLastLoginAt(ctx context.Context, id uuid.UUID, a
 func (r *PostgresRepository) scanOne(ctx context.Context, query string, args ...any) (User, error) {
 	var u User
 	err := r.db.Q(ctx).QueryRow(ctx, query, args...).
-		Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.Timezone, &u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt)
+		Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.Timezone, &u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt,
+			&u.BirthMonth, &u.BirthDay, &u.BirthYear)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return User{}, ErrNotFound

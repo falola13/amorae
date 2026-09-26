@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { useCouple, useMe } from "@/features/couple/hooks";
 import { useDeleteMilestone, useMilestones } from "@/features/together/hooks";
 import { MilestoneComposer } from "@/features/together/components/milestone-composer";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
@@ -22,6 +24,15 @@ import {
   TopBar,
 } from "@/components/ui/kit";
 import type { Milestone } from "@/lib/api/types";
+
+/** "From your space" / "From your profile" / "From {partner}'s profile" for one the
+ *  server derived; null for one someone added by hand, which gets no subline at all. */
+function derivedSub(m: Milestone, meId: string | undefined, partner: string): string | null {
+  if (m.source === "anniversary") return "From your space";
+  if (m.source === "birthday")
+    return m.about === meId ? "From your profile" : `From ${partner}’s profile`;
+  return null;
+}
 
 function MilestoneActions({ date, onClose }: { date: Milestone | null; onClose: () => void }) {
   const remove = useDeleteMilestone();
@@ -50,6 +61,8 @@ function MilestoneActions({ date, onClose }: { date: Milestone | null; onClose: 
 
 export default function Milestones() {
   const ms = useMilestones();
+  const couple = useCouple();
+  const me = useMe();
   const [acting, setActing] = useState<Milestone | null>(null);
   // Hides the bottom add-button when the empty state already shows one.
   const hasAny = (ms.data?.length ?? 0) > 0;
@@ -62,20 +75,50 @@ export default function Milestones() {
         <div className="pt-2">
           <Title>Milestones</Title>
         </div>
-        <QueryState queries={[ms]} loading={<Skeleton />}>
-          {(milestones) => {
+        <QueryState queries={[ms, couple, me]} loading={<Skeleton />}>
+          {(milestones, coupleData, meData) => {
+            const meId = coupleData.me.id;
+            const partner = coupleData.partner?.display_name ?? "your partner";
+            const noAnniversary = !coupleData.started_on;
+            const noBirthday = !meData.birthday;
+
+            const prompts =
+              noAnniversary || noBirthday ? (
+                <div className="flex flex-col gap-1 pt-1.5">
+                  {noAnniversary ? (
+                    <Link
+                      href={routes.settingsCouple}
+                      className="press text-support text-plum no-underline"
+                    >
+                      Add when you got together and your anniversary appears here.
+                    </Link>
+                  ) : null}
+                  {noBirthday ? (
+                    <Link
+                      href={routes.settingsProfile}
+                      className="press text-support text-plum no-underline"
+                    >
+                      Add your birthday so {partner} never misses it.
+                    </Link>
+                  ) : null}
+                </div>
+              ) : null;
+
             if (milestones.length === 0) {
               return (
-                <EmptyState
-                  ghost="dots"
-                  title="No dates yet."
-                  text="Anniversaries, first dates, the ones worth celebrating again next year."
-                  cta={
-                    <Button icon="plus" onClick={() => setOpen(true)}>
-                      Add a date
-                    </Button>
-                  }
-                />
+                <>
+                  {prompts}
+                  <EmptyState
+                    ghost="dots"
+                    title="No dates yet."
+                    text="Anniversaries, first dates, the ones worth celebrating again next year."
+                    cta={
+                      <Button icon="plus" onClick={() => setOpen(true)}>
+                        Add a date
+                      </Button>
+                    }
+                  />
+                </>
               );
             }
             const upcoming = milestones
@@ -88,6 +131,7 @@ export default function Milestones() {
             return (
               <>
                 <Para className="mt-1.5">The dates that matter to us.</Para>
+                {prompts}
                 {upcoming.length ? (
                   <Section label="Coming up" className="mt-[18px]">
                     {upcoming.map((d) => (
@@ -95,9 +139,9 @@ export default function Milestones() {
                         key={d.id}
                         date={d.next}
                         title={d.title}
-                        sub={d.sub}
+                        sub={derivedSub(d, meId, partner) ?? d.sub}
                         right={countdown(d.next, today())}
-                        onAction={() => setActing(d)}
+                        onAction={d.source ? undefined : () => setActing(d)}
                       />
                     ))}
                   </Section>
@@ -109,8 +153,12 @@ export default function Milestones() {
                         key={d.id}
                         date={d.date}
                         title={d.title}
-                        sub={d.sub ?? d.date.slice(0, 4)}
-                        onAction={() => setActing(d)}
+                        sub={
+                          derivedSub(d, meId, partner) ??
+                          d.sub ??
+                          (d.year_known === false ? "" : d.date.slice(0, 4))
+                        }
+                        onAction={d.source ? undefined : () => setActing(d)}
                       />
                     ))}
                   </Section>

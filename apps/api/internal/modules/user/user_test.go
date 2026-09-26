@@ -82,6 +82,65 @@ func TestNew_ReturnsAllFieldErrorsAtOnce(t *testing.T) {
 	}
 }
 
+func TestValidateBirthday(t *testing.T) {
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	year := func(y int) *int { return &y }
+
+	t.Run("Feb 29 without a year is fine — 2000 stands in, and it's a leap year", func(t *testing.T) {
+		got, err := ValidateBirthday(2, 29, nil, now)
+		if err != nil {
+			t.Fatalf("Feb 29 with no year was refused: %v", err)
+		}
+		if got.Month != 2 || got.Day != 29 || got.Year != nil {
+			t.Errorf("got %+v", got)
+		}
+	})
+
+	t.Run("Feb 30 is never a date, with or without a year", func(t *testing.T) {
+		if _, err := ValidateBirthday(2, 30, nil, now); err == nil {
+			t.Error("Feb 30 with no year was accepted")
+		}
+		if _, err := ValidateBirthday(2, 30, year(2000), now); err == nil {
+			t.Error("Feb 30 with a year was accepted")
+		}
+	})
+
+	t.Run("a year in the future is refused", func(t *testing.T) {
+		_, err := ValidateBirthday(6, 1, year(2027), now)
+		f := fieldsOf(t, err)
+		if f["birthday"] != "That’s in the future." {
+			t.Errorf("fields = %v, want the future message under birthday", f)
+		}
+	})
+
+	t.Run("this year, but the day hasn't happened yet, is also in the future", func(t *testing.T) {
+		if _, err := ValidateBirthday(6, 2, year(2026), now); err == nil {
+			t.Error("a birthday later this year was accepted")
+		}
+		if _, err := ValidateBirthday(6, 1, year(2026), now); err != nil {
+			t.Errorf("today's own date this year was refused: %v", err)
+		}
+	})
+
+	t.Run("a year before 1900 isn't a date", func(t *testing.T) {
+		_, err := ValidateBirthday(6, 1, year(1899), now)
+		f := fieldsOf(t, err)
+		if f["birthday"] != "That isn’t a date." {
+			t.Errorf("fields = %v, want the not-a-date message under birthday", f)
+		}
+	})
+
+	t.Run("a real, past year is kept as given", func(t *testing.T) {
+		got, err := ValidateBirthday(9, 30, year(1990), now)
+		if err != nil {
+			t.Fatalf("a good birthday was refused: %v", err)
+		}
+		if got.Year == nil || *got.Year != 1990 {
+			t.Errorf("Year = %v, want 1990", got.Year)
+		}
+	})
+}
+
 func TestNew_DisplayNameBounds(t *testing.T) {
 	now := time.Now()
 

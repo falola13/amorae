@@ -124,6 +124,52 @@ func TestPostgresRepository_Update(t *testing.T) {
 	}
 }
 
+func TestPostgresRepository_Update_Birthday(t *testing.T) {
+	db := dbtest.New(t)
+	repo := user.NewPostgresRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	u, err := user.New(uniqueEmail(t), "Ada", "hashed", now)
+	if err != nil {
+		t.Fatalf("user.New: %v", err)
+	}
+	created, err := repo.Create(ctx, u)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	month, day, year := 9, 30, 1990
+	created.BirthMonth, created.BirthDay, created.BirthYear = &month, &day, &year
+	if _, err := repo.Update(ctx, created); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	reread, err := repo.GetByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if reread.BirthMonth == nil || *reread.BirthMonth != 9 || reread.BirthDay == nil || *reread.BirthDay != 30 {
+		t.Fatalf("BirthMonth/BirthDay = %v/%v, want 9/30", reread.BirthMonth, reread.BirthDay)
+	}
+	if reread.BirthYear == nil || *reread.BirthYear != 1990 {
+		t.Errorf("BirthYear = %v, want 1990", reread.BirthYear)
+	}
+
+	// Clearing it round-trips back to nil, not zero.
+	reread.BirthMonth, reread.BirthDay, reread.BirthYear = nil, nil, nil
+	if _, err := repo.Update(ctx, reread); err != nil {
+		t.Fatalf("Update (clear): %v", err)
+	}
+	cleared, err := repo.GetByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetByID after clear: %v", err)
+	}
+	if cleared.BirthMonth != nil || cleared.BirthDay != nil || cleared.BirthYear != nil {
+		t.Errorf("birthday after clear = %v/%v/%v, want all nil", cleared.BirthMonth, cleared.BirthDay, cleared.BirthYear)
+	}
+}
+
 func TestPostgresRepository_UpdateEmailAndTimezone(t *testing.T) {
 	db := dbtest.New(t)
 	repo := user.NewPostgresRepository(db)

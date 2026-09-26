@@ -32,8 +32,11 @@ export const occursOn = (date: string, day: string) => {
   return dayIn(Number(day.slice(0, 4)), month, dayOfMonth) === day;
 };
 
-/** "7 years", "One year", or nothing at all the first time round. */
-export const yearsBy = (date: string, day: string) => {
+/** "7 years", "One year", or nothing at all the first time round — or when
+ *  there's no year to count from (a birthday with none on file: `date` then
+ *  carries 2000 as a placeholder, which must never surface as an age). */
+export const yearsBy = (date: string, day: string, yearKnown = true) => {
+  if (!yearKnown) return "";
   const years = Number(day.slice(0, 4)) - Number(date.slice(0, 4));
   if (years <= 0) return "";
   return years === 1 ? "One year" : `${years} years`;

@@ -208,7 +208,7 @@ func ForImportantDates(c ImportantDateCandidate, now time.Time) []Notification {
 			Key: fmt.Sprintf("%s:%s:%s", c.MilestoneID, on.Format(time.DateOnly), lead.name),
 			Message: push.Message{
 				Title: c.Title,
-				Body:  howFarOff(c.Date, on, lead.days),
+				Body:  howFarOff(c.Date, on, lead.days, c.YearKnown),
 				Path:  "/together/milestones",
 				Tag:   KindImportantDate,
 			},
@@ -217,9 +217,15 @@ func ForImportantDates(c ImportantDateCandidate, now time.Time) []Notification {
 	return due
 }
 
-// howFarOff names the date, plus a "years today" count when there's history.
-func howFarOff(date, on time.Time, days int) string {
-	years := on.Year() - date.Year()
+// howFarOff names the date, plus a "years today" count when there's
+// history — never that count for a birthday with no known year, where
+// date's year is only milestones' 2000 placeholder and would otherwise
+// claim an age nobody actually gave.
+func howFarOff(date, on time.Time, days int, yearKnown bool) string {
+	years := 0
+	if yearKnown {
+		years = on.Year() - date.Year()
+	}
 	if days > 0 {
 		if years > 0 {
 			return fmt.Sprintf("%s — %s.", plural(years, "year"), on.Format("Monday 2 January"))
@@ -399,7 +405,11 @@ type ImportantDateCandidate struct {
 	Date     time.Time
 	// Whether to announce it yearly; false means kept but never notified.
 	Reminder bool
-	Prefs    Preferences
+	// False only for a birthday whose profile has no year — Date's year is
+	// then milestones' 2000 placeholder, and howFarOff must not turn it
+	// into an "N years" claim nobody's age actually supports.
+	YearKnown bool
+	Prefs     Preferences
 }
 
 // WrittenCandidate is one thing one partner wrote, and the other partner who

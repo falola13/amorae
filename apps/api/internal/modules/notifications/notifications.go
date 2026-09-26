@@ -82,10 +82,12 @@ func Defaults() Preferences {
 	}
 }
 
-// defaultDailyCap is what an unconfigured person gets. Six is enough for a
-// week starting, an event, and a few things a partner did, and not enough
-// for a day of them to become background noise.
-const defaultDailyCap = 6
+// defaultDailyCap is what an unconfigured person gets: no limit. Six lived
+// here until migration 00030_birthdays_and_uncapped.sql — nobody had ever
+// actually chosen it, it just arrived unpicked alongside quiet hours
+// (00024_notification_budget.sql), and 0 already means "no limit" to
+// everything that reads DailyCap, so the unconfigured case now matches that.
+const defaultDailyCap = 0
 
 // maxDailyCap is the largest number the screen will accept. Higher than this
 // is the same as no limit, so the screen says so instead.

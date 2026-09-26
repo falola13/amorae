@@ -110,6 +110,11 @@ func TestDefaults_AreMostlyOnButNotNoisy(t *testing.T) {
 	if !d.EventFollowups || !d.PartnerEvents {
 		t.Error("event_followups and partner_events should start on")
 	}
+	// Nobody ever chose six (migration 00030_birthdays_and_uncapped.sql) —
+	// the unconfigured case now matches what 0 already means everywhere else.
+	if d.DailyCap != 0 {
+		t.Errorf("DailyCap = %d, want 0 (no limit)", d.DailyCap)
+	}
 	if d.DefaultEventReminder != "1 hour before" {
 		t.Errorf("default_event_reminder = %q, want %q, matching what the screen always offered",
 			d.DefaultEventReminder, "1 hour before")

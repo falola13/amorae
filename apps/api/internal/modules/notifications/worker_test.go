@@ -666,11 +666,12 @@ func TestForImportantDates(t *testing.T) {
 	}
 	base := ImportantDateCandidate{
 		UserID: uuid.New(), MilestoneID: uuid.New(),
-		Title:    "Our wedding",
-		Timezone: "Africa/Lagos",
-		Date:     time.Date(2019, 9, 30, 0, 0, 0, 0, time.UTC),
-		Reminder: true,
-		Prefs:    Preferences{ImportantDates: true},
+		Title:     "Our wedding",
+		Timezone:  "Africa/Lagos",
+		Date:      time.Date(2019, 9, 30, 0, 0, 0, 0, time.UTC),
+		Reminder:  true,
+		YearKnown: true,
+		Prefs:     Preferences{ImportantDates: true},
 	}
 	// 08:00 Lagos is 07:00 UTC.
 	morningOfTheDay := time.Date(2026, 9, 30, 7, 0, 0, 0, time.UTC)
@@ -762,6 +763,25 @@ func TestForImportantDates(t *testing.T) {
 		due := ForImportantDates(c, morningOfTheDay)
 		if !strings.Contains(due[0].Message.Body, "One year today") {
 			t.Errorf("body = %q", due[0].Message.Body)
+		}
+	})
+
+	t.Run("a birthday with no known year never claims an age", func(t *testing.T) {
+		// A yearless birthday's Date carries the 2000 placeholder
+		// (milestones.Milestone.YearKnown false); without YearKnown here
+		// too, on.Year()-date.Year() would report some made-up count of years.
+		c := base
+		c.Date = time.Date(2000, 9, 30, 0, 0, 0, 0, time.UTC)
+		c.YearKnown = false
+		due := ForImportantDates(c, morningOfTheDay)
+		if len(due) != 1 {
+			t.Fatalf("got %d notifications, want one", len(due))
+		}
+		if strings.Contains(due[0].Message.Body, "year") {
+			t.Errorf("body = %q, a yearless birthday should never mention years", due[0].Message.Body)
+		}
+		if due[0].Message.Body != "Today." {
+			t.Errorf("body = %q, want just \"Today.\"", due[0].Message.Body)
 		}
 	})
 }
