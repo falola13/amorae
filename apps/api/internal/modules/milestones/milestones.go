@@ -4,6 +4,7 @@
 package milestones
 
 import (
+	"crypto/md5"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -13,11 +14,26 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 )
 
-var ErrNotFound = apperr.NotFound("not_found", "That date isn’t here.")
+var (
+	ErrNotFound = apperr.NotFound("not_found", "That date isn’t here.")
+	// ErrDerived is Delete's answer for an id that isn't a row here at
+	// all — it's the anniversary or a birthday, worked out from the couple
+	// or a profile, and there is nothing here to remove.
+	ErrDerived = apperr.Conflict("milestone_derived", "This one comes from your space or a profile — change it there.")
+)
 
 const (
 	maxTitleRunes = 80
 	maxSubRunes   = 80
+)
+
+// Source says a Milestone was computed from another record rather than
+// stored here. Empty for a stored one.
+type Source string
+
+const (
+	SourceAnniversary Source = "anniversary"
+	SourceBirthday    Source = "birthday"
 )
 
 type Milestone struct {
@@ -28,6 +44,41 @@ type Milestone struct {
 	Sub      string
 	// Whether this one comes round for them every year, or is simply kept.
 	Reminder bool
+	// Source is set for a date computed from the couple itself or a
+	// profile (see Derived), and empty for one actually stored here.
+	Source Source
+	// YearKnown only means anything for a SourceBirthday: false when that
+	// profile has no birth year, in which case Date's year is the 2000
+	// placeholder ValidateBirthday uses, not a real one.
+	YearKnown bool
+	// About is who a SourceBirthday date belongs to; the zero uuid for
+	// anything else.
+	About uuid.UUID
+}
+
+// DerivedID is the id given to a computed date: deterministic from the seed
+// that names it, so the same couple (and the same member, for a birthday)
+// always gets the same id back. Matched, not shared, with the identical
+// expression on the SQL side — notifications' worker_repository.go
+// ImportantDates query — because that query has to produce these rows
+// without a round trip through Go; TestDerivedID_MatchesSQL keeps the two
+// from drifting apart.
+//
+// md5(seed)::uuid in Postgres reinterprets the raw digest as a uuid without
+// touching version/variant bits, so this does the same: cast, not hash of a
+// UUID namespace (which uuid.NewMD5 would give a different answer for).
+func DerivedID(seed string) uuid.UUID {
+	return uuid.UUID(md5.Sum([]byte(seed)))
+}
+
+// AnniversaryID and BirthdayID build DerivedID's seed consistently, so the
+// exact format only has to be remembered in one place.
+func AnniversaryID(coupleID uuid.UUID) uuid.UUID {
+	return DerivedID(coupleID.String() + ":anniversary")
+}
+
+func BirthdayID(coupleID, userID uuid.UUID) uuid.UUID {
+	return DerivedID(coupleID.String() + ":birthday:" + userID.String())
 }
 
 type Input struct {

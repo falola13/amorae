@@ -99,6 +99,7 @@ export function EditCoupleSheet({
         <Field
           label="Together since"
           type="date"
+          hint="Your anniversary shows up in Important dates, every year."
           error={errors.relationship_start_date?.message}
           {...register("relationship_start_date")}
         />

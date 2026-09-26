@@ -40,16 +40,34 @@ type milestoneDTO struct {
 	Sub   string `json:"sub,omitempty"`
 	// Always sent: an absent field and false would mean the same thing anyway.
 	Reminder bool `json:"reminder"`
+	// null for a date stored here; "anniversary" or "birthday" for one
+	// computed from the couple or a profile instead (see Milestone.Source).
+	Source *string `json:"source"`
+	// False only for a birthday whose profile has no year — Date's year is
+	// then a placeholder, not a real one. True for everything else.
+	YearKnown bool `json:"year_known"`
+	// Who a birthday belongs to; left out for anything that isn't one.
+	About string `json:"about,omitempty"`
 }
 
 func toDTO(m Milestone) milestoneDTO {
-	return milestoneDTO{
+	out := milestoneDTO{
 		ID:       m.ID.String(),
 		Title:    m.Title,
 		Date:     m.Date.Format(time.DateOnly),
 		Sub:      m.Sub,
 		Reminder: m.Reminder,
+		// Meaningful only for a birthday; anything else has a real, full date.
+		YearKnown: m.Source != SourceBirthday || m.YearKnown,
 	}
+	if m.Source != "" {
+		source := string(m.Source)
+		out.Source = &source
+	}
+	if m.About != uuid.Nil {
+		out.About = m.About.String()
+	}
+	return out
 }
 
 type createRequest struct {

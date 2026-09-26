@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 
 import { Main } from "@/components/layout/screen";
 import {
@@ -19,6 +19,7 @@ import { QueryState, inPage } from "@/components/ui/query-state";
 import { ChangeEmailSheet } from "@/features/couple/components/change-email-sheet";
 import { ChangePasswordSheet } from "@/features/couple/components/change-password-sheet";
 import { useCouple, useMe, useUpdateProfile } from "@/features/couple/hooks";
+import { BirthdayField } from "@/features/settings/components/birthday-field";
 import { isApiError } from "@/lib/api/errors";
 import { profileSchema, type ProfileInput } from "@/lib/api/schemas";
 import { routes } from "@/lib/routes";
@@ -42,9 +43,11 @@ export default function ProfilePage() {
     formState: { errors, isDirty },
   } = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { display_name: "", timezone: "Africa/Lagos" },
+    defaultValues: { display_name: "", timezone: "Africa/Lagos", birthday: null },
     // keepDirtyValues prevents a background refetch from wiping a half-typed name.
-    values: me ? { display_name: me.display_name, timezone: me.timezone } : undefined,
+    values: me
+      ? { display_name: me.display_name, timezone: me.timezone, birthday: me.birthday ?? null }
+      : undefined,
     resetOptions: { keepDirtyValues: true },
   });
   const name = useWatch({ control, name: "display_name" });
@@ -104,6 +107,18 @@ export default function ProfilePage() {
                     }
                     error={errors.display_name?.message}
                     {...register("display_name")}
+                  />
+                  <Controller
+                    name="birthday"
+                    control={control}
+                    render={({ field }) => (
+                      <BirthdayField
+                        value={field.value}
+                        onChange={field.onChange}
+                        hint={`${partner ?? "Your partner"} gets a reminder before it — you won’t get one for your own.`}
+                        error={errors.birthday?.message}
+                      />
+                    )}
                   />
                   <button
                     type="button"

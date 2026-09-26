@@ -126,6 +126,62 @@ func TestService_UpdateProfile_Timezone(t *testing.T) {
 	}
 }
 
+func TestService_UpdateProfile_Birthday(t *testing.T) {
+	original := User{ID: uuid.New(), DisplayName: "Ada"}
+	svc := NewService(newFakeRepository(original), fixedNow)
+	year := 1990
+
+	t.Run("absent leaves it alone", func(t *testing.T) {
+		got, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{DisplayName: "Ada"})
+		if err != nil {
+			t.Fatalf("UpdateProfile: %v", err)
+		}
+		if got.BirthMonth != nil || got.BirthDay != nil {
+			t.Errorf("BirthMonth/BirthDay = %v/%v, want untouched (nil)", got.BirthMonth, got.BirthDay)
+		}
+	})
+
+	t.Run("present sets it", func(t *testing.T) {
+		got, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{
+			DisplayName: "Ada",
+			Birthday:    BirthdayPatch{Present: true, Value: Birthday{Month: 9, Day: 30, Year: &year}},
+		})
+		if err != nil {
+			t.Fatalf("UpdateProfile: %v", err)
+		}
+		if got.BirthMonth == nil || *got.BirthMonth != 9 || got.BirthDay == nil || *got.BirthDay != 30 {
+			t.Fatalf("BirthMonth/BirthDay = %v/%v, want 9/30", got.BirthMonth, got.BirthDay)
+		}
+		if got.BirthYear == nil || *got.BirthYear != 1990 {
+			t.Errorf("BirthYear = %v, want 1990", got.BirthYear)
+		}
+	})
+
+	t.Run("explicit clear removes it", func(t *testing.T) {
+		got, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{
+			DisplayName: "Ada",
+			Birthday:    BirthdayPatch{Present: true, Clear: true},
+		})
+		if err != nil {
+			t.Fatalf("UpdateProfile: %v", err)
+		}
+		if got.BirthMonth != nil || got.BirthDay != nil || got.BirthYear != nil {
+			t.Errorf("birthday = %v/%v/%v, want all cleared", got.BirthMonth, got.BirthDay, got.BirthYear)
+		}
+	})
+
+	t.Run("an impossible date is refused under the birthday field", func(t *testing.T) {
+		_, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{
+			DisplayName: "Ada",
+			Birthday:    BirthdayPatch{Present: true, Value: Birthday{Month: 2, Day: 30}},
+		})
+		f := fieldsOf(t, err)
+		if f["birthday"] == "" {
+			t.Errorf("fields = %v, want a birthday error", f)
+		}
+	})
+}
+
 func fieldsOf(t *testing.T, err error) map[string]string {
 	t.Helper()
 	appErr, ok := apperr.As(err)

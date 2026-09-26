@@ -29,12 +29,24 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (User, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
+// BirthdayPatch mirrors what the request body can say about "birthday":
+// the key absent (Present false, leave it alone), present as `null` (Present
+// true, Clear true, remove it), or present with a value (Present true, Value
+// set). A plain *Birthday can't tell "absent" from "explicit null" apart —
+// both would leave a nil pointer — so the handler has to carry Present itself.
+type BirthdayPatch struct {
+	Present bool
+	Clear   bool
+	Value   Birthday
+}
+
 // Email is intentionally absent: changing it needs the current password
 // (auth.Service.ChangeEmail).
 type UpdateProfileInput struct {
 	DisplayName string `json:"display_name"`
 	// Timezone is optional: empty leaves it unchanged.
-	Timezone string `json:"timezone"`
+	Timezone string
+	Birthday BirthdayPatch
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateProfileInput) (User, error) {
@@ -53,6 +65,14 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateP
 		}
 	}
 
+	var birthday Birthday
+	if input.Birthday.Present && !input.Birthday.Clear {
+		birthday, err = ValidateBirthday(input.Birthday.Value.Month, input.Birthday.Value.Day, input.Birthday.Value.Year, s.now())
+		if err := collectFields(fields, err); err != nil {
+			return User{}, err
+		}
+	}
+
 	if len(fields) > 0 {
 		return User{}, apperr.Validation(fields)
 	}
@@ -65,6 +85,13 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateP
 	u.DisplayName = displayName
 	if timezone != "" {
 		u.Timezone = timezone
+	}
+	switch {
+	case input.Birthday.Present && input.Birthday.Clear:
+		u.BirthMonth, u.BirthDay, u.BirthYear = nil, nil, nil
+	case input.Birthday.Present:
+		month, day := birthday.Month, birthday.Day
+		u.BirthMonth, u.BirthDay, u.BirthYear = &month, &day, birthday.Year
 	}
 	u.UpdatedAt = s.now()
 

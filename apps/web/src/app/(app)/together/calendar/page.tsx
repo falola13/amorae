@@ -156,7 +156,7 @@ export default function Calendar() {
                     rank: 0,
                     time: "All day",
                     title: m.title,
-                    sub: yearsBy(m.date, d) || m.sub || "",
+                    sub: yearsBy(m.date, d, m.year_known) || m.sub || "",
                     href: routes.milestones,
                   });
 

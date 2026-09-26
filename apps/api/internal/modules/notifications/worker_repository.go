@@ -151,17 +151,47 @@ func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Tim
 // ImportantDates takes no window, unlike DueEventReminders — matching
 // "today" against each couple's own zone and leap years isn't worth
 // narrowing in SQL at current couple counts.
+//
+// Three sources, unioned so ForImportantDates never has to know which one a
+// row came from: rows stored in milestones itself, the anniversary derived
+// from couples.relationship_start_date, and each current member's birthday
+// derived from their own profile — neither of the derived two is ever
+// copied into milestones (see milestones.Milestone's Source field, and
+// AnniversaryID/BirthdayID for the identical id computed on the Go side,
+// matched by milestones.TestDerivedID_MatchesSQL). A birthday's row is
+// joined to every current member and then filtered to exclude its own
+// subject, so it reaches the other partner(s) and never the person whose
+// day it is.
 func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDateCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT u.id, ms.id, ms.title, c.timezone, ms.date, ms.reminder,
-		       COALESCE(p.important_dates, true)
-		FROM milestones ms
-		JOIN couples c ON c.id = ms.couple_id
+		WITH dates AS (
+			SELECT ms.couple_id, ms.id, ms.title, ms.date, ms.reminder,
+			       true AS year_known, NULL::uuid AS about
+			FROM milestones ms
+			WHERE ms.reminder
+			UNION ALL
+			SELECT c.id, md5(c.id::text || ':anniversary')::uuid, 'Our anniversary',
+			       c.relationship_start_date, true, true, NULL::uuid
+			FROM couples c
+			WHERE c.relationship_start_date IS NOT NULL
+			UNION ALL
+			SELECT m.couple_id, md5(m.couple_id::text || ':birthday:' || u.id::text)::uuid,
+			       u.display_name || '’s birthday',
+			       make_date(COALESCE(u.birth_year, 2000)::int, u.birth_month, u.birth_day),
+			       true, u.birth_year IS NOT NULL, u.id
+			FROM couple_members m
+			JOIN users u ON u.id = m.user_id
+			WHERE m.ended_at IS NULL AND u.birth_month IS NOT NULL
+		)
+		SELECT u.id, d.id, d.title, c.timezone, d.date, d.reminder,
+		       COALESCE(p.important_dates, true), d.year_known
+		FROM dates d
+		JOIN couples c ON c.id = d.couple_id
 		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
 		JOIN users u ON u.id = m.user_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
-		  AND ms.reminder
+		  AND (d.about IS NULL OR d.about <> u.id)
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("finding dates to remind about: %w", err)
@@ -172,7 +202,7 @@ func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDat
 	for rows.Next() {
 		var c ImportantDateCandidate
 		if err := rows.Scan(&c.UserID, &c.MilestoneID, &c.Title, &c.Timezone,
-			&c.Date, &c.Reminder, &c.Prefs.ImportantDates); err != nil {
+			&c.Date, &c.Reminder, &c.Prefs.ImportantDates, &c.YearKnown); err != nil {
 			return nil, fmt.Errorf("scanning date to remind about: %w", err)
 		}
 		out = append(out, c)

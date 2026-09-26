@@ -71,6 +71,7 @@ interface User {
   timezone: string;   // IANA zone, e.g. "Africa/Lagos"; "UTC" for new accounts
   created_at: string;
   updated_at: string;
+  birthday: null | { month: number; day: number; year: number | null }; // year is optional
 }
 
 interface AuthResult {
@@ -133,12 +134,18 @@ identical rule. The display name is trimmed and 1–50 characters.
 ### `PATCH /v1/users/me` (auth)
 
 ```json
-{ "display_name": "Ada L.", "timezone": "Africa/Lagos" }
+{ "display_name": "Ada L.", "timezone": "Africa/Lagos", "birthday": { "month": 9, "day": 30, "year": 1990 } }
 ```
 
 - `200` → `{ "data": User }`
-- `400 validation_failed`: `fields` may contain `display_name`, `timezone`
+- `400 validation_failed`: `fields` may contain `display_name`, `timezone`, `birthday`
 - `timezone` is optional (omit or `""` to leave it unchanged) and must be an IANA zone name.
+- `birthday` follows the usual absent/null/value rule: omit the key to leave it unchanged, send
+  `"birthday": null` to clear it, or send `{ "month", "day", "year"? }` to set it. `year` is
+  optional — a birthday can be kept without saying which year. `month`/`day` must form a real
+  calendar date (year 2000 stands in when no year is given, so Feb 29 is always allowed); a given
+  `year` must be between 1900 and this year and the resulting date must not be in the future.
+  Either problem is `fields.birthday`, worded `"That isn’t a date."` or `"That’s in the future."`.
 - `email` is **not** accepted here (it's rejected as an unknown field): use the endpoint below.
 
 ### `PUT /v1/users/me/email` (auth)

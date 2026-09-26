@@ -35,6 +35,49 @@ type User struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
+	// BirthMonth and BirthDay travel together: both set or both nil (see
+	// the users_birthday_month_day_together constraint). BirthYear is
+	// optional even then — plenty of people would rather not say.
+	BirthMonth *int `json:"birth_month"`
+	BirthDay   *int `json:"birth_day"`
+	BirthYear  *int `json:"birth_year"`
+}
+
+// Birthday is a validated month/day, with an optional year.
+type Birthday struct {
+	Month int
+	Day   int
+	Year  *int
+}
+
+// minBirthYear bounds a birth year the same way the far end of a lifetime
+// does; ValidateBirthday's future check handles the near end.
+const minBirthYear = 1900
+
+// ValidateBirthday checks month and day form a real calendar date, and that
+// a given year is plausible and not in the future. Year 2000 (a leap year)
+// stands in when none is given, so a Feb 29 birthday is never refused for
+// lacking one — the placeholder is a stand-in for validation only, never
+// stored as if it meant something.
+func ValidateBirthday(month, day int, year *int, now time.Time) (Birthday, error) {
+	calendarYear := 2000
+	if year != nil {
+		calendarYear = *year
+	}
+	date := time.Date(calendarYear, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	if int(date.Month()) != month || date.Day() != day {
+		return Birthday{}, apperr.Validation(map[string]string{"birthday": "That isn’t a date."})
+	}
+	if year != nil {
+		if *year < minBirthYear {
+			return Birthday{}, apperr.Validation(map[string]string{"birthday": "That isn’t a date."})
+		}
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		if date.After(today) {
+			return Birthday{}, apperr.Validation(map[string]string{"birthday": "That’s in the future."})
+		}
+	}
+	return Birthday{Month: month, Day: day, Year: year}, nil
 }
 
 // DefaultTimezone matches the users.timezone column default.

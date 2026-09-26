@@ -49,10 +49,37 @@ export const joinSchema = z.object({
     .trim()
     .regex(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/i, "Codes look like XXX-XXX."),
 });
+// A birthday without a year lives on 2000-MM-DD (a leap year, so the 29th of
+// February stays choosable) — see Milestone.year_known in lib/api/types.ts.
+const isLeapYear = (y: number) => y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+export const maxDayInMonth = (month: number, year: number | null) => {
+  if (month === 2) return !year || isLeapYear(year) ? 29 : 28;
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+};
+// The day options offered are already narrowed to the chosen month/year; this
+// refine is a backstop against a stale or hand-built value.
+export const birthdaySchema = z
+  .object({
+    month: z.number().int().min(1).max(12),
+    day: z.number().int().min(1).max(31),
+    year: z
+      .number()
+      .int()
+      .min(1900)
+      .max(new Date().getFullYear(), "That can’t be right.")
+      .nullable(),
+  })
+  .refine((b) => b.day <= maxDayInMonth(b.month, b.year), {
+    message: "That date doesn’t exist.",
+    path: ["day"],
+  });
+export type BirthdayInput = z.infer<typeof birthdaySchema>;
+
 // Email isn't in the profile form: changing it needs the current password (changeEmailSchema).
 export const profileSchema = z.object({
   display_name: registerSchema.shape.display_name,
   timezone: z.string().min(1),
+  birthday: birthdaySchema.nullable(),
 });
 export const changeEmailSchema = z.object({
   email: emailSchema,
