@@ -1,6 +1,7 @@
 "use client";
 
 import { useCouple } from "@/features/couple/hooks";
+import { todaysPoints } from "@/features/prayers/derive";
 import { useWeek } from "@/features/prayers/hooks";
 import { Main } from "@/components/layout/screen";
 import { LinkButton, Para, Segments, Title } from "@/components/ui/kit";
@@ -9,7 +10,7 @@ import { routes } from "@/lib/routes";
 export default function Completion() {
   const week = useWeek();
   const couple = useCouple();
-  const n = week.data?.points.length ?? 5;
+  const n = week.data ? todaysPoints(week.data).length : 5;
   const partner = couple.data?.partner?.display_name ?? "Your partner";
   return (
     <>
@@ -35,9 +36,10 @@ export default function Completion() {
             style={{ animation: "draw 0.5s 0.15s ease-out forwards" }}
           />
         </svg>
-        <Title size="lg">You&rsquo;ve prayed through this week.</Title>
+        <Title size="lg">You&rsquo;ve prayed through today.</Title>
         <Para size="lg">
-          All {n} prayers, in your own time. {partner} will see that you&rsquo;ve finished.
+          Today&rsquo;s {n} prayers, in your own time. {partner} will see that you&rsquo;ve prayed
+          today.
         </Para>
         <Segments total={n} done={n} color="bg-green" height={4} className="mt-1 w-32" />
       </Main>

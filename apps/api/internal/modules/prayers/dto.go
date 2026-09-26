@@ -1,6 +1,7 @@
 package prayers
 
 import (
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,12 +16,24 @@ type pointDTO struct {
 	Scripture string `json:"scripture,omitempty"`
 	Verse     string `json:"verse,omitempty"`
 	Position  int    `json:"position"`
+	// Which weekdays (0=Sunday..6=Saturday) this point is for; empty means
+	// every day, so a point that's for every day never has to say so.
+	Weekdays []int `json:"weekdays"`
 	// Absent until marked answered; the client keys the answered treatment off this.
 	AnsweredAt string `json:"answered_at,omitempty"`
 	// answered_at is the instant (for ordering); this is the day in the couple's timezone.
 	AnsweredOn string `json:"answered_on,omitempty"`
 	AnsweredBy string `json:"answered_by,omitempty"`
 	AnswerNote string `json:"answer_note,omitempty"`
+}
+
+// dayDTO is one day of the week: which points are scheduled for it, and who
+// of the two partners has prayed each of those that day.
+type dayDTO struct {
+	Date    string   `json:"date"`
+	Points  []string `json:"points"`
+	Mine    []string `json:"mine"`
+	Partner []string `json:"partner"`
 }
 
 // answeredDTO carries enough of its week to be placed in time on a screen
@@ -41,11 +54,23 @@ type weekDTO struct {
 	MyCompleted      []string   `json:"my_completed"`
 	PartnerCompleted []string   `json:"partner_completed"`
 	Reflection       string     `json:"reflection,omitempty"`
+	// Present only when this week is the one running now — a history week
+	// has no "today" of its own.
+	Today string `json:"today,omitempty"`
+	// Sunday through Saturday, always — a week without a today still has
+	// its seven days.
+	Days []dayDTO `json:"days"`
+	// Point ids `viewer` cannot edit: the other partner has prayed them, on
+	// any day this week.
+	Locked []string `json:"locked"`
 }
 
-// ToDTO renders one week as `viewer` is allowed to see it. Visibility is
-// filtered here (via StatusFor/PointsFor) rather than at the edges.
-func ToDTO(rec Record, viewer, partner uuid.UUID) weekDTO {
+// ToDTO renders one week as `viewer` is allowed to see it. `today` is the
+// couple-local date the caller computed this request at; a zero value, or
+// one outside this week's own seven days, means this isn't being viewed as
+// the current week, so my_completed/partner_completed fall back to "any day
+// this week" (the history view) and Today is left empty.
+func ToDTO(rec Record, viewer, partner uuid.UUID, today time.Time) weekDTO {
 	status := StatusFor(rec.Week, viewer)
 	visible := PointsFor(rec.Week, viewer)
 
@@ -59,27 +84,51 @@ func ToDTO(rec Record, viewer, partner uuid.UUID) weekDTO {
 		MyCompleted:      []string{},
 		PartnerCompleted: []string{},
 		Reflection:       rec.Reflections[viewer],
+		Days:             make([]dayDTO, 0, 7),
+		Locked:           lockedIDs(rec.PrayedByOthers(viewer)),
 	}
 
 	for _, p := range visible {
 		out.Points = append(out.Points, toPointDTO(p))
 	}
 
-	// No visible points means no progress to report either.
+	// No visible points means no progress, and no days, to report either.
 	if len(visible) == 0 {
 		return out
 	}
-	out.MyCompleted = idStrings(rec.Completed[viewer])
-	out.PartnerCompleted = idStrings(rec.Completed[partner])
+
+	isCurrent := !today.IsZero() && !today.Before(rec.WeekStart) && today.Before(rec.WeekStart.AddDate(0, 0, 7))
+	if isCurrent {
+		out.Today = today.Format(time.DateOnly)
+		out.MyCompleted = idStrings(rec.ByDay[today][viewer])
+		out.PartnerCompleted = idStrings(rec.ByDay[today][partner])
+	} else {
+		out.MyCompleted = idStrings(rec.Completed[viewer])
+		out.PartnerCompleted = idStrings(rec.Completed[partner])
+	}
+
+	for i := 0; i < 7; i++ {
+		day := rec.WeekStart.AddDate(0, 0, i)
+		d := dayDTO{Date: day.Format(time.DateOnly), Points: []string{}, Mine: []string{}, Partner: []string{}}
+		for _, p := range visible {
+			if ScheduledOn(p.Weekdays, day.Weekday()) {
+				d.Points = append(d.Points, p.ID.String())
+			}
+		}
+		d.Mine = idStrings(rec.ByDay[day][viewer])
+		d.Partner = idStrings(rec.ByDay[day][partner])
+		out.Days = append(out.Days, d)
+	}
 	return out
 }
 
 // ToDTOs renders a list, always as an array rather than null so a client can
-// map over it without a nil check.
+// map over it without a nil check. Every record here is history, never the
+// current week, so `today` is always the zero value.
 func ToDTOs(records []Record, viewer, partner uuid.UUID) []weekDTO {
 	out := make([]weekDTO, 0, len(records))
 	for _, rec := range records {
-		out = append(out, ToDTO(rec, viewer, partner))
+		out = append(out, ToDTO(rec, viewer, partner, time.Time{}))
 	}
 	return out
 }
@@ -92,6 +141,7 @@ func toPointDTO(p Point) pointDTO {
 		Scripture:  p.Scripture,
 		Verse:      p.Verse,
 		Position:   p.Position,
+		Weekdays:   weekdaysList(p.Weekdays),
 		AnswerNote: p.AnswerNote,
 	}
 	if p.AnsweredAt != nil {
@@ -103,6 +153,32 @@ func toPointDTO(p Point) pointDTO {
 	if p.AnsweredBy != (uuid.UUID{}) {
 		out.AnsweredBy = p.AnsweredBy.String()
 	}
+	return out
+}
+
+// weekdaysList renders a bitmask as the days it names, empty for
+// AllWeekdays — the DTO would rather say nothing than list all seven.
+func weekdaysList(mask int) []int {
+	out := []int{}
+	if mask == AllWeekdays {
+		return out
+	}
+	for d := 0; d <= 6; d++ {
+		if mask&(1<<uint(d)) != 0 {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// lockedIDs is the point ids a map of "prayed by the other partner" names,
+// sorted so the response is stable from one call to the next.
+func lockedIDs(prayedByOthers map[uuid.UUID]bool) []string {
+	out := make([]string, 0, len(prayedByOthers))
+	for id := range prayedByOthers {
+		out = append(out, id.String())
+	}
+	sort.Strings(out)
 	return out
 }
 

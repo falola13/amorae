@@ -3,11 +3,20 @@
 import { useParams } from "next/navigation";
 
 import { Main } from "@/components/layout/screen";
-import { BottomActions, Button, LinkButton, Skeleton, Title, TopBar } from "@/components/ui/kit";
+import {
+  BottomActions,
+  Button,
+  LinkButton,
+  Para,
+  Skeleton,
+  Title,
+  TopBar,
+} from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { Scripture } from "@/components/ui/scripture";
 import { useCouple } from "@/features/couple/hooks";
 import { AnsweredBlock } from "@/features/prayers/components/answered-block";
+import { daysLabel, isForDay, todaysPoints, weekdayOf } from "@/features/prayers/derive";
 import { useSetCompleted, useWeek } from "@/features/prayers/hooks";
 import { routes } from "@/lib/routes";
 
@@ -31,6 +40,8 @@ export default function PrayerDetailPage() {
         if (!p) return loading;
         const idx = w.points.findIndex((x) => x.id === id);
         const done = w.my_completed.includes(p.id);
+        const forToday = w.today !== undefined && isForDay(p, weekdayOf(w.today));
+        const todayIdx = forToday ? todaysPoints(w).findIndex((x) => x.id === id) : -1;
         const setter =
           w.setter_id === couple.data?.me.id
             ? "you"
@@ -49,14 +60,20 @@ export default function PrayerDetailPage() {
             <Main className="gap-5 pt-5">
               <div className="flex flex-col gap-2.5">
                 <Title size="lg">{p.title}</Title>
-                <div className="text-support text-stone">Added by {setter} on Sunday</div>
+                <div className="text-support text-stone">
+                  Added by {setter} &middot; {daysLabel(p.weekdays)}
+                </div>
               </div>
               {p.text ? <p className="m-0 text-[19px] leading-[1.6]">{p.text}</p> : null}
               {p.scripture ? <Scripture reference={p.scripture} verse={p.verse} /> : null}
               <AnsweredBlock p={p} />
             </Main>
             <BottomActions>
-              {done ? (
+              {!forToday ? (
+                <Para className="text-stone">
+                  Not set for today &mdash; {daysLabel(p.weekdays)}.
+                </Para>
+              ) : done ? (
                 <Button
                   variant="secondary"
                   icon="check"
@@ -69,9 +86,11 @@ export default function PrayerDetailPage() {
                   I&rsquo;ve prayed
                 </Button>
               )}
-              <LinkButton href={routes.prayerMode({ at: idx })} variant="text" icon="moon">
-                Open in prayer mode
-              </LinkButton>
+              {forToday ? (
+                <LinkButton href={routes.prayerMode({ at: todayIdx })} variant="text" icon="moon">
+                  Open in prayer mode
+                </LinkButton>
+              ) : null}
             </BottomActions>
           </>
         );

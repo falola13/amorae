@@ -90,6 +90,8 @@ export const prayerPointSchema = z.object({
   title: z.string().trim().min(1, "Give this prayer a title.").max(80, "Keep the title short."),
   text: z.string().trim().max(1000, "Keep it under 1000 characters."),
   scripture: z.string().trim().max(60).optional(),
+  // Empty (or omitted) means every day.
+  weekdays: z.array(z.number().int().min(0).max(6)).optional(),
 });
 
 export const eventSchema = z.object({

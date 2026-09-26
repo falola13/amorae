@@ -61,7 +61,9 @@ func ForBothMarked(c BothMarkedCandidate) (Notification, bool) {
 	}, true
 }
 
-// ForBothPrayed is both of them having prayed everything in the week.
+// ForBothPrayed is both of them having prayed everything scheduled for one
+// day — fires once per day, not once per week (DEC-33): a couple prays the
+// week's points every day, so "both finished" is a daily thing to notice.
 func ForBothPrayed(c BothPrayedCandidate) (Notification, bool) {
 	if !c.Prefs.Together {
 		return Notification{}, false
@@ -69,10 +71,12 @@ func ForBothPrayed(c BothPrayedCandidate) (Notification, bool) {
 	return Notification{
 		UserID: c.UserID,
 		Kind:   KindBothPrayed,
-		Key:    c.WeekID.String(),
+		// Keyed per week and day, so tomorrow's "both finished" isn't
+		// suppressed by today's.
+		Key: c.WeekID.String() + ":" + c.Date.Format(time.DateOnly),
 		Message: push.Message{
 			Title: "Both of you",
-			Body:  "You’ve both prayed everything this week.",
+			Body:  "You’ve both prayed everything today.",
 			Path:  "/prayers",
 			Tag:   KindBothPrayed,
 		},

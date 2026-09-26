@@ -54,6 +54,8 @@ export interface PrayerPoint {
   scripture?: string;
   verse?: string;
   position: number;
+  /** Weekdays this is prayed, 0 (Sun) to 6 (Sat). Empty means every day. */
+  weekdays: number[];
   /** When this was marked answered. Absent until it is, which is what the
    *  answered treatment keys off — there is no boolean. */
   answered_at?: string;
@@ -74,15 +76,34 @@ export interface AnsweredPrayer extends PrayerPoint {
 
 export type WeekStatus = "draft" | "published" | "waiting";
 
+/** One day of the week, Sunday first. */
+export interface PrayerDay {
+  date: string; // ISO date
+  /** Point ids scheduled for this day. */
+  points: string[];
+  /** Point ids I prayed this day. */
+  mine: string[];
+  /** Point ids my partner prayed this day. */
+  partner: string[];
+}
+
 export interface PrayerWeek {
   id: string;
   week_start: string; // ISO date, a Sunday
   week_end: string;
+  /** Whose turn it is to write this week — either of you can still edit or publish it. */
   setter_id: string;
   status: WeekStatus;
   points: PrayerPoint[];
+  /** Current week: point ids prayed TODAY, by me/partner. Past weeks: ids prayed on at least one day. */
   my_completed: string[];
   partner_completed: string[];
+  /** Couple-local date (YYYY-MM-DD). Present only for the current week. */
+  today?: string;
+  /** Sun..Sat for this week. */
+  days: PrayerDay[];
+  /** Point ids I can't edit — my partner already prayed them on some day this week. */
+  locked: string[];
   reflection?: string;
 }
 

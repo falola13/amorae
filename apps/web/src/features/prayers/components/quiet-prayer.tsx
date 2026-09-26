@@ -7,8 +7,17 @@ import { Button } from "@/components/ui/kit";
 import type { useTimer } from "@/lib/hooks/use-timer";
 import { routes } from "@/lib/routes";
 
-/** No list today — just space and an optional timer. Shown for quiet prayer (?quiet=1) or an empty week. */
-export function QuietPrayer({ timer }: { timer: ReturnType<typeof useTimer> }) {
+/**
+ * No list today — just space and an optional timer. Shown for quiet prayer (?quiet=1), an empty
+ * week, or `restDay` — a week with points, but none set for today.
+ */
+export function QuietPrayer({
+  timer,
+  restDay,
+}: {
+  timer: ReturnType<typeof useTimer>;
+  restDay?: boolean;
+}) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col bg-paper">
       <div className="shrink-0" style={{ height: "calc(var(--safe-top) + 12px)" }} />
@@ -23,9 +32,13 @@ export function QuietPrayer({ timer }: { timer: ReturnType<typeof useTimer> }) {
       </div>
       <main className="flex grow animate-page flex-col justify-center gap-5 px-8 pb-6">
         <Icon name="moon" size={28} strokeWidth={1.4} className="text-plum" />
-        <h1 className="m-0 text-display">Take a quiet moment.</h1>
+        <h1 className="m-0 text-display">
+          {restDay ? "Nothing set for today." : "Take a quiet moment."}
+        </h1>
         <p className="m-0 text-reading text-stone">
-          No list today. Just you, and whatever is on your heart.
+          {restDay
+            ? "Rest, or pray freely."
+            : "No list today. Just you, and whatever is on your heart."}
         </p>
         {timer.label ? (
           <div

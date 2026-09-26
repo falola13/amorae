@@ -17,6 +17,11 @@ import (
 // MaxPoints is a deliberate kindness, not a technical bound.
 const MaxPoints = 10
 
+// AllWeekdays is the weekday bitmask meaning "every day" — the default for
+// a point that says nothing about which days it's for. Bit n is weekday n
+// (Sunday=0 .. Saturday=6, matching time.Weekday).
+const AllWeekdays = 127
+
 const (
 	maxTitleRunes      = 80
 	maxBodyRunes       = 500
@@ -29,23 +34,24 @@ const (
 type Status string
 
 const (
-	// The setter is still writing; only they can see the points.
+	// Not yet shared, but visible to both partners — either may write it
+	// (DEC-33).
 	StatusDraft     Status = "draft"
 	StatusPublished Status = "published"
-	// Never stored: a derived view of draft shown to the waiting partner,
-	// so they know a week exists without seeing half-written prayers.
-	StatusWaiting Status = "waiting"
 )
 
 var (
 	ErrNotFound    = apperr.NotFound("prayer_week_not_found", "That prayer week isn’t here.")
-	ErrNotSetter   = apperr.Forbidden("not_this_weeks_setter", "It’s your partner’s week to set the prayers.")
 	ErrNotDraft    = apperr.Conflict("week_already_published", "This week has been shared already.")
 	ErrLockedByUse = apperr.Conflict("prayer_in_use", "Your partner has already prayed this one, so it stays as it is. You can still add more, or change the ones they haven’t reached.")
 	// A draft prayer hasn't been seen by the partner, so it can't be answered.
 	ErrNotShared = apperr.Conflict("prayer_not_shared", "This one hasn’t been shared yet.")
 	// No week exists until the couple has two members to set a rotation.
 	ErrWaitingForPartner = apperr.Conflict("waiting_for_partner", "Your first prayer week starts when your partner joins.")
+	// A point not scheduled for today, or a week that isn't the current one —
+	// a couple prays the week's points every day, but only today's points,
+	// and only for the week that is actually running now.
+	ErrNotForToday = apperr.Conflict("not_for_today", "This one isn’t for today.")
 )
 
 // Week is one couple's week of prayer.
@@ -56,7 +62,20 @@ type Week struct {
 	SetterUserID uuid.UUID
 	Status       Status
 	PublishedAt  *time.Time
-	Points       []Point
+	// Who published it — nil for a week from before either partner could,
+	// or one still in draft. Decides who KindWeekPublished is addressed to.
+	PublishedBy *uuid.UUID
+	Points      []Point
+}
+
+// Point finds one of the week's own points by id.
+func (w Week) Point(id uuid.UUID) (Point, bool) {
+	for _, p := range w.Points {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return Point{}, false
 }
 
 // Point is one thing to pray about. Body, scripture and verse are optional —
@@ -68,6 +87,15 @@ type Point struct {
 	Body      string
 	Scripture string
 	Verse     string
+
+	// Weekdays is a bitmask, bit n meaning "scheduled on weekday n" (Sunday=0
+	// .. Saturday=6). Always in [1, AllWeekdays] once validated — never zero,
+	// which would mean "never". AllWeekdays is every day, the default.
+	Weekdays int
+	// WeekdaysRaw is what a request carries before ValidatePoints turns it
+	// into Weekdays; empty means every day. Never read afterwards, and never
+	// persisted itself.
+	WeekdaysRaw []int
 
 	// Answered once per couple, not per person, so a single nullable time
 	// rather than a join table. AnsweredBy is who noticed.
@@ -106,6 +134,22 @@ func StartOfWeek(at time.Time, loc *time.Location) time.Time {
 // date-only so daylight saving can't skew the count.
 func WeekIndex(firstWeekStart, weekStart time.Time) int {
 	return int(weekStart.Sub(firstWeekStart).Hours() / (24 * 7))
+}
+
+// StartOfDay is the couple-local calendar date `at` falls on, in the same
+// date-only representation as StartOfWeek (midnight UTC standing in for a
+// date, never an instant) — "today" is a calendar fact, not a moment.
+func StartOfDay(at time.Time, loc *time.Location) time.Time {
+	local := at.In(loc)
+	y, m, d := local.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+// ScheduledOn reports whether a point carrying this weekday mask is due on
+// `day` — the couple-local weekday of a date-only time.Time from StartOfDay
+// or StartOfWeek.AddDate.
+func ScheduledOn(weekdays int, day time.Weekday) bool {
+	return weekdays&(1<<uint(day)) != 0
 }
 
 // SetterFor is whose turn it is: members in join order, alternating weekly.
@@ -155,6 +199,23 @@ func ValidatePoints(points []Point) ([]Point, error) {
 		if utf8.RuneCountInString(p.Verse) > maxVerseRunes {
 			fields[fmt.Sprintf("points.%d.verse", i)] = fmt.Sprintf("Keep the verse under %d characters.", maxVerseRunes)
 		}
+
+		// Empty means every day; a client never has to spell that out.
+		mask := AllWeekdays
+		if len(p.WeekdaysRaw) > 0 {
+			mask = 0
+			for _, day := range p.WeekdaysRaw {
+				if day < 0 || day > 6 {
+					fields[fmt.Sprintf("points.%d.weekdays", i)] = "Days must be between Sunday (0) and Saturday (6)."
+					mask = AllWeekdays
+					break
+				}
+				mask |= 1 << uint(day)
+			}
+		}
+		p.Weekdays = mask
+		p.WeekdaysRaw = nil
+
 		cleaned = append(cleaned, p)
 	}
 
@@ -196,32 +257,27 @@ func CanAnswer(w Week) error {
 	return nil
 }
 
-// StatusFor is what `viewer` should be told the week's status is: a draft
-// reads as StatusWaiting to anyone but the setter (see PointsFor).
+// StatusFor is what `viewer` should be told the week's status is. Both
+// partners are told the same thing, draft or published — either may step in
+// on a draft (see CanEditPoints), so hiding it from one of them would just
+// be hiding work they're allowed to do. Kept as a function rather than a
+// raw field read so this boundary stays in one place.
 func StatusFor(w Week, viewer uuid.UUID) Status {
-	if w.Status == StatusDraft && viewer != w.SetterUserID {
-		return StatusWaiting
-	}
 	return w.Status
 }
 
-// PointsFor is the week's points as `viewer` may see them: none while the
-// setter is still writing.
+// PointsFor is the week's points as `viewer` may see them: the same points
+// either partner sees, for the reason StatusFor gives.
 func PointsFor(w Week, viewer uuid.UUID) []Point {
-	if w.Status == StatusDraft && viewer != w.SetterUserID {
-		return nil
-	}
 	return w.Points
 }
 
-// CanEditPoints reports whether this edit is allowed: only the setter may
-// write the week, and a point someone else has prayed can't be reworded or
-// removed (reordering is fine). prayedByOthers excludes the editor's own
-// completions, which don't restrict them.
+// CanEditPoints reports whether this edit is allowed: either partner may
+// write the week (DEC-33), but a point the OTHER partner has already prayed
+// — on any day this week — can't be reworded or removed (reordering is
+// fine). prayedByOthers excludes the editor's own completions, which don't
+// restrict them.
 func CanEditPoints(w Week, editor uuid.UUID, incoming []Point, prayedByOthers map[uuid.UUID]bool) error {
-	if editor != w.SetterUserID {
-		return ErrNotSetter
-	}
 	if len(prayedByOthers) == 0 {
 		return nil
 	}
@@ -250,11 +306,6 @@ func CanEditPoints(w Week, editor uuid.UUID, incoming []Point, prayedByOthers ma
 	return nil
 }
 
-// CanPublish reports whether `publisher` may share this week now. Publishing
-// again is not an error — the service treats it as a no-op.
-func CanPublish(w Week, publisher uuid.UUID) error {
-	if publisher != w.SetterUserID {
-		return ErrNotSetter
-	}
-	return nil
-}
+// Publishing is open to either partner (DEC-33); a caller has already been
+// checked to belong to the couple by the time it reaches here, so there is
+// nothing left for a CanPublish to guard — the service just publishes.

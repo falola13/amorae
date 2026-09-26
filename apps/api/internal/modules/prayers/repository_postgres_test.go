@@ -2,6 +2,7 @@ package prayers_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,15 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 	"github.com/falola13/amorae/apps/api/internal/platform/database/dbtest"
 )
+
+// fakeCouples hands the service a fixed CoupleContext, so a service-level
+// test can drive prayers.Service against the real database without also
+// standing up the couples module.
+type fakeCouples struct{ cc prayers.CoupleContext }
+
+func (f fakeCouples) ForPrayers(context.Context, uuid.UUID) (prayers.CoupleContext, error) {
+	return f.cc, nil
+}
 
 // dbtest shares one database across packages, so anything unique per run has
 // to be unique here too.
@@ -112,14 +122,14 @@ func TestPostgresRepository_LoadsAWholeWeek(t *testing.T) {
 			t.Fatalf("insert point %d: %v", i, err)
 		}
 	}
-	// Ada prayed two of them, Ben one.
+	// Ada prayed two of them, Ben one — all on the week's own Sunday.
 	for _, c := range []struct {
 		point uuid.UUID
 		user  uuid.UUID
 	}{{points[0], ada}, {points[1], ada}, {points[0], ben}} {
 		if _, err := db.Q(ctx).Exec(ctx,
-			`INSERT INTO prayer_completions (point_id, user_id) VALUES ($1, $2)`,
-			c.point, c.user); err != nil {
+			`INSERT INTO prayer_completions (point_id, user_id, prayed_on) VALUES ($1, $2, $3)`,
+			c.point, c.user, weekStart); err != nil {
 			t.Fatalf("insert completion: %v", err)
 		}
 	}
@@ -268,11 +278,17 @@ func TestPostgresRepository_ReplacePoints(t *testing.T) {
 		t.Fatalf("%d points after the first write, want 3", len(rec.Points))
 	}
 	work, family, rest := rec.Points[0], rec.Points[1], rec.Points[2]
+	day := weekStart
+	nextDay := weekStart.AddDate(0, 0, 1)
 
 	t.Run("reordering keeps the points, and what was prayed on them", func(t *testing.T) {
-		// Ben prays the first one, then Ada rearranges the week.
-		if err := repo.SetCompletion(ctx, work.ID, ben, true, at); err != nil {
-			t.Fatalf("SetCompletion: %v", err)
+		// Ben prays the first one on two different days, then Ada rearranges
+		// the week.
+		if err := repo.SetCompletion(ctx, work.ID, ben, day, true, at); err != nil {
+			t.Fatalf("SetCompletion (day 1): %v", err)
+		}
+		if err := repo.SetCompletion(ctx, work.ID, ben, nextDay, true, at); err != nil {
+			t.Fatalf("SetCompletion (day 2): %v", err)
 		}
 
 		// Exercises the UNIQUE (week_id, position) collision guard.
@@ -289,9 +305,14 @@ func TestPostgresRepository_ReplacePoints(t *testing.T) {
 		if rec.Points[1].ID != work.ID {
 			t.Error("the point was replaced rather than moved, so its id changed")
 		}
-		// The id survived, so Ben's prayer went with it.
+		// The id survived, so Ben's prayer went with it — once, not twice,
+		// even though he prayed it on two separate days.
 		if len(rec.Completed[ben]) != 1 || rec.Completed[ben][0] != work.ID {
 			t.Errorf("Ben's completion did not survive the reorder: %v", rec.Completed[ben])
+		}
+		// But each day is still there of its own accord.
+		if len(rec.ByDay[day][ben]) != 1 || len(rec.ByDay[nextDay][ben]) != 1 {
+			t.Errorf("the two days of Ben's completion did not both survive: %+v", rec.ByDay)
 		}
 	})
 
@@ -330,20 +351,26 @@ func TestPostgresRepository_PublishAndComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureWeek: %v", err)
 	}
-	cleaned, err := prayers.ValidatePoints([]prayers.Point{{Title: "Work"}})
+	// Rest is every day; Work is Sunday and Monday only, so the days
+	// breakdown below has something to distinguish.
+	cleaned, err := prayers.ValidatePoints([]prayers.Point{
+		{Title: "Rest"},
+		{Title: "Work", WeekdaysRaw: []int{0, 1}},
+	})
 	if err != nil {
 		t.Fatalf("ValidatePoints: %v", err)
 	}
 	if err := repo.ReplacePoints(ctx, weekID, cleaned, at); err != nil {
 		t.Fatalf("ReplacePoints: %v", err)
 	}
+	day := weekStart // a Sunday: both points are scheduled on it
 
-	t.Run("publishing twice leaves one published week", func(t *testing.T) {
-		if err := repo.Publish(ctx, weekID, at); err != nil {
+	t.Run("publishing twice leaves one published week, crediting the first publisher", func(t *testing.T) {
+		if err := repo.Publish(ctx, weekID, ada, at); err != nil {
 			t.Fatalf("first Publish: %v", err)
 		}
 		later := at.Add(time.Hour)
-		if err := repo.Publish(ctx, weekID, later); err != nil {
+		if err := repo.Publish(ctx, weekID, ben, later); err != nil {
 			t.Fatalf("second Publish: %v", err)
 		}
 		rec, err := repo.WeekByID(ctx, coupleID, weekID)
@@ -353,17 +380,21 @@ func TestPostgresRepository_PublishAndComplete(t *testing.T) {
 		if rec.Status != prayers.StatusPublished {
 			t.Errorf("status = %q, want published", rec.Status)
 		}
-		// A retry must not move the moment it was shared.
+		// A retry must not move the moment it was shared, nor credit
+		// whoever happened to call publish again.
 		if rec.PublishedAt == nil || !rec.PublishedAt.Equal(at) {
 			t.Errorf("published_at = %v, want %v", rec.PublishedAt, at)
 		}
+		if rec.PublishedBy == nil || *rec.PublishedBy != ada {
+			t.Errorf("published_by = %v, want %s (the first publisher)", rec.PublishedBy, ada)
+		}
 	})
 
-	t.Run("completing twice is the same as completing once", func(t *testing.T) {
+	t.Run("completing twice on the same day is the same as completing once", func(t *testing.T) {
 		rec, _ := repo.WeekByID(ctx, coupleID, weekID)
 		point := rec.Points[0].ID
 		for i := 0; i < 2; i++ {
-			if err := repo.SetCompletion(ctx, point, ben, true, at); err != nil {
+			if err := repo.SetCompletion(ctx, point, ben, day, true, at); err != nil {
 				t.Fatalf("SetCompletion %d: %v", i, err)
 			}
 		}
@@ -375,13 +406,46 @@ func TestPostgresRepository_PublishAndComplete(t *testing.T) {
 			t.Error("Ada was marked as having prayed something she never touched")
 		}
 
-		if err := repo.SetCompletion(ctx, point, ben, false, at); err != nil {
+		if err := repo.SetCompletion(ctx, point, ben, day, false, at); err != nil {
 			t.Fatalf("clearing: %v", err)
 		}
 		rec, _ = repo.WeekByID(ctx, coupleID, weekID)
 		if len(rec.Completed[ben]) != 0 {
 			t.Error("unmarking left the completion behind")
 		}
+	})
+
+	t.Run("the days breakdown reflects each point's own schedule", func(t *testing.T) {
+		var rest, work prayers.Point
+		rec, _ := repo.WeekByID(ctx, coupleID, weekID)
+		for _, p := range rec.Points {
+			switch p.Title {
+			case "Rest":
+				rest = p
+			case "Work":
+				work = p
+			}
+		}
+		if err := repo.SetCompletion(ctx, rest.ID, ada, day, true, at); err != nil {
+			t.Fatalf("SetCompletion (rest): %v", err)
+		}
+		if err := repo.SetCompletion(ctx, work.ID, ben, day, true, at); err != nil {
+			t.Fatalf("SetCompletion (work): %v", err)
+		}
+
+		rec, err := repo.WeekByID(ctx, coupleID, weekID)
+		if err != nil {
+			t.Fatalf("WeekByID: %v", err)
+		}
+		if len(rec.ByDay[day][ada]) != 1 || rec.ByDay[day][ada][0] != rest.ID {
+			t.Errorf("Ada's day-1 completions = %v, want just %s", rec.ByDay[day][ada], rest.ID)
+		}
+		if len(rec.ByDay[day][ben]) != 1 || rec.ByDay[day][ben][0] != work.ID {
+			t.Errorf("Ben's day-1 completions = %v, want just %s", rec.ByDay[day][ben], work.ID)
+		}
+		// Clean up so later subtests see a blank slate.
+		_ = repo.SetCompletion(ctx, rest.ID, ada, day, false, at)
+		_ = repo.SetCompletion(ctx, work.ID, ben, day, false, at)
 	})
 
 	t.Run("a reflection replaces rather than accumulates", func(t *testing.T) {
@@ -401,6 +465,88 @@ func TestPostgresRepository_PublishAndComplete(t *testing.T) {
 		rec, _ = repo.WeekByID(ctx, coupleID, weekID)
 		if _, still := rec.Reflections[ada]; still {
 			t.Error("an emptied reflection is still there")
+		}
+	})
+}
+
+func TestService_SetCompletion_OnlyTodaysPointsInTheCurrentWeek(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	coupleID, ada, ben := pair(t, db)
+	repo := prayers.NewPostgresRepository(db)
+
+	cc := prayers.CoupleContext{
+		CoupleID: coupleID,
+		Location: time.UTC,
+		Members: []prayers.Member{
+			{UserID: ada, JoinedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{UserID: ben, JoinedAt: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)},
+		},
+	}
+	// A fixed Tuesday, so "today" and "this week" are both under the test's
+	// control rather than the wall clock's.
+	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
+	svc := prayers.NewService(repo, fakeCouples{cc: cc}, func() time.Time { return now })
+
+	rec, _, err := svc.SavePoints(ctx, ada, []prayers.Point{
+		{Title: "Every day"},
+		{Title: "Mondays only", WeekdaysRaw: []int{1}},
+	})
+	if err != nil {
+		t.Fatalf("SavePoints: %v", err)
+	}
+	everyDay, mondaysOnly := rec.Points[0].ID, rec.Points[1].ID
+
+	t.Run("an unpublished week has nothing to complete", func(t *testing.T) {
+		if _, _, err := svc.SetCompletion(ctx, ada, everyDay, true); !errors.Is(err, prayers.ErrNotShared) {
+			t.Errorf("SetCompletion on a draft = %v, want ErrNotShared", err)
+		}
+	})
+
+	if _, _, err := svc.Publish(ctx, ben); err != nil {
+		t.Fatalf("Publish (by the non-setter, DEC-33): %v", err)
+	}
+
+	t.Run("a point scheduled for today may be completed, by either partner", func(t *testing.T) {
+		if _, _, err := svc.SetCompletion(ctx, ada, everyDay, true); err != nil {
+			t.Errorf("SetCompletion by the setter = %v, want nil", err)
+		}
+		if _, _, err := svc.SetCompletion(ctx, ben, everyDay, true); err != nil {
+			t.Errorf("SetCompletion by the partner = %v, want nil", err)
+		}
+	})
+
+	t.Run("a point not scheduled for today is refused", func(t *testing.T) {
+		// `now` is a Tuesday; this point only runs on Mondays.
+		if _, _, err := svc.SetCompletion(ctx, ada, mondaysOnly, true); !errors.Is(err, prayers.ErrNotForToday) {
+			t.Errorf("SetCompletion(off-schedule) = %v, want ErrNotForToday", err)
+		}
+	})
+
+	t.Run("a point outside the current week is refused", func(t *testing.T) {
+		// A published week from last month, with its own "every day" point.
+		pastStart := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+		pastWeekID, err := repo.EnsureWeek(ctx, coupleID, pastStart, ada, now)
+		if err != nil {
+			t.Fatalf("EnsureWeek (past): %v", err)
+		}
+		cleaned, err := prayers.ValidatePoints([]prayers.Point{{Title: "Long done"}})
+		if err != nil {
+			t.Fatalf("ValidatePoints: %v", err)
+		}
+		if err := repo.ReplacePoints(ctx, pastWeekID, cleaned, now); err != nil {
+			t.Fatalf("ReplacePoints (past): %v", err)
+		}
+		if err := repo.Publish(ctx, pastWeekID, ada, now); err != nil {
+			t.Fatalf("Publish (past): %v", err)
+		}
+		past, err := repo.WeekByID(ctx, coupleID, pastWeekID)
+		if err != nil {
+			t.Fatalf("WeekByID (past): %v", err)
+		}
+
+		if _, _, err := svc.SetCompletion(ctx, ada, past.Points[0].ID, true); !errors.Is(err, prayers.ErrNotForToday) {
+			t.Errorf("SetCompletion(past week) = %v, want ErrNotForToday", err)
 		}
 	})
 }
