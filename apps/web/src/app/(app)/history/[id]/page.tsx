@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
+import { DaysRow } from "@/features/prayers/components/days-row";
 import { setterSentence, prayerCount } from "@/features/prayers/derive";
 import { useSaveReflection, useWeekById } from "@/features/prayers/hooks";
 import { range } from "@/lib/dates";
@@ -54,6 +55,11 @@ export default function HistoryDetail() {
                 {prayerCount(w.points.length)}. You prayed {w.my_completed.length}, {partner} prayed{" "}
                 {w.partner_completed.length}.
               </Para>
+              {w.days.length > 0 ? (
+                <div className="mt-4 max-w-[320px]">
+                  <DaysRow days={w.days} today={w.today} partnerName={partner} />
+                </div>
+              ) : null}
               <ol className="m-0 mt-[18px] list-none border-t border-line p-0">
                 {w.points.map((p, i) => (
                   <li key={p.id} className="flex min-h-[64px] gap-4 border-b border-line py-3">

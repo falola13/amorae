@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { lookupScripture, type LookupFailure, type Scripture } from "@/features/prayers/scripture";
 import type { z } from "zod";
 
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { useCouple } from "@/features/couple/hooks";
+import { WeekdayChips } from "@/features/prayers/components/weekday-chips";
 import { useSavePoints, useWeek } from "@/features/prayers/hooks";
 import { prayerPointSchema } from "@/lib/api/schemas";
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts";
@@ -53,12 +54,18 @@ function EditPrayer() {
     getValues,
     reset,
     watch,
+    control,
     formState: { errors, isDirty },
   } = useForm<Form>({
     resolver: zodResolver(prayerPointSchema),
-    defaultValues: { title: "", text: "", scripture: "" },
+    defaultValues: { title: "", text: "", scripture: "", weekdays: [] },
     values: point
-      ? { title: point.title, text: point.text, scripture: point.scripture ?? "" }
+      ? {
+          title: point.title,
+          text: point.text,
+          scripture: point.scripture ?? "",
+          weekdays: point.weekdays,
+        }
       : undefined,
     resetOptions: { keepDirtyValues: true },
   });
@@ -91,9 +98,13 @@ function EditPrayer() {
     const draft = readDraft<Form>(draftKey);
     if (!draft) return;
     const current = getValues();
-    const keys = ["title", "text", "scripture"] as const;
-    if (keys.every((k) => (draft[k] ?? "") === (current[k] ?? ""))) return;
-    for (const k of keys) setValue(k, draft[k] ?? "", { shouldDirty: true });
+    const textKeys = ["title", "text", "scripture"] as const;
+    const sameText = textKeys.every((k) => (draft[k] ?? "") === (current[k] ?? ""));
+    const sameDays =
+      JSON.stringify(draft.weekdays ?? []) === JSON.stringify(current.weekdays ?? []);
+    if (sameText && sameDays) return;
+    for (const k of textKeys) setValue(k, draft[k] ?? "", { shouldDirty: true });
+    setValue("weekdays", draft.weekdays ?? [], { shouldDirty: true });
     setRestored(true);
   }, [week.isSuccess, draftKey, getValues, setValue]);
   const leave = () => {
@@ -104,8 +115,13 @@ function EditPrayer() {
     clearDraft(draftKey);
     reset(
       point
-        ? { title: point.title, text: point.text, scripture: point.scripture ?? "" }
-        : { title: "", text: "", scripture: "" },
+        ? {
+            title: point.title,
+            text: point.text,
+            scripture: point.scripture ?? "",
+            weekdays: point.weekdays,
+          }
+        : { title: "", text: "", scripture: "", weekdays: [] },
     );
     setRestored(false);
   };
@@ -150,7 +166,7 @@ function EditPrayer() {
         const idx = points.findIndex((x) => x.id === id);
 
         // Reachable via back button/old tab even though the list hides this link once the partner has prayed it.
-        if (idx !== -1 && id && w.partner_completed.includes(id)) {
+        if (idx !== -1 && id && w.locked.includes(id)) {
           return (
             <Main>
               <div className="pt-3">
@@ -190,6 +206,7 @@ function EditPrayer() {
             scripture,
             verse: (scripture && words) || undefined,
             position: idx === -1 ? points.length : idx,
+            weekdays: v.weekdays ?? [],
           };
           const next =
             idx === -1 ? [...points, p] : points.map((x) => (x.id === id ? { ...x, ...p } : x));
@@ -257,6 +274,16 @@ function EditPrayer() {
                 className="min-h-[124px] text-[19px] leading-[1.6]"
                 {...register("text")}
               />
+              <div>
+                <p className="m-0 pb-2 text-[13px] font-semibold text-stone">Which days?</p>
+                <Controller
+                  name="weekdays"
+                  control={control}
+                  render={({ field }) => (
+                    <WeekdayChips value={field.value ?? []} onChange={field.onChange} />
+                  )}
+                />
+              </div>
               <div className="border-t border-line pt-[18px]">
                 {/* The reference is all anybody types. The words come from it,
                     because a verse field nobody filled is why scripture has

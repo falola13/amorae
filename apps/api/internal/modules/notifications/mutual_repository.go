@@ -18,10 +18,14 @@ type BothMarkedCandidate struct {
 	Prefs       Preferences
 }
 
-// BothPrayedCandidate is a week both partners have prayed all the way through.
+// BothPrayedCandidate is one day, in the current week, that both partners
+// have prayed all the way through.
 type BothPrayedCandidate struct {
 	UserID uuid.UUID
 	WeekID uuid.UUID
+	// The couple-local date this is about — "today", since that's the only
+	// day BothPrayedWeeks ever checks.
+	Date   time.Time
 	Points int
 	Prefs  Preferences
 }
@@ -74,12 +78,15 @@ func (r *PostgresRepository) BothMarkedDays(ctx context.Context, since time.Time
 	return out, nil
 }
 
-// BothPrayedWeeks finds this week's prayers, where both have prayed all of
-// them. Bounded by `since` for the same reason as BothMarkedDays.
+// BothPrayedWeeks finds today's schedule in the current week, where both
+// partners have prayed everything scheduled for today. Bounded by `since`
+// for the same reason as BothMarkedDays — otherwise a couple who finished
+// yesterday would still be "both finished" a week later.
 func (r *PostgresRepository) BothPrayedWeeks(ctx context.Context, now, since time.Time) ([]BothPrayedCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT u.id, w.id,
-		       (SELECT count(*) FROM prayer_points pp WHERE pp.week_id = w.id)::int,
+		SELECT u.id, w.id, `+coupleLocalToday+`,
+		       (SELECT count(*) FROM prayer_points pp
+		         WHERE pp.week_id = w.id AND (pp.weekdays::int & `+todaysWeekdayBit+`) <> 0)::int,
 		       COALESCE(p.together, true)
 		FROM prayer_weeks w
 		JOIN couples c ON c.id = w.couple_id
@@ -89,38 +96,42 @@ func (r *PostgresRepository) BothPrayedWeeks(ctx context.Context, now, since tim
 		WHERE c.dissolved_at IS NULL
 		  AND w.status = 'published'
 		  AND w.week_start = `+currentWeekStart+`
-		  AND (SELECT count(*) FROM prayer_points pp WHERE pp.week_id = w.id) > 0
+		  AND (SELECT count(*) FROM prayer_points pp
+		        WHERE pp.week_id = w.id AND (pp.weekdays::int & `+todaysWeekdayBit+`) <> 0) > 0
 		  AND (SELECT count(*) FROM couple_members m2
 		        WHERE m2.couple_id = c.id AND m2.ended_at IS NULL) = 2
-		  -- Every member has a completion for every point in the week.
+		  -- Every member has, for today, a completion for every point
+		  -- scheduled today.
 		  AND NOT EXISTS (
 		        SELECT 1
 		        FROM couple_members m3
 		        JOIN prayer_points pp ON pp.week_id = w.id
+		                              AND (pp.weekdays::int & `+todaysWeekdayBit+`) <> 0
 		        WHERE m3.couple_id = c.id AND m3.ended_at IS NULL
 		          AND NOT EXISTS (
 		                SELECT 1 FROM prayer_completions pc
-		                 WHERE pc.point_id = pp.id AND pc.user_id = m3.user_id)
+		                 WHERE pc.point_id = pp.id AND pc.user_id = m3.user_id
+		                   AND pc.prayed_on = `+coupleLocalToday+`)
 		      )
 		  AND (SELECT max(pc.completed_at) FROM prayer_completions pc
 		         JOIN prayer_points pp ON pp.id = pc.point_id
-		        WHERE pp.week_id = w.id) > $2
+		        WHERE pp.week_id = w.id AND pc.prayed_on = `+coupleLocalToday+`) > $2
 	`, now, since)
 	if err != nil {
-		return nil, fmt.Errorf("finding weeks you both finished: %w", err)
+		return nil, fmt.Errorf("finding days you both finished: %w", err)
 	}
 	defer rows.Close()
 
 	var out []BothPrayedCandidate
 	for rows.Next() {
 		var c BothPrayedCandidate
-		if err := rows.Scan(&c.UserID, &c.WeekID, &c.Points, &c.Prefs.Together); err != nil {
-			return nil, fmt.Errorf("scanning a week you both finished: %w", err)
+		if err := rows.Scan(&c.UserID, &c.WeekID, &c.Date, &c.Points, &c.Prefs.Together); err != nil {
+			return nil, fmt.Errorf("scanning a day you both finished: %w", err)
 		}
 		out = append(out, c)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("finding weeks you both finished: %w", err)
+		return nil, fmt.Errorf("finding days you both finished: %w", err)
 	}
 	return out, nil
 }

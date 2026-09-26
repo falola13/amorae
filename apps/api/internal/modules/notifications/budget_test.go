@@ -136,25 +136,6 @@ func TestForBothMarked(t *testing.T) {
 	}
 }
 
-func TestForBothPrayed(t *testing.T) {
-	c := BothPrayedCandidate{
-		UserID: uuid.New(), WeekID: uuid.New(), Points: 3,
-		Prefs: Preferences{Together: true},
-	}
-	n, ok := ForBothPrayed(c)
-	if !ok {
-		t.Fatal("a finished week said nothing")
-	}
-	if n.Key != c.WeekID.String() {
-		t.Errorf("key = %q, want the week", n.Key)
-	}
-	off := c
-	off.Prefs.Together = false
-	if _, ok := ForBothPrayed(off); ok {
-		t.Error("it was sent to somebody who turned it off")
-	}
-}
-
 // The cap has to hold within one tick as well as across them: several things
 // can come due at once, and a budget read once at the start would let all of
 // them through.

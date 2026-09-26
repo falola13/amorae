@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Button, cx } from "@/components/ui/kit";
 import { Scripture } from "@/components/ui/scripture";
+import { todaysPoints } from "@/features/prayers/derive";
 import { useSetCompleted } from "@/features/prayers/hooks";
 import type { PrayerWeek } from "@/lib/api/types";
 import type { useTimer } from "@/lib/hooks/use-timer";
 import { routes } from "@/lib/routes";
 
-/** One prayer at a time: title, text, scripture, a "prayed" toggle, and next/previous. */
+/** One of today's prayers at a time: title, text, scripture, a "prayed" toggle, and next/previous. */
 export function PrayerSession({
   week: w,
   index: i,
@@ -25,10 +26,11 @@ export function PrayerSession({
 }) {
   const complete = useSetCompleted();
   const router = useRouter();
-  const p = w.points[i];
-  const n = w.points.length;
+  const todays = todaysPoints(w);
+  const p = todays[i];
+  const n = todays.length;
   const prayed = w.my_completed.includes(p.id);
-  const allDone = w.my_completed.length === n;
+  const allDone = todays.every((x) => w.my_completed.includes(x.id));
   const last = i === n - 1;
 
   return (
@@ -44,7 +46,7 @@ export function PrayerSession({
         </Link>
         {/* Both colors are ≥3:1 contrast (WCAG 1.4.11); current point is also marked by shape, not color alone. */}
         <div aria-hidden="true" className="flex w-32 items-center gap-1">
-          {w.points.map((x, k) => (
+          {todays.map((x, k) => (
             <div
               key={x.id}
               className={cx(

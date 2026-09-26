@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
+import { daysLabel } from "@/features/prayers/derive";
 import { useHistory, usePublish, useSavePoints, useWeek } from "@/features/prayers/hooks";
 import { useDragReorder } from "@/features/prayers/use-drag-reorder";
 import { range } from "@/lib/dates";
@@ -53,30 +54,9 @@ export default function SetPrayers() {
       }
     >
       {(w) => {
-        // Mirrors the API's rotation enforcement so a non-setter sees a read-only view, not a save that 403s.
+        // Either of you can edit or publish now — turns just say who started the week.
         const me = couple.data?.me.id;
-        if (me && w.setter_id !== me) {
-          return (
-            <Main>
-              <div className="pt-3">
-                <Micro>{range(w.week_start, w.week_end)}</Micro>
-                <h1 className="m-0 mt-2 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
-                  It&rsquo;s {partner}&rsquo;s week.
-                </h1>
-                <Para className="mt-1.5">
-                  They set this week&rsquo;s prayers, and you&rsquo;ll see them as soon as they
-                  share them. Yours comes round next week.
-                </Para>
-              </div>
-              <div className="pt-6">
-                <LinkButton href={routes.prayers} variant="secondary">
-                  Back to this week
-                </LinkButton>
-              </div>
-            </Main>
-          );
-        }
-
+        const mine = !me || w.setter_id === me;
         const items = drag.items ?? w.points;
         const shared = w.status === "published";
         const doPublish = () =>
@@ -110,12 +90,14 @@ export default function SetPrayers() {
                 <Micro>{range(w.week_start, w.week_end)}</Micro>
               </div>
               <h1 className="m-0 mt-2 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
-                It&rsquo;s your week.
+                {mine ? "It’s your week." : "This week’s prayers"}
               </h1>
               <Para className="mt-1.5">
-                {shared
-                  ? `${partner} can see these. Add another whenever you think of one, and change any they haven’t prayed yet.`
-                  : `Write what’s on your heart. One is enough, and you can have up to ${MAX}.`}
+                {!mine
+                  ? `It’s ${partner}’s turn this week — you can still write it.`
+                  : shared
+                    ? `${partner} can see these. Add another whenever you think of one, and change any they haven’t prayed yet.`
+                    : `Write what’s on your heart. One is enough, and you can have up to ${MAX}.`}
               </Para>
               {items.length === 0 && previous ? (
                 <button
@@ -137,15 +119,17 @@ export default function SetPrayers() {
               ) : null}
               <ol className="m-0 mt-6 list-none border-t border-line p-0" {...drag.listProps}>
                 {items.map((p, i) => {
-                  // Once the partner has prayed it, it can be reordered but not edited or removed.
-                  const prayed = w.partner_completed.includes(p.id);
+                  // Once the partner has prayed it (on any day this week), it can be reordered
+                  // but not edited or removed.
+                  const locked = w.locked.includes(p.id);
                   const body = (
                     <>
                       <span className="text-bodylg font-semibold tracking-[-0.01em]">
                         {p.title || "Untitled prayer"}
                       </span>
                       {p.text ? <span className="text-support text-stone">{p.text}</span> : null}
-                      {prayed ? (
+                      <span className="text-support text-stone">{daysLabel(p.weekdays)}</span>
+                      {locked ? (
                         <span className="text-support text-stone">
                           {partner} has prayed this one.
                         </span>
@@ -171,7 +155,7 @@ export default function SetPrayers() {
                       <span className="tabular w-[22px] self-start pt-[17px] text-[13px] font-semibold text-stone">
                         {String(i + 1).padStart(2, "0")}
                       </span>
-                      {prayed ? (
+                      {locked ? (
                         <div className="flex min-h-[72px] grow flex-col justify-center gap-0.5 py-3 text-ink">
                           {body}
                         </div>

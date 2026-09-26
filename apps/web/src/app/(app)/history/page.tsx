@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCouple } from "@/features/couple/hooks";
+import { DaysRow } from "@/features/prayers/components/days-row";
 import { setterLabel, prayerCount } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
 import { longDate, monthName } from "@/lib/dates";
@@ -56,7 +57,7 @@ function Entry({
           now ? "border-2 border-plum bg-plum" : "border-[1.5px] border-edge bg-bg",
         )}
       />
-      <span className={cx("flex grow flex-col gap-0.5 py-3.5", !last && "border-b border-line")}>
+      <span className={cx("flex grow flex-col gap-1.5 py-3.5", !last && "border-b border-line")}>
         <span className="flex items-center gap-2.5 text-bodylg font-semibold tracking-[-0.01em]">
           {longDate(w.week_start)}
           {now ? (
@@ -65,8 +66,15 @@ function Entry({
             </span>
           ) : null}
         </span>
-        <span className="text-[15px]">{setterLabel(w, meId, partner)} set the prayers</span>
-        <span className="text-support text-stone">{meta}</span>
+        <span className="flex flex-col gap-0.5">
+          <span className="text-[15px]">{setterLabel(w, meId, partner)} set the prayers</span>
+          <span className="text-support text-stone">{meta}</span>
+        </span>
+        {w.days.length > 0 ? (
+          <div className="max-w-[220px] pt-0.5">
+            <DaysRow days={w.days} today={w.today} partnerName={partner} />
+          </div>
+        ) : null}
       </span>
       <Icon name="right" size={18} className="text-stone" />
     </Link>

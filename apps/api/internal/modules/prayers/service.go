@@ -16,8 +16,8 @@ type Repository interface {
 	History(ctx context.Context, coupleID uuid.UUID, before time.Time) ([]Record, error)
 	WeekOfPoint(ctx context.Context, coupleID, pointID uuid.UUID) (uuid.UUID, error)
 	ReplacePoints(ctx context.Context, weekID uuid.UUID, points []Point, at time.Time) error
-	Publish(ctx context.Context, weekID uuid.UUID, at time.Time) error
-	SetCompletion(ctx context.Context, pointID, userID uuid.UUID, done bool, at time.Time) error
+	Publish(ctx context.Context, weekID, publisherID uuid.UUID, at time.Time) error
+	SetCompletion(ctx context.Context, pointID, userID uuid.UUID, prayedOn time.Time, done bool, at time.Time) error
 	SetAnswered(ctx context.Context, pointID, userID uuid.UUID, answered bool, note string, at time.Time) error
 	Answered(ctx context.Context, coupleID uuid.UUID) ([]Answered, error)
 	SetReflection(ctx context.Context, weekID, userID uuid.UUID, body string, at time.Time) error
@@ -29,6 +29,11 @@ type CoupleContext struct {
 	CoupleID uuid.UUID
 	Location *time.Location
 	Members  []Member
+	// Today, in the couple's own zone — set by the service (coupleContext),
+	// not by Couples.ForPrayers itself, since it depends on the moment of
+	// the call, not on couple data. The zero value means "not computed",
+	// which ToDTO treats as "not the current week".
+	Today time.Time
 }
 
 // Partner is the other member.
@@ -56,11 +61,23 @@ func NewService(repo Repository, couples Couples, now func() time.Time) *Service
 	return &Service{repo: repo, couples: couples, now: now}
 }
 
+// coupleContext is Couples.ForPrayers plus "today" in the couple's zone,
+// computed once here so every caller agrees on what today is, rather than
+// each recomputing it from s.now() at a slightly different instant.
+func (s *Service) coupleContext(ctx context.Context, userID uuid.UUID) (CoupleContext, error) {
+	cc, err := s.couples.ForPrayers(ctx, userID)
+	if err != nil {
+		return CoupleContext{}, err
+	}
+	cc.Today = StartOfDay(s.now(), cc.Location)
+	return cc, nil
+}
+
 // Current is this week, created on first sight if nobody has made it yet.
 // No scheduler exists yet (Q-16), so the read creates it; UNIQUE
 // (couple_id, week_start) makes concurrent creation safe.
 func (s *Service) Current(ctx context.Context, userID uuid.UUID) (Record, CoupleContext, error) {
-	cc, err := s.couples.ForPrayers(ctx, userID)
+	cc, err := s.coupleContext(ctx, userID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
@@ -95,7 +112,7 @@ func (s *Service) Current(ctx context.Context, userID uuid.UUID) (Record, Couple
 
 // History is every week before this one, newest first.
 func (s *Service) History(ctx context.Context, userID uuid.UUID) ([]Record, CoupleContext, error) {
-	cc, err := s.couples.ForPrayers(ctx, userID)
+	cc, err := s.coupleContext(ctx, userID)
 	if err != nil {
 		return nil, CoupleContext{}, err
 	}
@@ -105,7 +122,7 @@ func (s *Service) History(ctx context.Context, userID uuid.UUID) ([]Record, Coup
 
 // Week is one week by id, and only if it belongs to the caller's couple.
 func (s *Service) Week(ctx context.Context, userID, weekID uuid.UUID) (Record, CoupleContext, error) {
-	cc, err := s.couples.ForPrayers(ctx, userID)
+	cc, err := s.coupleContext(ctx, userID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
@@ -135,19 +152,18 @@ func (s *Service) SavePoints(ctx context.Context, userID uuid.UUID, points []Poi
 	return rec, cc, err
 }
 
-// Publish shares this week with the partner. Publishing twice is a no-op.
+// Publish shares this week with the partner. Publishing twice is a no-op —
+// either partner may publish (DEC-33); a caller only reaches here already
+// scoped to the couple by Current, so there is nothing further to check.
 func (s *Service) Publish(ctx context.Context, userID uuid.UUID) (Record, CoupleContext, error) {
 	rec, cc, err := s.Current(ctx, userID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
-	if err := CanPublish(rec.Week, userID); err != nil {
-		return Record{}, CoupleContext{}, err
-	}
 	if rec.Status == StatusPublished {
 		return rec, cc, nil
 	}
-	if err := s.repo.Publish(ctx, rec.ID, s.now()); err != nil {
+	if err := s.repo.Publish(ctx, rec.ID, userID, s.now()); err != nil {
 		return Record{}, CoupleContext{}, err
 	}
 
@@ -155,10 +171,14 @@ func (s *Service) Publish(ctx context.Context, userID uuid.UUID) (Record, Couple
 	return rec, cc, err
 }
 
-// SetCompletion marks one point as prayed, or unmarks it, for the caller
-// alone; their partner's progress is never touched.
+// SetCompletion marks one point as prayed today, or unmarks it, for the
+// caller alone; their partner's progress is never touched. A couple prays
+// the week's points every day, not once and done (DEC-33), so this only
+// ever touches the current week, and only a point actually scheduled for
+// today — anything else is ErrNotForToday rather than silently doing
+// something other than what was asked.
 func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, done bool) (Record, CoupleContext, error) {
-	cc, err := s.couples.ForPrayers(ctx, userID)
+	cc, err := s.coupleContext(ctx, userID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
@@ -172,11 +192,21 @@ func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, 
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
-	if StatusFor(rec.Week, userID) == StatusWaiting {
+	if rec.Status != StatusPublished {
+		return Record{}, CoupleContext{}, ErrNotShared
+	}
+	if !rec.WeekStart.Equal(StartOfWeek(s.now(), cc.Location)) {
+		return Record{}, CoupleContext{}, ErrNotForToday
+	}
+	point, found := rec.Point(pointID)
+	if !found {
 		return Record{}, CoupleContext{}, ErrNotFound
 	}
+	if !ScheduledOn(point.Weekdays, cc.Today.Weekday()) {
+		return Record{}, CoupleContext{}, ErrNotForToday
+	}
 
-	if err := s.repo.SetCompletion(ctx, pointID, userID, done, s.now()); err != nil {
+	if err := s.repo.SetCompletion(ctx, pointID, userID, cc.Today, done, s.now()); err != nil {
 		return Record{}, CoupleContext{}, err
 	}
 
@@ -190,7 +220,7 @@ func (s *Service) SetCompletion(ctx context.Context, userID, pointID uuid.UUID, 
 func (s *Service) SetAnswered(
 	ctx context.Context, userID, pointID uuid.UUID, answered bool, note string,
 ) (Record, CoupleContext, error) {
-	cc, err := s.couples.ForPrayers(ctx, userID)
+	cc, err := s.coupleContext(ctx, userID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
@@ -220,7 +250,7 @@ func (s *Service) SetAnswered(
 
 // Answered is everything the couple has marked answered, newest first.
 func (s *Service) Answered(ctx context.Context, userID uuid.UUID) ([]Answered, CoupleContext, error) {
-	cc, err := s.couples.ForPrayers(ctx, userID)
+	cc, err := s.coupleContext(ctx, userID)
 	if err != nil {
 		return nil, CoupleContext{}, err
 	}
@@ -231,17 +261,17 @@ func (s *Service) Answered(ctx context.Context, userID uuid.UUID) ([]Answered, C
 	return out, cc, nil
 }
 
+// SetReflection is the caller's own note on the week — visible to both,
+// written by each for themselves, and open regardless of draft/published
+// now that a draft is no longer hidden from either partner (DEC-33).
 func (s *Service) SetReflection(ctx context.Context, userID, weekID uuid.UUID, body string) (Record, CoupleContext, error) {
-	cc, err := s.couples.ForPrayers(ctx, userID)
+	cc, err := s.coupleContext(ctx, userID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
 	}
 	rec, err := s.repo.WeekByID(ctx, cc.CoupleID, weekID)
 	if err != nil {
 		return Record{}, CoupleContext{}, err
-	}
-	if StatusFor(rec.Week, userID) == StatusWaiting {
-		return Record{}, CoupleContext{}, ErrNotFound
 	}
 
 	body, err = ValidateReflection(body)

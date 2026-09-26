@@ -14,10 +14,12 @@ import {
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { PrayerRow } from "@/components/ui/prayer-row";
 import { useCouple } from "@/features/couple/hooks";
-import { setterWord } from "@/features/prayers/derive";
+import { DaysRow } from "@/features/prayers/components/days-row";
+import { daysLabel, setterWord, todaysPoints } from "@/features/prayers/derive";
 import { usePendingCompletions, useWeek } from "@/features/prayers/hooks";
 import { range } from "@/lib/dates";
 import { routes } from "@/lib/routes";
+import Link from "next/link";
 
 export default function PrayersPage() {
   const week = useWeek();
@@ -70,23 +72,22 @@ export default function PrayersPage() {
                 text={
                   mine
                     ? "Write what’s on your heart and share it when it feels ready."
-                    : "You’ll get a quiet nudge the moment the week is shared."
+                    : `It’s ${partner}’s turn this week, but you can pitch in and write it with them.`
                 }
                 cta={
-                  mine ? (
-                    <LinkButton href={routes.prayersSet}>Set this week&rsquo;s prayers</LinkButton>
-                  ) : (
-                    <LinkButton href={routes.prayerMode({ quiet: true })} icon="moon">
-                      Enter quiet prayer
-                    </LinkButton>
-                  )
+                  <LinkButton href={routes.prayersSet}>
+                    {mine ? "Set this week’s prayers" : "Write or edit this week"}
+                  </LinkButton>
                 }
               />
             </Main>
           );
         }
+        const todays = todaysPoints(w);
+        // The rest of the week, so a Thursday prayer isn't invisible on Monday.
+        const later = w.points.filter((p) => !todays.includes(p));
         const done = w.my_completed.length;
-        const total = w.points.length;
+        const total = todays.length;
         return (
           <>
             <Main>
@@ -100,29 +101,57 @@ export default function PrayersPage() {
               <div className="mt-5 flex flex-col gap-2.5">
                 <Segments total={total} done={done} />
                 <Para size="support">
-                  {done} of {total} prayed
+                  {total === 0 ? "Nothing set for today" : `Today · ${done} of ${total} prayed`}
                 </Para>
               </div>
-              <div className="mt-2 flex flex-col border-t border-line">
-                {w.points.map((p, i) => (
-                  <PrayerRow
-                    key={p.id}
-                    p={p}
-                    index={i}
-                    done={w.my_completed.includes(p.id)}
-                    href={routes.prayer(p.id)}
-                    note={pending.has(p.id) ? "Will sync when you’re back online" : undefined}
-                  />
-                ))}
+              <div className="mt-4">
+                <DaysRow days={w.days} today={w.today} partnerName={partner} />
               </div>
+              {total === 0 ? (
+                <Para className="mt-5 text-stone">Rest, or pray freely.</Para>
+              ) : (
+                <div className="mt-2 flex flex-col border-t border-line">
+                  {todays.map((p, i) => (
+                    <PrayerRow
+                      key={p.id}
+                      p={p}
+                      index={i}
+                      done={w.my_completed.includes(p.id)}
+                      href={routes.prayer(p.id)}
+                      note={pending.has(p.id) ? "Will sync when you’re back online" : undefined}
+                    />
+                  ))}
+                </div>
+              )}
+              {later.length > 0 ? (
+                <section className="mt-6">
+                  <Micro>Other days this week</Micro>
+                  <div className="mt-2 flex flex-col border-t border-line">
+                    {later.map((p) => (
+                      <Link
+                        key={p.id}
+                        href={routes.prayer(p.id)}
+                        className="press flex min-h-[54px] items-center justify-between gap-3 border-b border-line py-2 text-ink no-underline"
+                      >
+                        <span className="text-[16px] font-medium text-stone">{p.title}</span>
+                        <span className="shrink-0 text-[13px] font-semibold text-stone">
+                          {daysLabel(p.weekdays)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </Main>
             <BottomActions>
               <LinkButton href={routes.prayerMode()}>
-                {done === total
+                {total === 0
                   ? "Open prayer mode"
-                  : done === 0
-                    ? "Begin praying"
-                    : "Continue praying"}
+                  : done >= total
+                    ? "Open prayer mode"
+                    : done === 0
+                      ? "Begin praying"
+                      : "Continue praying"}
               </LinkButton>
             </BottomActions>
           </>

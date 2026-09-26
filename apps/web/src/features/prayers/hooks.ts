@@ -28,6 +28,18 @@ const withCompletion = (w: PrayerWeek, { pointId, done }: CompletionVars): Praye
   my_completed: done
     ? Array.from(new Set([...w.my_completed, pointId]))
     : w.my_completed.filter((x) => x !== pointId),
+  // Completion always acts on today, so today's entry in `days` (mine) reacts at once too —
+  // otherwise the week's day-by-day row would lag a beat behind the check itself.
+  days: w.days.map((d) =>
+    d.date === w.today
+      ? {
+          ...d,
+          mine: done
+            ? Array.from(new Set([...d.mine, pointId]))
+            : d.mine.filter((x) => x !== pointId),
+        }
+      : d,
+  ),
 });
 
 /**

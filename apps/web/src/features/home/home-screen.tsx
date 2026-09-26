@@ -21,7 +21,7 @@ import { QueryState } from "@/components/ui/query-state";
 import { isAbsence } from "@/lib/api/envelope";
 import { readableMessage } from "@/lib/query/client";
 import { useCouple } from "@/features/couple/hooks";
-import { setterWord } from "@/features/prayers/derive";
+import { setterWord, todaysPoints } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
 import { useEvents, useGoals, useNudge } from "@/features/together/hooks";
@@ -86,21 +86,25 @@ export function HomeScreen() {
   const lastWeek = lastWeekSummary(history.data, me.id);
   const reminder = reminderLabel(prefs.data);
 
-  if (w && w.setter_id === me.id && w.status === "draft") {
+  if (w && w.status === "draft") {
+    const mine = w.setter_id === me.id;
     return (
       <Main>
         <div className="pt-1.5">
           <Micro>{range(w.week_start, w.week_end)}</Micro>
         </div>
         <Title size="display" className="mt-2">
-          It&rsquo;s your week.
+          {mine ? "It’s your week." : "This week’s prayers"}
         </Title>
         <Para size="lg" className="mt-2.5">
-          What would you like the two of you to pray about? {partner} will see your prayers once you
-          share them.
+          {mine
+            ? `What would you like the two of you to pray about? ${partner} will see your prayers once you share them.`
+            : `It’s ${partner}’s turn this week — you can still write it.`}
         </Para>
         <div className="mt-7">
-          <LinkButton href={routes.prayersSet}>Set this week&rsquo;s prayers</LinkButton>
+          <LinkButton href={routes.prayersSet}>
+            {mine ? "Set this week’s prayers" : "Write or edit this week"}
+          </LinkButton>
         </div>
         <div className="mt-7 flex flex-col border-t border-line">
           {lastWeek ? (
@@ -245,21 +249,31 @@ export function HomeScreen() {
             {/* No week can exist without a partner (prayer alternates between two people), so skip it. */}
             {alone ? null : (
               <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
-                {(wk) => (
-                  <Row
-                    icon="book"
-                    title="Weekly prayer"
-                    sub={`Set by ${setterWord(wk, me.id, partner)} · you’ve prayed ${wk.my_completed.length} of ${wk.points.length}`}
-                    href={routes.prayers}
-                  >
-                    <Segments
-                      total={wk.points.length}
-                      done={wk.my_completed.length}
-                      height={4}
-                      className="mb-0.5 mt-1.5 w-24"
-                    />
-                  </Row>
-                )}
+                {(wk) => {
+                  const total = todaysPoints(wk).length;
+                  const done = wk.my_completed.length;
+                  return (
+                    <Row
+                      icon="book"
+                      title="Weekly prayer"
+                      sub={
+                        total === 0
+                          ? `Set by ${setterWord(wk, me.id, partner)} · nothing set for today`
+                          : `Set by ${setterWord(wk, me.id, partner)} · today ${done} of ${total} prayed`
+                      }
+                      href={routes.prayers}
+                    >
+                      {total > 0 ? (
+                        <Segments
+                          total={total}
+                          done={done}
+                          height={4}
+                          className="mb-0.5 mt-1.5 w-24"
+                        />
+                      ) : null}
+                    </Row>
+                  );
+                }}
               </QueryState>
             )}
             {eventsBroke ? (
@@ -360,17 +374,26 @@ function PrayerFooter({
   reminder: string | null;
 }) {
   const done = w.my_completed.length;
-  const total = w.points.length;
+  const total = todaysPoints(w).length;
+  const partnerToday = w.partner_completed.length > 0;
   return (
     <>
       <div className="mt-[18px]">
         <LinkButton href={routes.prayerMode()}>
-          {done === total ? "Open prayer mode" : done === 0 ? "Begin praying" : "Continue praying"}
+          {total === 0 || done >= total
+            ? "Open prayer mode"
+            : done === 0
+              ? "Begin praying"
+              : "Continue praying"}
         </LinkButton>
       </div>
       <div className="mt-3.5 flex items-center gap-2 pb-4 text-support text-stone">
         <Initial letter={partner[0]} size={18} />
-        {partner} has prayed {w.partner_completed.length} of {total}
+        {total === 0
+          ? "Nothing set for today"
+          : partnerToday
+            ? `${partner} has prayed today`
+            : `${partner} hasn’t prayed yet today`}
         {reminder ? <> &middot; reminder {reminder}</> : null}
       </div>
     </>

@@ -69,15 +69,16 @@ func TestForReminder(t *testing.T) {
 	// 19:00 Lagos is 18:00 UTC; this instant is after it.
 	now := time.Date(2026, 9, 23, 18, 30, 0, 0, time.UTC)
 	base := Candidate{
-		UserID:     uuid.New(),
-		Timezone:   "Africa/Lagos",
-		Prefs:      Preferences{PrayerReminder: true, ReminderTime: "19:00", NewWeek: true},
-		WeekStatus: "published",
-		Points:     3,
-		Completed:  1,
+		UserID:         uuid.New(),
+		Timezone:       "Africa/Lagos",
+		Prefs:          Preferences{PrayerReminder: true, ReminderTime: "19:00", NewWeek: true},
+		WeekStatus:     "published",
+		Points:         3,
+		TodayScheduled: 3,
+		TodayCompleted: 1,
 	}
 
-	t.Run("someone with prayers left is reminded", func(t *testing.T) {
+	t.Run("someone with today's prayers left is reminded", func(t *testing.T) {
 		n, ok, err := ForReminder(base, now)
 		if err != nil || !ok {
 			t.Fatalf("no reminder: ok=%v err=%v", ok, err)
@@ -93,7 +94,7 @@ func TestForReminder(t *testing.T) {
 	t.Run("the body never says what the prayers are", func(t *testing.T) {
 		// It lands on a lock screen (FR-NOTF-005).
 		n, _, _ := ForReminder(base, now)
-		for _, word := range []string{"interview", "Ada", "mum"} {
+		for _, word := range []string{"interview", "Ada", "mum", "week"} {
 			if strings.Contains(n.Message.Body+n.Message.Title, word) {
 				t.Errorf("a notification leaked content: %q", n.Message.Body)
 			}
@@ -102,18 +103,48 @@ func TestForReminder(t *testing.T) {
 
 	t.Run("one left reads as words, not a digit", func(t *testing.T) {
 		c := base
-		c.Completed = 2
+		c.TodayCompleted = 2
 		n, _, _ := ForReminder(c, now)
 		if !strings.Contains(n.Message.Body, "one left") {
 			t.Errorf("body = %q", n.Message.Body)
 		}
 	})
 
-	t.Run("somebody who has finished is left alone", func(t *testing.T) {
+	t.Run("somebody who has finished today is left alone", func(t *testing.T) {
 		c := base
-		c.Completed = c.Points
+		c.TodayCompleted = c.TodayScheduled
 		if _, ok, _ := ForReminder(c, now); ok {
-			t.Error("a finished week still nagged")
+			t.Error("a finished day still nagged")
+		}
+	})
+
+	t.Run("nothing scheduled today is not nagged either, even mid-week", func(t *testing.T) {
+		c := base
+		c.TodayScheduled = 0
+		c.TodayCompleted = 0
+		if _, ok, _ := ForReminder(c, now); ok {
+			t.Error("a day with nothing scheduled produced a reminder")
+		}
+	})
+
+	t.Run("the reminder resets the next day", func(t *testing.T) {
+		// Yesterday they finished everything; today there's something new
+		// (or the same point, scheduled again) and nothing done yet.
+		finishedYesterday := base
+		finishedYesterday.TodayCompleted = finishedYesterday.TodayScheduled
+		if _, ok, _ := ForReminder(finishedYesterday, now); ok {
+			t.Fatal("setup: yesterday's finish should not itself nag")
+		}
+
+		tomorrow := now.Add(24 * time.Hour)
+		freshDay := base
+		freshDay.TodayCompleted = 0
+		n, ok, err := ForReminder(freshDay, tomorrow)
+		if err != nil || !ok {
+			t.Fatalf("the new day produced no reminder: ok=%v err=%v", ok, err)
+		}
+		if n.Key == "2026-09-23" {
+			t.Error("the key did not move to the new day")
 		}
 	})
 
@@ -366,6 +397,23 @@ func TestForPublishedWeek(t *testing.T) {
 			t.Error("an empty week was announced")
 		}
 	})
+
+	t.Run("published_by, not the setter, decides who is told (DEC-33)", func(t *testing.T) {
+		// The setter delegated publishing to the partner this time.
+		c := base
+		c.PublishedBy = partner
+		if _, ok := ForPublishedWeek(c); ok {
+			t.Error("the partner was told about a week they published themselves")
+		}
+		c.UserID = setter
+		n, ok := ForPublishedWeek(c)
+		if !ok {
+			t.Fatal("the setter was not told, even though the partner published it")
+		}
+		if n.Message.Path != "/prayers" {
+			t.Errorf("path = %q", n.Message.Path)
+		}
+	})
 }
 
 func TestPreferencesAreRespected(t *testing.T) {
@@ -392,7 +440,7 @@ func TestPreferencesAreRespected(t *testing.T) {
 		off := Preferences{NewWeek: true, PrayerReminder: false, ReminderTime: "19:00"}
 		_, ok, err := ForReminder(Candidate{
 			UserID: partner, SetterUserID: setter, WeekID: week, Timezone: "Africa/Lagos",
-			WeekStatus: "published", Points: 3, Completed: 0, Prefs: off,
+			WeekStatus: "published", Points: 3, TodayScheduled: 3, TodayCompleted: 0, Prefs: off,
 		}, time.Date(2026, 9, 23, 20, 0, 0, 0, time.UTC))
 		if err != nil {
 			t.Fatalf("ForReminder: %v", err)

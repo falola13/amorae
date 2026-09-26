@@ -330,20 +330,39 @@ do not leak.
 | `GET /v1/prayers/current` | `PrayerWeek` for this couple's current week, which runs Sunday to Saturday **in the couple's timezone** (DEC-27). The week is created on first read if it does not exist — safe because `UNIQUE (couple_id, week_start)` makes a second creator lose harmlessly, which is the same property that will let the scheduler pre-warm it later. 409 `waiting_for_partner` while a couple has only one member: a week needs two people to have a setter |
 | `GET /v1/prayers/history` | past weeks, newest first |
 | `GET /v1/prayers/weeks/:id` | |
-| `PUT /v1/prayers/current/points` `{ points: PrayerPoint[] }` | Setter only; ≤10 points; the order of the array is the order, and each point's `position` is ignored on the way in. Points are matched by `id` and kept, so reordering does not discard what has been prayed on them; a point left out is deleted, and its completions with it. An `id` the week does not already own is treated as a new point — the server chooses primary keys. 403 `not_this_weeks_setter`; 409 `prayer_in_use` when the submitted list rewords or drops a point the partner has already prayed — adding, editing a point nobody has prayed, and reordering stay open for the whole week (DEC-31) |
-| `POST /v1/prayers/current/publish` | Setter only. Publishing an already-published week is a no-op, and does not move `published_at`. The setter may still edit after publishing — fixing a typo is not a betrayal — until the partner prays any of it |
-| `POST` / `DELETE /v1/prayers/points/:id/complete` | the caller's own completion; the other partner's is untouched |
+| `PUT /v1/prayers/current/points` `{ points: PrayerPoint[] }` | Either partner (DEC-33); ≤10 points; the order of the array is the order, and each point's `position` is ignored on the way in. Points are matched by `id` and kept, so reordering does not discard what has been prayed on them; a point left out is deleted, and its completions with it. An `id` the week does not already own is treated as a new point — the server chooses primary keys. `weekdays` is optional per point — see below. 409 `prayer_in_use` when the submitted list rewords or drops a point the OTHER partner has already prayed, on any day this week — adding, editing a point nobody has prayed, and reordering stay open for the whole week (DEC-31) |
+| `POST /v1/prayers/current/publish` | Either partner (DEC-33). Publishing an already-published week is a no-op, and does not move `published_at` or `published_by`. Either partner may still edit after publishing — fixing a typo is not a betrayal — until the other partner prays any of it |
+| `POST` / `DELETE /v1/prayers/points/:id/complete` | Marks, or unmarks, the caller's own prayer **for today** — a couple prays the week's points every day, not once and done (DEC-33). Today is the couple-local date; only a point actually scheduled for today, in the current week, can be marked, otherwise 409 `not_for_today`. 409 `prayer_not_shared` on a draft week. The other partner's progress is untouched |
 | `PATCH /v1/prayers/weeks/:id/reflection` `{ reflection }` | the caller's reflection |
 | `PUT` / `DELETE /v1/prayers/points/:id/answered` `{ note }` | Marks a prayer answered, or takes the mark back. Either partner may — a prayer belongs to them both, and the one who notices is not always the one who wrote it down. Deliberately **not** limited to the current week: prayers are answered months later, and an endpoint that only worked for seven days would miss most of what it exists to catch. `note` is optional; `PUT` twice is an edit of the note, not a second answer, and does not move `answered_at`. 409 `prayer_not_shared` on a draft |
 | `GET /v1/prayers/answered` | Every answered prayer, newest answer first, each with the week it came from. Note what is absent: there is no way to ask for the prayers that were *not* answered, and no count of them — see FR-PRAY-012 |
 
-`PrayerWeek.status` is `draft` (setter still writing), `published`, or
-`waiting` (the other partner sees this while the setter writes). A `waiting`
-week carries no points and no progress at all — not the setter's either, since
-reporting what they had prayed would describe a week you are not allowed to
-read. `week_end` is `week_start` plus six days and is computed, never stored.
-A point's text is `text` in JSON and `body` in the database; the DTO is where
-those two names meet.
+`PrayerWeek.status` is `draft` (still being written) or `published`. A draft
+is visible to both partners now, not just the setter — either may step in
+and write or publish it (DEC-33); `setter_id` still names whose turn it is
+(it decides `KindNewWeek` and reads as a label), it just no longer gates who
+may act. `week_end` is `week_start` plus six days and is computed, never
+stored. A point's text is `text` in JSON and `body` in the database; the DTO
+is where those two names meet.
+
+A point's `weekdays` is `number[]`, `0`=Sunday .. `6`=Saturday, sorted and
+deduplicated; empty or absent means every day, so a point that runs all week
+never has to say so. Stored as a bitmask (`prayer_points.weekdays`); which
+weekday a date is is the couple-local weekday, and the week itself still
+runs Sunday→Saturday (`StartOfWeek`).
+
+`PrayerWeek.my_completed`/`partner_completed` mean different things
+depending which week this is: for the **current** week, they are today's
+completions only (couple-local), and reset the next day; for any **other**
+week (history), they are every point completed on **any** day of that week.
+`today` is `YYYY-MM-DD`, couple-local, and present only on the current week
+— absent everywhere else, since a history week has no "today" of its own.
+`days` is always seven entries, Sunday through Saturday, each
+`{ date, points, mine, partner }`: `points` is which point ids were
+scheduled that day, `mine`/`partner` which of those the caller/the other
+partner actually prayed that day. `locked` is the point ids the caller
+cannot edit right now — the other partner has prayed them, on any day this
+week — which is exactly what turns into 409 `prayer_in_use` on a `PUT`.
 
 ### Together
 

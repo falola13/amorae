@@ -16,6 +16,15 @@ const currentWeekStart = `(
 	- EXTRACT(DOW FROM ($1 AT TIME ZONE c.timezone))::int
 )`
 
+// coupleLocalToday is "today" in the couple's own zone, matching
+// prayers.StartOfDay — the day a point's weekdays bitmask is checked
+// against, and the day a completion's prayed_on is compared to.
+const coupleLocalToday = `(($1 AT TIME ZONE c.timezone)::date)`
+
+// todaysWeekdayBit is the single bit of a prayer_points.weekdays mask that
+// names today, mirroring prayers.ScheduledOn (bit n = weekday n, Sunday=0).
+const todaysWeekdayBit = `(1 << EXTRACT(DOW FROM ` + coupleLocalToday + `)::int)`
+
 // Candidate is one person, with everything needed to decide and send,
 // gathered in one query rather than one per person.
 type Candidate struct {
@@ -29,10 +38,17 @@ type Candidate struct {
 	WeekID       uuid.UUID
 	WeekStart    time.Time
 	SetterUserID uuid.UUID
-	WeekStatus   string
-	// How many points are in it, and how many this person has prayed.
-	Points    int
-	Completed int
+	// Who published it, or the zero id for a draft or a week from before
+	// either partner could (ForPublishedWeek falls back to SetterUserID).
+	PublishedBy uuid.UUID
+	WeekStatus  string
+	// How many points the week has in total — used only to tell "nothing
+	// set yet" (ForNewWeek) from "written" (ForPublishedWeek).
+	Points int
+	// Today's schedule and progress, couple-local — what ForReminder resets
+	// on every day, rather than counting the whole week once and never again.
+	TodayScheduled int
+	TodayCompleted int
 }
 
 // CurrentWeekCandidates gathers everyone in a live couple with their current
@@ -42,11 +58,17 @@ func (r *PostgresRepository) CurrentWeekCandidates(ctx context.Context, now time
 		SELECT u.id, u.display_name, u.timezone,
 		       COALESCE(p.new_week, true), COALESCE(p.prayer_reminder, true),
 		       COALESCE(p.reminder_time, TIME '19:00'),
-		       w.id, w.week_start, w.setter_user_id, w.status,
+		       w.id, w.week_start, w.setter_user_id,
+		       COALESCE(w.published_by, '00000000-0000-0000-0000-000000000000'::uuid),
+		       w.status,
 		       (SELECT count(*) FROM prayer_points pp WHERE pp.week_id = w.id),
-		       (SELECT count(*) FROM prayer_completions pc
-		         JOIN prayer_points pp ON pp.id = pc.point_id
-		        WHERE pp.week_id = w.id AND pc.user_id = u.id)
+		       (SELECT count(*) FROM prayer_points pp
+		         WHERE pp.week_id = w.id AND (pp.weekdays::int & `+todaysWeekdayBit+`) <> 0),
+		       (SELECT count(*) FROM prayer_points pp
+		         JOIN prayer_completions pc ON pc.point_id = pp.id
+		        WHERE pp.week_id = w.id AND pc.user_id = u.id
+		          AND pc.prayed_on = `+coupleLocalToday+`
+		          AND (pp.weekdays::int & `+todaysWeekdayBit+`) <> 0)
 		FROM prayer_weeks w
 		JOIN couples c ON c.id = w.couple_id
 		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
@@ -70,8 +92,8 @@ func (r *PostgresRepository) candidates(ctx context.Context, query string, args 
 		var reminder time.Time
 		if err := rows.Scan(&c.UserID, &c.Name, &c.Timezone,
 			&c.Prefs.NewWeek, &c.Prefs.PrayerReminder, &reminder,
-			&c.WeekID, &c.WeekStart, &c.SetterUserID, &c.WeekStatus,
-			&c.Points, &c.Completed); err != nil {
+			&c.WeekID, &c.WeekStart, &c.SetterUserID, &c.PublishedBy, &c.WeekStatus,
+			&c.Points, &c.TodayScheduled, &c.TodayCompleted); err != nil {
 			return nil, fmt.Errorf("scanning person to notify: %w", err)
 		}
 		c.Prefs.ReminderTime = reminder.Format("15:04")

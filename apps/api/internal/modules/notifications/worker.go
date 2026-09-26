@@ -41,10 +41,16 @@ func ForNewWeek(c Candidate) (Notification, bool) {
 	}, true
 }
 
-// ForPublishedWeek notifies the partner who didn't write the week, once,
-// when it's ready to read.
+// ForPublishedWeek notifies whoever didn't publish the week, once, when
+// it's ready to read. Either partner may publish now (DEC-33); PublishedBy
+// says who did, falling back to the setter for a week from before that, or
+// one whose publisher somehow didn't get recorded.
 func ForPublishedWeek(c Candidate) (Notification, bool) {
-	if c.UserID == c.SetterUserID || c.WeekStatus != "published" || c.Points == 0 || !c.Prefs.NewWeek {
+	publisher := c.PublishedBy
+	if publisher == uuid.Nil {
+		publisher = c.SetterUserID
+	}
+	if c.UserID == publisher || c.WeekStatus != "published" || c.Points == 0 || !c.Prefs.NewWeek {
 		return Notification{}, false
 	}
 	return Notification{
@@ -60,10 +66,13 @@ func ForPublishedWeek(c Candidate) (Notification, bool) {
 	}, true
 }
 
-// ForReminder is the daily nudge for an unfinished published week. The body
-// never names what's left — it lands on a lock screen (FR-NOTF-005).
+// ForReminder is the daily nudge for today's unfinished points in a
+// published week. Resets every day along with what's scheduled and what's
+// been prayed (DEC-33) — the key is the local date, so a day that starts
+// with nothing left simply produces no reminder rather than a stale one.
+// The body never names what's left — it lands on a lock screen (FR-NOTF-005).
 func ForReminder(c Candidate, now time.Time) (Notification, bool, error) {
-	if c.WeekStatus != "published" || c.Points == 0 || c.Completed >= c.Points || !c.Prefs.PrayerReminder {
+	if c.WeekStatus != "published" || c.TodayScheduled == 0 || c.TodayCompleted >= c.TodayScheduled || !c.Prefs.PrayerReminder {
 		return Notification{}, false, nil
 	}
 
@@ -76,10 +85,10 @@ func ForReminder(c Candidate, now time.Time) (Notification, bool, error) {
 		return Notification{}, false, err
 	}
 
-	left := c.Points - c.Completed
-	body := fmt.Sprintf("You have %d left this week.", left)
+	left := c.TodayScheduled - c.TodayCompleted
+	body := fmt.Sprintf("You have %d left today.", left)
 	if left == 1 {
-		body = "You have one left this week."
+		body = "You have one left today."
 	}
 	return Notification{
 		UserID: c.UserID,

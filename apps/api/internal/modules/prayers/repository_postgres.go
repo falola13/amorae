@@ -62,14 +62,19 @@ func (r *PostgresRepository) EnsureWeek(
 // person rather than the couple: completions and reflections.
 type Record struct {
 	Week
-	// user id -> the points that user has completed.
+	// user id -> the points that user has prayed on any day this week — the
+	// "ever this week" view History and the lock rule both want.
 	Completed map[uuid.UUID][]uuid.UUID
+	// day (as WeekStart's date-only representation) -> user id -> the points
+	// that user prayed that specific day — what "today"'s my/partner lists,
+	// and the days breakdown, are built from.
+	ByDay map[time.Time]map[uuid.UUID][]uuid.UUID
 	// user id -> what that person wrote about the week.
 	Reflections map[uuid.UUID]string
 }
 
 // PrayedByOthers is the set of point ids somebody other than `except` has
-// prayed — the input CanEditPoints needs.
+// prayed, on any day this week — the input CanEditPoints needs.
 func (rec Record) PrayedByOthers(except uuid.UUID) map[uuid.UUID]bool {
 	var out map[uuid.UUID]bool
 	for userID, points := range rec.Completed {
@@ -114,7 +119,7 @@ func (r *PostgresRepository) one(ctx context.Context, where string, args ...any)
 // four queries regardless of result size, rather than N+1 per week.
 func (r *PostgresRepository) load(ctx context.Context, where string, args ...any) ([]Record, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT w.id, w.couple_id, w.week_start, w.setter_user_id, w.status, w.published_at
+		SELECT w.id, w.couple_id, w.week_start, w.setter_user_id, w.status, w.published_at, w.published_by
 		FROM prayer_weeks w `+where+`
 		ORDER BY w.week_start DESC
 	`, args...)
@@ -126,12 +131,15 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 	at := map[uuid.UUID]int{} // week id -> where it sits in records
 	for rows.Next() {
 		var rec Record
+		var publishedBy *uuid.UUID
 		if err := rows.Scan(&rec.ID, &rec.CoupleID, &rec.WeekStart, &rec.SetterUserID,
-			&rec.Status, &rec.PublishedAt); err != nil {
+			&rec.Status, &rec.PublishedAt, &publishedBy); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scanning prayer week: %w", err)
 		}
+		rec.PublishedBy = publishedBy
 		rec.Completed = map[uuid.UUID][]uuid.UUID{}
+		rec.ByDay = map[time.Time]map[uuid.UUID][]uuid.UUID{}
 		rec.Reflections = map[uuid.UUID]string{}
 		at[rec.ID] = len(records)
 		records = append(records, rec)
@@ -151,7 +159,7 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 
 	// Points, ordered so the setter's arrangement survives the round trip.
 	pointRows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT p.id, p.week_id, p.position, p.title, p.body,
+		SELECT p.id, p.week_id, p.position, p.title, p.body, p.weekdays,
 		       COALESCE(p.scripture, ''), COALESCE(p.verse, ''),
 		       p.answered_at, (p.answered_at AT TIME ZONE c.timezone)::date,
 		       p.answered_by, p.answer_note
@@ -169,7 +177,7 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 		var p Point
 		var weekID uuid.UUID
 		var answeredBy *uuid.UUID
-		if err := pointRows.Scan(&p.ID, &weekID, &p.Position, &p.Title, &p.Body,
+		if err := pointRows.Scan(&p.ID, &weekID, &p.Position, &p.Title, &p.Body, &p.Weekdays,
 			&p.Scripture, &p.Verse, &p.AnsweredAt, &p.AnsweredOn, &answeredBy,
 			&p.AnswerNote); err != nil {
 			pointRows.Close()
@@ -188,7 +196,7 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 	}
 
 	completionRows, err := r.db.Q(ctx).Query(ctx, `
-		SELECT c.point_id, c.user_id
+		SELECT c.point_id, c.user_id, c.prayed_on
 		FROM prayer_completions c
 		JOIN prayer_points p ON p.id = c.point_id
 		WHERE p.week_id = ANY($1)
@@ -196,14 +204,32 @@ func (r *PostgresRepository) load(ctx context.Context, where string, args ...any
 	if err != nil {
 		return nil, fmt.Errorf("loading completions: %w", err)
 	}
+	// Completed collapses every day into one "prayed this week" entry per
+	// point, so the same point prayed on two different days must not appear
+	// in it twice.
+	seen := map[uuid.UUID]map[uuid.UUID]bool{} // point id -> user id -> already counted
 	for completionRows.Next() {
 		var pointID, userID uuid.UUID
-		if err := completionRows.Scan(&pointID, &userID); err != nil {
+		var prayedOn time.Time
+		if err := completionRows.Scan(&pointID, &userID, &prayedOn); err != nil {
 			completionRows.Close()
 			return nil, fmt.Errorf("scanning completion: %w", err)
 		}
 		i := at[weekOfPoint[pointID]]
-		records[i].Completed[userID] = append(records[i].Completed[userID], pointID)
+
+		if seen[pointID] == nil {
+			seen[pointID] = map[uuid.UUID]bool{}
+		}
+		if !seen[pointID][userID] {
+			seen[pointID][userID] = true
+			records[i].Completed[userID] = append(records[i].Completed[userID], pointID)
+		}
+
+		byDay := records[i].ByDay
+		if byDay[prayedOn] == nil {
+			byDay[prayedOn] = map[uuid.UUID][]uuid.UUID{}
+		}
+		byDay[prayedOn][userID] = append(byDay[prayedOn][userID], pointID)
 	}
 	completionRows.Close()
 	if err := completionRows.Err(); err != nil {
@@ -291,10 +317,10 @@ func (r *PostgresRepository) ReplacePoints(ctx context.Context, weekID uuid.UUID
 			if _, known := existing[p.ID]; known {
 				if _, err := r.db.Q(ctx).Exec(ctx, `
 					UPDATE prayer_points
-					SET position = $3, title = $4, body = $5, scripture = $6, verse = $7, updated_at = $8
+					SET position = $3, title = $4, body = $5, scripture = $6, verse = $7, weekdays = $8, updated_at = $9
 					WHERE id = $1 AND week_id = $2
 				`, p.ID, weekID, p.Position, p.Title, p.Body,
-					nullIfEmpty(p.Scripture), nullIfEmpty(p.Verse), at); err != nil {
+					nullIfEmpty(p.Scripture), nullIfEmpty(p.Verse), p.Weekdays, at); err != nil {
 					return fmt.Errorf("updating prayer point: %w", err)
 				}
 				keep = append(keep, p.ID)
@@ -306,10 +332,10 @@ func (r *PostgresRepository) ReplacePoints(ctx context.Context, weekID uuid.UUID
 				return fmt.Errorf("generating point id: %w", err)
 			}
 			if _, err := r.db.Q(ctx).Exec(ctx, `
-				INSERT INTO prayer_points (id, week_id, position, title, body, scripture, verse, created_at, updated_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+				INSERT INTO prayer_points (id, week_id, position, title, body, scripture, verse, weekdays, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 			`, id, weekID, p.Position, p.Title, p.Body,
-				nullIfEmpty(p.Scripture), nullIfEmpty(p.Verse), at); err != nil {
+				nullIfEmpty(p.Scripture), nullIfEmpty(p.Verse), p.Weekdays, at); err != nil {
 				return fmt.Errorf("adding prayer point: %w", err)
 			}
 			keep = append(keep, id)
@@ -345,34 +371,37 @@ func (r *PostgresRepository) pointIDsOf(ctx context.Context, weekID uuid.UUID) (
 	return ids, nil
 }
 
-// Publish shares the week. Publishing an already-published week is a no-op.
-func (r *PostgresRepository) Publish(ctx context.Context, weekID uuid.UUID, at time.Time) error {
+// Publish shares the week, recording who did it. Publishing an
+// already-published week is a no-op, so a republish by the other partner
+// never steals credit for having shared it first.
+func (r *PostgresRepository) Publish(ctx context.Context, weekID, publisherID uuid.UUID, at time.Time) error {
 	if _, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE prayer_weeks
-		SET status = 'published', published_at = $2, updated_at = $2
+		SET status = 'published', published_at = $2, published_by = $3, updated_at = $2
 		WHERE id = $1 AND status = 'draft'
-	`, weekID, at); err != nil {
+	`, weekID, at, publisherID); err != nil {
 		return fmt.Errorf("publishing prayer week: %w", err)
 	}
 	return nil
 }
 
-// SetCompletion marks or unmarks one point for one person. Marking twice is
-// a no-op, which is what makes the offline queue safe to replay.
-func (r *PostgresRepository) SetCompletion(ctx context.Context, pointID, userID uuid.UUID, done bool, at time.Time) error {
+// SetCompletion marks or unmarks one point for one person, for one specific
+// day. Marking the same day twice is a no-op, which is what makes the
+// offline queue safe to replay.
+func (r *PostgresRepository) SetCompletion(ctx context.Context, pointID, userID uuid.UUID, prayedOn time.Time, done bool, at time.Time) error {
 	if !done {
 		if _, err := r.db.Q(ctx).Exec(ctx, `
-			DELETE FROM prayer_completions WHERE point_id = $1 AND user_id = $2
-		`, pointID, userID); err != nil {
+			DELETE FROM prayer_completions WHERE point_id = $1 AND user_id = $2 AND prayed_on = $3
+		`, pointID, userID, prayedOn); err != nil {
 			return fmt.Errorf("clearing completion: %w", err)
 		}
 		return nil
 	}
 	if _, err := r.db.Q(ctx).Exec(ctx, `
-		INSERT INTO prayer_completions (point_id, user_id, completed_at)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (point_id, user_id) DO NOTHING
-	`, pointID, userID, at); err != nil {
+		INSERT INTO prayer_completions (point_id, user_id, prayed_on, completed_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (point_id, user_id, prayed_on) DO NOTHING
+	`, pointID, userID, prayedOn, at); err != nil {
 		return fmt.Errorf("recording completion: %w", err)
 	}
 	return nil

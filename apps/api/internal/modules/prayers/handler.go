@@ -91,6 +91,9 @@ type savePointsRequest struct {
 		Text      string `json:"text"`
 		Scripture string `json:"scripture"`
 		Verse     string `json:"verse"`
+		// Empty or absent means every day; ValidatePoints turns this into the
+		// stored bitmask and validates each day is 0..6.
+		Weekdays []int `json:"weekdays"`
 		// Accepted and ignored — array order decides position (ValidatePoints).
 		// Declared so the decoder, which rejects unknown fields, doesn't reject the request.
 		Position int `json:"position"`
@@ -116,11 +119,12 @@ func (h *Handler) savePoints(w http.ResponseWriter, r *http.Request) {
 			id = uuid.UUID{}
 		}
 		points = append(points, Point{
-			ID:        id,
-			Title:     p.Title,
-			Body:      p.Text,
-			Scripture: p.Scripture,
-			Verse:     p.Verse,
+			ID:          id,
+			Title:       p.Title,
+			Body:        p.Text,
+			Scripture:   p.Scripture,
+			Verse:       p.Verse,
+			WeekdaysRaw: p.Weekdays,
 		})
 	}
 
@@ -238,7 +242,7 @@ func (h *Handler) respond(
 		httpx.Error(w, r, err)
 		return
 	}
-	httpx.Data(w, status, ToDTO(rec, userID, cc.Partner(userID)))
+	httpx.Data(w, status, ToDTO(rec, userID, cc.Partner(userID), cc.Today))
 }
 
 func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
