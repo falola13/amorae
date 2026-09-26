@@ -299,6 +299,12 @@ button {
   cursor: pointer;
 }
 
+/* A calm, distinct surface for a birthday or anniversary card on Home — plum-tinted,
+   not another plain bg-surface card, but no louder than the rest of the page. */
+@utility bg-celebrate {
+  background: linear-gradient(160deg, var(--color-plum-tint), var(--color-surface) 85%);
+}
+
 @utility press {
   transition:
     transform 0.12s ease-out,

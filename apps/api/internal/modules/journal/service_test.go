@@ -46,6 +46,12 @@ type fakeCouples struct{ id uuid.UUID }
 
 func (c fakeCouples) CoupleFor(context.Context, uuid.UUID) (uuid.UUID, error) { return c.id, nil }
 
+// fakePoker counts pokes so a test can check one happened, without either
+// side knowing anything about how notifications work.
+type fakePoker struct{ pokes int }
+
+func (p *fakePoker) Poke() { p.pokes++ }
+
 func newService(t *testing.T) (*Service, *fakeRepo, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	couple, author := uuid.New(), uuid.New()
@@ -54,7 +60,21 @@ func newService(t *testing.T) (*Service, *fakeRepo, uuid.UUID, uuid.UUID) {
 		Date: time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC),
 		Tag:  TagGratitude, Text: "For the quiet morning.",
 	}}
-	return NewService(repo, fakeCouples{id: couple}, time.Now), repo, couple, author
+	return NewService(repo, fakeCouples{id: couple}, time.Now, &fakePoker{}), repo, couple, author
+}
+
+func TestAdd_PokesTheWorker(t *testing.T) {
+	couple, author := uuid.New(), uuid.New()
+	repo := &fakeRepo{e: Entry{ID: uuid.New(), CoupleID: couple, AuthorID: author}}
+	poker := &fakePoker{}
+	svc := NewService(repo, fakeCouples{id: couple}, time.Now, poker)
+
+	if _, err := svc.Add(context.Background(), author, string(TagGratitude), "Something good."); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if poker.pokes != 1 {
+		t.Errorf("pokes = %d, want 1 — the partner shouldn't wait for the next cron tick", poker.pokes)
+	}
 }
 
 func TestUpdate(t *testing.T) {

@@ -29,6 +29,8 @@ export const routes = {
   join: (opts: { code?: string } = {}) => `/join${q({ code: opts.code })}`,
   install: "/install",
   notificationsSetup: "/notifications",
+  // Not /notifications — that path is the onboarding step above.
+  inbox: "/inbox",
 
   // Prayers
   prayers: "/prayers",

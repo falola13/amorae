@@ -21,11 +21,18 @@ import { QueryState } from "@/components/ui/query-state";
 import { isAbsence } from "@/lib/api/envelope";
 import { readableMessage } from "@/lib/query/client";
 import { useCouple } from "@/features/couple/hooks";
+import { useInbox } from "@/features/notifications/hooks";
 import { setterWord, todaysPoints } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
-import { useEvents, useGoals, useNudge } from "@/features/together/hooks";
-import type { PrayerWeek } from "@/lib/api/types";
+import { useEvents, useGoals, useMilestones, useNudge } from "@/features/together/hooks";
+import {
+  celebrationCopy,
+  daysAwayLabel,
+  todaysMilestones,
+  upcomingMilestones,
+} from "@/features/together/milestones";
+import type { Milestone, PrayerWeek } from "@/lib/api/types";
 import {
   activeGoal,
   isAlone,
@@ -59,6 +66,9 @@ export function HomeScreen() {
   const goalsBroke = goals.isError && !isAbsence(goals.error);
   const history = useHistory();
   const prefs = usePrefs();
+  const milestones = useMilestones();
+  const inbox = useInbox();
+  const unread = inbox.data?.unread ?? 0;
   const now = today();
   const todayIso = iso(now);
 
@@ -186,14 +196,36 @@ export function HomeScreen() {
             {alone ? me.display_name : `${me.display_name} & ${partner}`}
           </h1>
         </div>
-        <Link
-          href={routes.eventNew()}
-          aria-label="Add something to our space"
-          className="press -mr-2 flex h-11 w-11 items-center justify-center rounded-full text-ink"
-        >
-          <Icon name="plus" size={24} />
-        </Link>
+        <div className="-mr-2 flex items-center gap-1">
+          <Link
+            href={routes.inbox}
+            aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+            className="press relative flex h-11 w-11 items-center justify-center rounded-full text-ink"
+          >
+            <Icon name="bell" size={22} />
+            {unread > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-plum"
+              />
+            ) : null}
+          </Link>
+          <Link
+            href={routes.eventNew()}
+            aria-label="Add something to our space"
+            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink"
+          >
+            <Icon name="plus" size={24} />
+          </Link>
+        </div>
       </div>
+
+      <Celebrations
+        milestones={milestones.data ?? []}
+        meId={me.id}
+        partner={partner}
+        todayIso={todayIso}
+      />
 
       {alone ? (
         <div className="mt-6 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
@@ -319,6 +351,58 @@ export function HomeScreen() {
       ) : null}
       {coupleData.partner ? <Nudge partner={partner} /> : null}
     </Main>
+  );
+}
+
+/** The icon for a milestone: cake for a birthday, heart for an anniversary,
+ *  gift for anything else worth marking. */
+const celebrationIcon = (m: Milestone) =>
+  m.source === "birthday" ? "cake" : m.source === "anniversary" ? "heart" : "gift";
+
+/** What's today, and what's coming in the week ahead — a calm card per date
+ *  happening today (stacked if there's more than one), then a slim row for
+ *  each one still a few days off. Nothing renders when there's nothing to say. */
+function Celebrations({
+  milestones,
+  meId,
+  partner,
+  todayIso,
+}: {
+  milestones: Milestone[];
+  meId: string;
+  partner: string;
+  todayIso: string;
+}) {
+  const todays = todaysMilestones(milestones, todayIso);
+  const soon = upcomingMilestones(milestones, todayIso);
+  if (todays.length === 0 && soon.length === 0) return null;
+  return (
+    <div className="mt-6 flex flex-col gap-3">
+      {todays.map((m) => {
+        const { title, sub } = celebrationCopy(m, todayIso, meId, partner);
+        return (
+          <div key={m.id} className="flex flex-col items-start rounded-card bg-celebrate px-5 py-5">
+            <Icon name={celebrationIcon(m)} size={26} strokeWidth={1.4} className="text-plum" />
+            <h2 className="m-0 mt-3 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-plum-dark">
+              {title}
+            </h2>
+            {sub ? <Para className="mt-1">{sub}</Para> : null}
+          </div>
+        );
+      })}
+      {soon.map((m) => (
+        <Link
+          key={m.id}
+          href={routes.milestones}
+          className="press -my-1 flex items-center gap-2.5 py-1 text-ink no-underline"
+        >
+          <Icon name={celebrationIcon(m)} size={18} className="text-stone" />
+          <span className="text-support text-stone">
+            {m.title} · {daysAwayLabel(m.days)}
+          </span>
+        </Link>
+      ))}
+    </div>
   );
 }
 

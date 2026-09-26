@@ -24,14 +24,20 @@ type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
 
+// Poker asks the notifications worker to run a pass soon rather than
+// waiting for its next cron tick, without events knowing anything about how
+// notifications are put together.
+type Poker interface{ Poke() }
+
 type Service struct {
 	repo    Repository
 	couples Couples
 	now     func() time.Time
+	poker   Poker
 }
 
-func NewService(repo Repository, couples Couples, now func() time.Time) *Service {
-	return &Service{repo: repo, couples: couples, now: now}
+func NewService(repo Repository, couples Couples, now func() time.Time, poker Poker) *Service {
+	return &Service{repo: repo, couples: couples, now: now, poker: poker}
 }
 
 func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Event, error) {
@@ -67,6 +73,10 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Event
 	if err != nil {
 		return Event{}, err
 	}
+	// Only a "together" event ever produces a notification (RecentlyWritten
+	// excludes "mine" at the query itself) — poking unconditionally costs
+	// nothing when there is nothing due.
+	s.poker.Poke()
 	return s.repo.ByID(ctx, coupleID, id)
 }
 

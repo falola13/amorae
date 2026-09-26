@@ -18,14 +18,20 @@ type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
 
+// Poker asks the notifications worker to run a pass soon rather than
+// waiting for its next cron tick, without journal knowing anything about
+// how notifications are put together.
+type Poker interface{ Poke() }
+
 type Service struct {
 	repo    Repository
 	couples Couples
 	now     func() time.Time
+	poker   Poker
 }
 
-func NewService(repo Repository, couples Couples, now func() time.Time) *Service {
-	return &Service{repo: repo, couples: couples, now: now}
+func NewService(repo Repository, couples Couples, now func() time.Time, poker Poker) *Service {
+	return &Service{repo: repo, couples: couples, now: now, poker: poker}
 }
 
 // List is the couple's journal, the same for both of them (FR-JRNL-002).
@@ -49,12 +55,20 @@ func (s *Service) Add(ctx context.Context, userID uuid.UUID, tag, text string) (
 	}
 
 	// Date isn't set here; the repository derives the couple's local day from the couple row (DEC-27).
-	return s.repo.Create(ctx, Entry{
+	entry, err := s.repo.Create(ctx, Entry{
 		CoupleID: coupleID,
 		AuthorID: userID,
 		Tag:      cleanTag,
 		Text:     cleanText,
 	}, s.now())
+	if err != nil {
+		return Entry{}, err
+	}
+	// A journal entry has no undo window (unlike appreciation), so the
+	// partner's notification is due the moment it exists — no reason to
+	// make them wait for the next cron tick to hear about it.
+	s.poker.Poke()
+	return entry, nil
 }
 
 // Update touches tag and text only; the date an entry was filed under never

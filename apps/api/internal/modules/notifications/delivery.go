@@ -19,6 +19,7 @@ type DeliveryRepository interface {
 	SubscriptionsFor(ctx context.Context, userID uuid.UUID) ([]Subscription, error)
 	Unsubscribe(ctx context.Context, endpoint string) error
 	MarkSent(ctx context.Context, endpoint string, at time.Time) error
+	RecordInbox(ctx context.Context, userID uuid.UUID, kind, title, body, path string, at time.Time) error
 }
 
 // Deliver claims a notification and sends it to every device that person
@@ -42,6 +43,15 @@ func Deliver(
 	}
 	if !claimed {
 		return false, nil
+	}
+
+	// The claim is the moment this notification is decided to go out — not
+	// whether a device was listening or the push itself worked — so the
+	// inbox row is written here, once, regardless of what follows. A held
+	// one (quiet hours, the daily cap) never reaches Deliver in the first
+	// place, and reaches here — and the inbox — only once it finally does.
+	if err := repo.RecordInbox(ctx, n.UserID, n.Kind, n.Message.Title, n.Message.Body, n.Message.Path, now); err != nil {
+		log.Warn("could not record a notification in the inbox", "error", err)
 	}
 
 	release := func(cause error) error {

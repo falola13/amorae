@@ -248,6 +248,8 @@ export interface NotificationPrefs {
   event_followups: boolean;
   /** When your partner adds a together event. */
   partner_events: boolean;
+  /** Whether the partner's "thinking of you" nudge may reach you. */
+  nudges: boolean;
   /** One of REMINDER_OPTIONS' values (features/together/events.ts); "" is None. */
   default_event_reminder: string;
   important_dates: boolean;
@@ -269,6 +271,46 @@ export interface NotificationPrefs {
   daily_cap: number;
   /** The largest cap the API will accept; read-only. */
   max_daily_cap: number;
+}
+
+/** Every kind of notification the API can put in the inbox. */
+export type NotificationKind =
+  | "new_week"
+  | "week_published"
+  | "prayer_reminder"
+  | "event_reminder"
+  | "event_added"
+  | "event_over"
+  | "important_date"
+  | "appreciation"
+  | "journal"
+  | "goal"
+  | "goal_milestone"
+  | "goal_milestones"
+  | "goal_crossing"
+  | "challenge"
+  | "prayer_answered"
+  | "both_prayed"
+  | "both_marked"
+  | "memory_on_this_day"
+  | "nudge";
+
+/** One row of the notifications inbox (GET /v1/notifications/inbox). Newest first,
+ *  at most 30 — the server keeps only that many. */
+export interface NotificationItem {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  /** Where tapping it goes, an in-app path. */
+  path: string;
+  created_at: string;
+  read: boolean;
+}
+
+export interface NotificationsInbox {
+  items: NotificationItem[];
+  unread: number;
 }
 
 /** One row of "where you're signed in" (GET /v1/sessions), for your own account. */

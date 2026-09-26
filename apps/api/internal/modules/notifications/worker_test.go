@@ -183,6 +183,7 @@ type fakeRepo struct {
 	released []string
 	removed  []string
 	sentTo   []string
+	inbox    []Notification
 }
 
 func newFakeRepo() *fakeRepo {
@@ -248,6 +249,19 @@ func (f *fakeRepo) Unsubscribe(_ context.Context, endpoint string) error {
 }
 func (f *fakeRepo) MarkSent(_ context.Context, endpoint string, _ time.Time) error {
 	f.sentTo = append(f.sentTo, endpoint)
+	return nil
+}
+func (f *fakeRepo) RecordInbox(_ context.Context, userID uuid.UUID, kind, title, body, path string, _ time.Time) error {
+	f.inbox = append(f.inbox, Notification{
+		UserID: userID, Kind: kind,
+		Message: push.Message{Title: title, Body: body, Path: path},
+	})
+	return nil
+}
+func (f *fakeRepo) Inbox(context.Context, uuid.UUID) ([]InboxItem, error) {
+	return nil, nil
+}
+func (f *fakeRepo) MarkInboxRead(context.Context, uuid.UUID, time.Time) error {
 	return nil
 }
 

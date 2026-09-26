@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
@@ -23,10 +22,9 @@ const tickTimeout = 60 * time.Second
 // first (notification_sends), so the secret guards against cost, not
 // correctness.
 type TickHandler struct {
-	worker  *Worker
-	secret  string
-	log     *slog.Logger
-	running sync.Mutex
+	worker *Worker
+	secret string
+	log    *slog.Logger
 }
 
 // NewTickHandler returns nil (no endpoint registered) when no secret is
@@ -50,18 +48,18 @@ func (h *TickHandler) tick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Claim rows make an overlapping pass harmless, but two passes competing
-	// for the same connections could turn one slow tick into several.
-	if !h.running.TryLock() {
-		writeTick(w, http.StatusOK, map[string]any{"status": "already running"})
-		return
-	}
-	defer h.running.Unlock()
-
 	ctx, cancel := context.WithTimeout(r.Context(), tickTimeout)
 	defer cancel()
 
-	sent, err := h.worker.Tick(ctx)
+	// Claim rows make an overlapping pass harmless, but two passes competing
+	// for the same connections could turn one slow tick into several — and
+	// Poke may already be running one of its own, so this goes through the
+	// same lock rather than a second one of its own.
+	sent, ran, err := h.worker.TryTick(ctx)
+	if !ran {
+		writeTick(w, http.StatusOK, map[string]any{"status": "already running"})
+		return
+	}
 	if err != nil {
 		h.log.Error("tick failed", "error", err)
 		// 500 so the scheduler's log shows a failure, not a quiet zero-sent run.

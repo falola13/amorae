@@ -24,6 +24,18 @@ func (f fakeCouples) ForPrayers(context.Context, uuid.UUID) (prayers.CoupleConte
 	return f.cc, nil
 }
 
+// fakePoker stands in for the notifications worker, which this test has no
+// need to stand up.
+type fakePoker struct{}
+
+func (fakePoker) Poke() {}
+
+// countingPoker counts pokes, so a test can check exactly one happened —
+// or that none did, for the paths that shouldn't produce one.
+type countingPoker struct{ pokes int }
+
+func (p *countingPoker) Poke() { p.pokes++ }
+
 // dbtest shares one database across packages, so anything unique per run has
 // to be unique here too.
 func uniqueEmail() string { return "prayers+" + uuid.NewString() + "@example.com" }
@@ -486,7 +498,7 @@ func TestService_SetCompletion_OnlyTodaysPointsInTheCurrentWeek(t *testing.T) {
 	// A fixed Tuesday, so "today" and "this week" are both under the test's
 	// control rather than the wall clock's.
 	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
-	svc := prayers.NewService(repo, fakeCouples{cc: cc}, func() time.Time { return now })
+	svc := prayers.NewService(repo, fakeCouples{cc: cc}, func() time.Time { return now }, fakePoker{})
 
 	rec, _, err := svc.SavePoints(ctx, ada, []prayers.Point{
 		{Title: "Every day"},
@@ -547,6 +559,81 @@ func TestService_SetCompletion_OnlyTodaysPointsInTheCurrentWeek(t *testing.T) {
 
 		if _, _, err := svc.SetCompletion(ctx, ada, past.Points[0].ID, true); !errors.Is(err, prayers.ErrNotForToday) {
 			t.Errorf("SetCompletion(past week) = %v, want ErrNotForToday", err)
+		}
+	})
+}
+
+// TestService_Pokes checks each of prayers' immediate-notification write
+// paths against a real database: Publish, marking a point done, and marking
+// one answered each poke exactly once; taking a mark or an answer back
+// pokes nobody, since neither has a partner-facing notification of its own.
+func TestService_Pokes(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	coupleID, ada, ben := pair(t, db)
+	repo := prayers.NewPostgresRepository(db)
+
+	cc := prayers.CoupleContext{
+		CoupleID: coupleID,
+		Location: time.UTC,
+		Members: []prayers.Member{
+			{UserID: ada, JoinedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{UserID: ben, JoinedAt: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)},
+		},
+	}
+	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC) // a Tuesday
+	poker := &countingPoker{}
+	svc := prayers.NewService(repo, fakeCouples{cc: cc}, func() time.Time { return now }, poker)
+
+	rec, _, err := svc.SavePoints(ctx, ada, []prayers.Point{{Title: "Every day"}})
+	if err != nil {
+		t.Fatalf("SavePoints: %v", err)
+	}
+	point := rec.Points[0].ID
+
+	t.Run("publishing pokes", func(t *testing.T) {
+		poker.pokes = 0
+		if _, _, err := svc.Publish(ctx, ben); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if poker.pokes != 1 {
+			t.Errorf("pokes = %d, want 1", poker.pokes)
+		}
+	})
+
+	t.Run("marking a point done pokes; taking it back does not", func(t *testing.T) {
+		poker.pokes = 0
+		if _, _, err := svc.SetCompletion(ctx, ada, point, true); err != nil {
+			t.Fatalf("SetCompletion(true): %v", err)
+		}
+		if poker.pokes != 1 {
+			t.Errorf("pokes = %d, want 1 after marking done", poker.pokes)
+		}
+
+		poker.pokes = 0
+		if _, _, err := svc.SetCompletion(ctx, ada, point, false); err != nil {
+			t.Fatalf("SetCompletion(false): %v", err)
+		}
+		if poker.pokes != 0 {
+			t.Errorf("pokes = %d, want 0 after unmarking, which nobody is told about", poker.pokes)
+		}
+	})
+
+	t.Run("marking a prayer answered pokes; taking that back does not", func(t *testing.T) {
+		poker.pokes = 0
+		if _, _, err := svc.SetAnswered(ctx, ada, point, true, ""); err != nil {
+			t.Fatalf("SetAnswered(true): %v", err)
+		}
+		if poker.pokes != 1 {
+			t.Errorf("pokes = %d, want 1 after marking answered", poker.pokes)
+		}
+
+		poker.pokes = 0
+		if _, _, err := svc.SetAnswered(ctx, ada, point, false, ""); err != nil {
+			t.Fatalf("SetAnswered(false): %v", err)
+		}
+		if poker.pokes != 0 {
+			t.Errorf("pokes = %d, want 0 after taking the mark back", poker.pokes)
 		}
 	})
 }

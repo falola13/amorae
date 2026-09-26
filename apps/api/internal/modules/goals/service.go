@@ -19,14 +19,20 @@ type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
 
+// Poker asks the notifications worker to run a pass soon rather than
+// waiting for its next cron tick, without goals knowing anything about how
+// notifications are put together.
+type Poker interface{ Poke() }
+
 type Service struct {
 	repo    Repository
 	couples Couples
 	now     func() time.Time
+	poker   Poker
 }
 
-func NewService(repo Repository, couples Couples, now func() time.Time) *Service {
-	return &Service{repo: repo, couples: couples, now: now}
+func NewService(repo Repository, couples Couples, now func() time.Time, poker Poker) *Service {
+	return &Service{repo: repo, couples: couples, now: now, poker: poker}
 }
 
 func (s *Service) List(ctx context.Context, userID uuid.UUID) ([]Goal, error) {
@@ -92,5 +98,8 @@ func (s *Service) LogProgress(ctx context.Context, userID, goalID uuid.UUID, amo
 	if err := s.repo.AddProgress(ctx, coupleID, goalID, userID, amount, s.now()); err != nil {
 		return Goal{}, err
 	}
+	// So the partner hears about it, and any halfway/reached crossing, on
+	// this tick rather than the next cron one.
+	s.poker.Poke()
 	return s.repo.ByID(ctx, coupleID, goalID)
 }

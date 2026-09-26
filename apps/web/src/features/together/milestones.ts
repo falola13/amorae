@@ -1,4 +1,5 @@
-import { daysUntil } from "@/lib/dates";
+import { daysUntil, parse } from "@/lib/dates";
+import type { Milestone } from "@/lib/api/types";
 
 // "Next" = today if not yet passed this year, else next year. Feb 29 maps to Feb 28 in non-leap
 // years — same rule as the server's notifications.OccursOn, so screen and reminder never disagree.
@@ -41,3 +42,47 @@ export const yearsBy = (date: string, day: string, yearKnown = true) => {
   if (years <= 0) return "";
   return years === 1 ? "One year" : `${years} years`;
 };
+
+/** How many days until a date's next occurrence, from today — 0 when it's today. */
+export const daysAway = (date: string, todayIso: string): number =>
+  daysUntil(nextOccurrence(date, todayIso), parse(todayIso));
+
+/** Every milestone whose next occurrence lands on today. */
+export const todaysMilestones = (milestones: Milestone[], todayIso: string): Milestone[] =>
+  milestones.filter((m) => occursOn(m.date, todayIso));
+
+/** Milestones landing in the next `withinDays` days, not counting today — soonest first. */
+export const upcomingMilestones = (
+  milestones: Milestone[],
+  todayIso: string,
+  withinDays = 7,
+): Array<Milestone & { days: number }> =>
+  milestones
+    .map((m) => ({ ...m, days: daysAway(m.date, todayIso) }))
+    .filter((m) => m.days > 0 && m.days <= withinDays)
+    .sort((a, b) => a.days - b.days);
+
+/** "in 5 days" / "tomorrow" for the slim upcoming row; `days` must be > 0. */
+export const daysAwayLabel = (days: number): string =>
+  days === 1 ? "tomorrow" : `in ${days} days`;
+
+/** The celebration card's title and sub for a milestone occurring today.
+ *  `meId` and `partnerName` disambiguate whose birthday it is. */
+export function celebrationCopy(
+  m: Milestone,
+  todayIso: string,
+  meId: string | undefined,
+  partnerName: string,
+): { title: string; sub: string } {
+  if (m.source === "birthday") {
+    if (m.about === meId) {
+      return { title: "Happy birthday", sub: `${partnerName} has been waiting for today.` };
+    }
+    return { title: `Happy birthday, ${partnerName}`, sub: "Tell them today." };
+  }
+  if (m.source === "anniversary") {
+    const years = yearsBy(m.date, todayIso, true);
+    return { title: "Happy anniversary", sub: years ? `${years} together` : "" };
+  }
+  return { title: m.title, sub: "Today" };
+}

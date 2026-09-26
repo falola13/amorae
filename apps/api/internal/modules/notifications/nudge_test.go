@@ -17,6 +17,8 @@ type nudgeRepo struct {
 	partner uuid.UUID
 	name    string
 	counts  map[string]int
+	// nudgesOff is the partner having switched nudges off.
+	nudgesOff bool
 }
 
 func (r *nudgeRepo) NudgeTarget(context.Context, uuid.UUID) (uuid.UUID, string, error) {
@@ -26,7 +28,9 @@ func (r *nudgeRepo) CountSends(_ context.Context, _ uuid.UUID, kind string, _ ti
 	return r.counts[kind], nil
 }
 func (r *nudgeRepo) PreferencesFor(context.Context, uuid.UUID) (Preferences, bool, error) {
-	return Defaults(), true, nil
+	p := Defaults()
+	p.Nudges = !r.nudgesOff
+	return p, true, nil
 }
 func (r *nudgeRepo) SavePreferences(context.Context, uuid.UUID, Preferences, time.Time) error {
 	return nil
@@ -45,6 +49,18 @@ func newNudgeService(t *testing.T, sender push.Sender) (*Service, *nudgeRepo) {
 
 func TestNudge(t *testing.T) {
 	ctx := context.Background()
+
+	t.Run("switched off, the sender is told so and nothing is sent", func(t *testing.T) {
+		sender := &fakeSender{}
+		svc, repo := newNudgeService(t, sender)
+		repo.nudgesOff = true
+		if _, err := svc.Nudge(ctx, uuid.New()); !errors.Is(err, ErrNudgesOff) {
+			t.Fatalf("err = %v, want ErrNudgesOff", err)
+		}
+		if len(sender.sent) != 0 {
+			t.Errorf("%d sent, want none", len(sender.sent))
+		}
+	})
 
 	t.Run("it reaches the other one, and says who from", func(t *testing.T) {
 		sender := &fakeSender{}
