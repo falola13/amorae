@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import { Main } from "@/components/layout/screen";
@@ -52,8 +53,16 @@ export default function PrayerDetailPage() {
               back="Prayers"
               backHref={routes.prayers}
               right={
-                <div className="tabular pr-3 text-support font-semibold text-stone">
-                  {idx + 1} of {w.points.length}
+                <div className="flex items-center gap-3 pr-3">
+                  <span className="tabular text-support font-semibold text-stone">
+                    {idx + 1} of {w.points.length}
+                  </span>
+                  <Link
+                    href={routes.prayerEdit(p.id)}
+                    className="press text-support font-semibold text-plum no-underline"
+                  >
+                    Edit
+                  </Link>
                 </div>
               }
             />

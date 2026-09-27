@@ -25,6 +25,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/milestones"
 	"github.com/falola13/amorae/apps/api/internal/modules/notifications"
 	"github.com/falola13/amorae/apps/api/internal/modules/prayers"
+	"github.com/falola13/amorae/apps/api/internal/modules/timeline"
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
@@ -72,11 +73,25 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	// Product counters (services) and HTTP metrics (router) share this registry.
 	m := metrics.New()
 
+	// One Cloudinary account backs both memories' photos and profile photos;
+	// nil when it isn't configured, so photo endpoints say so and the rest of
+	// the app still works (FR-MEM-003, Q-06). Built once, handed to both
+	// modules' own Photos interfaces below.
+	photoStore := photos.New(cfg.CloudinaryCloudName, cfg.CloudinaryAPIKey, cfg.CloudinaryAPISecret)
+	var memoryPictures memories.Photos
+	var userPictures user.Photos
+	if photoStore != nil {
+		memoryPictures = photoStore
+		userPictures = photoStore
+	} else {
+		log.Info("no Cloudinary credentials: memories and profile photos will have none")
+	}
+
 	// --- services ---
 	// Truncated to match Postgres's microsecond precision, so a timestamp
 	// returned on write equals the one returned on later reads.
 	now := func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
-	userSvc := user.NewService(userRepo, now)
+	userSvc := user.NewService(userRepo, userPictures, now)
 
 	// In-memory rate limits, per process (swap for a Redis-backed limiter behind
 	// the same Allow(key) interface when scaling out).
@@ -127,14 +142,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	milestonesSvc := milestones.NewService(milestonesRepo, togetherCouples, now)
 
 	memoriesRepo := memories.NewPostgresRepository(db)
-	// nil when Cloudinary isn't configured; photo endpoints say so, rest still works (FR-MEM-003, Q-06).
-	var pictures memories.Photos
-	if store := photos.New(cfg.CloudinaryCloudName, cfg.CloudinaryAPIKey, cfg.CloudinaryAPISecret); store != nil {
-		pictures = store
-	} else {
-		log.Info("no Cloudinary credentials: memories will have no photos")
-	}
-	memoriesSvc := memories.NewService(memoriesRepo, togetherCouples, pictures, now)
+	memoriesSvc := memories.NewService(memoriesRepo, togetherCouples, memoryPictures, now)
+
+	// History as the couple's story: read-only, across every module's tables.
+	timelineSvc := timeline.NewService(timeline.NewPostgresRepository(db), togetherCouples, memoryPictures, now)
 
 	journalRepo := journal.NewPostgresRepository(db)
 	journalSvc := journal.NewService(journalRepo, togetherCouples, now, notificationsWorker)
@@ -147,7 +158,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	purger := couples.NewPurger(couplesRepo, now, log)
 
 	// *database.DB satisfies auth.TxRunner directly (matching InTx signature) — no adapter needed.
-	authSvc, err := auth.NewService(userRepo, sessionRepo, hasher, db, cfg.SessionTTL, now, auth.NewToken, loginAttempts, auth.Options{
+	// DeletingRepository wraps userRepo so that deleting an account also
+	// destroys the person's profile photo at Cloudinary — best-effort, so a
+	// Cloudinary hiccup never blocks deleting the account itself.
+	authUserRepo := user.NewDeletingRepository(userRepo, userPictures, log)
+	authSvc, err := auth.NewService(authUserRepo, sessionRepo, hasher, db, cfg.SessionTTL, now, auth.NewToken, loginAttempts, auth.Options{
 		Resets:   resetRepo,
 		Mailer:   mail,
 		AppURL:   cfg.AppURL,
@@ -184,6 +199,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	memoriesHandler := memories.NewHandler(memoriesSvc)
 	journalHandler := journal.NewHandler(journalSvc)
 	appreciationHandler := appreciation.NewHandler(appreciationSvc)
+	timelineHandler := timeline.NewHandler(timelineSvc)
 
 	// --- HTTP ---
 	mux := http.NewServeMux()
@@ -218,6 +234,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	memoriesHandler.RegisterRoutes(v1)
 	journalHandler.RegisterRoutes(v1)
 	appreciationHandler.RegisterRoutes(v1)
+	timelineHandler.RegisterRoutes(v1)
 
 	// Order matters: RequestID first so panics/logs get the id; ClientIP
 	// before any rate limiter reads it; Recover inside Logging so its 500

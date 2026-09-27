@@ -72,6 +72,7 @@ interface User {
   created_at: string;
   updated_at: string;
   birthday: null | { month: number; day: number; year: number | null }; // year is optional
+  photo_url?: string; // signed, unguessable, versioned; absent when there is no photo
 }
 
 interface AuthResult {
@@ -148,6 +149,38 @@ identical rule. The display name is trimmed and 1–50 characters.
   Either problem is `fields.birthday`, worded `"That isn’t a date."` or `"That’s in the future."`.
 - `email` is **not** accepted here (it's rejected as an unknown field): use the endpoint below.
 
+### `POST /v1/users/me/photo/ticket` (auth)
+
+A signature for uploading one photo **directly to Cloudinary**, so no image byte passes
+through this API — same shape and reasoning as memories' photo ticket, scoped to the
+caller's own profile picture instead of a memory.
+
+- `200` → `{ "data": { "upload_url": string, "fields": { [key: string]: string } } }`.
+  Post the file to `upload_url` as multipart with every pair in `fields` plus `file`,
+  changing nothing, since the signature covers exactly those values. The server chose the
+  asset's name, so the client cannot decide where a file lands.
+- `400 photos_unavailable` when Cloudinary is not configured on this server
+- `401 unauthenticated`
+
+### `PUT /v1/users/me/photo` (auth)
+
+Tell the profile that the upload finished. No body — the server already knows the only
+name the file can have.
+
+- `200` → `{ "data": User }`, now with `photo_url` set
+- `400 photos_unavailable`
+- `401 unauthenticated`
+
+### `DELETE /v1/users/me/photo` (auth)
+
+Take the photo off the profile and delete the file at Cloudinary. The deletion happens
+first: if Cloudinary refuses, nothing here changes and the error says so, rather than
+reporting a picture gone while it is still stored. Idempotent.
+
+- `200` → `{ "data": User }`, `photo_url` now absent
+- `400 photos_unavailable`
+- `401 unauthenticated`
+
 ### `PUT /v1/users/me/email` (auth)
 
 Changing the email changes what the account logs in with, so it needs the current
@@ -215,8 +248,9 @@ not be signed out by it.
 { "confirm": "delete", "current_password": "correct horse" }
 ```
 
-- `204`. The user, their sessions and their couple membership are deleted. A partner
-  keeps their account and the couple.
+- `204`. The user, their sessions and their couple membership are deleted, their profile
+  photo destroyed at Cloudinary with them (best-effort — a Cloudinary hiccup never blocks
+  deleting the account). A partner keeps their account and the couple.
 - `400 invalid_json` when there is no body
 - `400 validation_failed`: `fields.confirm` unless it is the word `delete` (any case,
   surrounding spaces ignored), or `fields.current_password` when it is missing or wrong
@@ -264,8 +298,11 @@ usual envelope:
 ### Couples (auth)
 
 `Couple` is flat: `id`, `name`, `me` (a `User` plus your own `role`), `partner` (null until
-joined), `invite_code` (only while a usable code exists and the couple has one member),
-`started_on`, `timezone`, `onboarding` flags. A `Couple` is always a live one; a couple that has ended is a
+joined; `{ id, display_name, role, photo_url? }` — never their email), `invite_code` (only
+while a usable code exists and the couple has one member), `started_on`, `timezone`,
+`onboarding` flags. `me.photo_url` and `partner.photo_url` are generated the same way as
+`User.photo_url`, so each of you sees the other's picture without either seeing anything
+else about their account. A `Couple` is always a live one; a couple that has ended is a
 different shape, `EndedCouple` (below).
 
 An authenticated write may carry an **`Idempotency-Key`** header. The API stores the reply
@@ -337,7 +374,7 @@ do not leak.
 | `GET /v1/prayers/current` | `PrayerWeek` for this couple's current week, which runs Sunday to Saturday **in the couple's timezone** (DEC-27). The week is created on first read if it does not exist — safe because `UNIQUE (couple_id, week_start)` makes a second creator lose harmlessly, which is the same property that will let the scheduler pre-warm it later. 409 `waiting_for_partner` while a couple has only one member: a week needs two people to have a setter |
 | `GET /v1/prayers/history` | past weeks, newest first |
 | `GET /v1/prayers/weeks/:id` | |
-| `PUT /v1/prayers/current/points` `{ points: PrayerPoint[] }` | Either partner (DEC-33); ≤10 points; the order of the array is the order, and each point's `position` is ignored on the way in. Points are matched by `id` and kept, so reordering does not discard what has been prayed on them; a point left out is deleted, and its completions with it. An `id` the week does not already own is treated as a new point — the server chooses primary keys. `weekdays` is optional per point — see below. 409 `prayer_in_use` when the submitted list rewords or drops a point the OTHER partner has already prayed, on any day this week — adding, editing a point nobody has prayed, and reordering stay open for the whole week (DEC-31) |
+| `PUT /v1/prayers/current/points` `{ points: PrayerPoint[] }` | Either partner (DEC-33) may edit or delete any point at any time, whether or not the other partner has already prayed it; the app confirms before sending a delete. ≤10 points; the order of the array is the order, and each point's `position` is ignored on the way in. Points are matched by `id` and kept, so reordering does not discard what has been prayed on them; a point left out is deleted, and its completions with it. An `id` the week does not already own is treated as a new point — the server chooses primary keys. `weekdays` is optional per point — see below |
 | `POST /v1/prayers/current/publish` | Either partner (DEC-33). Publishing an already-published week is a no-op, and does not move `published_at` or `published_by`. Either partner may still edit after publishing — fixing a typo is not a betrayal — until the other partner prays any of it |
 | `POST` / `DELETE /v1/prayers/points/:id/complete` | Marks, or unmarks, the caller's own prayer **for today** — a couple prays the week's points every day, not once and done (DEC-33). Today is the couple-local date; only a point actually scheduled for today, in the current week, can be marked, otherwise 409 `not_for_today`. 409 `prayer_not_shared` on a draft week. The other partner's progress is untouched |
 | `PATCH /v1/prayers/weeks/:id/reflection` `{ reflection }` | the caller's reflection |
@@ -367,9 +404,7 @@ week (history), they are every point completed on **any** day of that week.
 `days` is always seven entries, Sunday through Saturday, each
 `{ date, points, mine, partner }`: `points` is which point ids were
 scheduled that day, `mine`/`partner` which of those the caller/the other
-partner actually prayed that day. `locked` is the point ids the caller
-cannot edit right now — the other partner has prayed them, on any day this
-week — which is exactly what turns into 409 `prayer_in_use` on a `PUT`.
+partner actually prayed that day.
 
 ### Together
 
@@ -404,6 +439,39 @@ week — which is exactly what turns into 409 `prayer_in_use` on a `PUT`.
 | `POST /v1/nudge` | One partner telling the other they are thinking of them: no body, nothing to reply to, and no record kept beyond the send itself. Sent immediately rather than on the next tick, because five minutes late is a different thought. Three a day; a sent one answers `{ "left": n }`, how many more today, so the limit is seen before it is met. Refused with `their_quiet_hours` or `their_day_is_full` rather than queued, so the sender is told they are asleep instead of the thought being silently dropped |
 | `GET`, `POST /v1/milestones` | The dates a couple keeps: birthdays, anniversaries, the day they met — one entity, not one per kind (BR-DATE-01). `date` is the day it happened, never the next time it comes round; which year's occurrence is being looked at is worked out by whoever asks (the list screen, the reminder worker). Either partner may add one and it belongs to them both, so there is no author. `reminder` means "remind us every year" and defaults to true; a date with it off is kept but never announced. Listed oldest first — what counts as "coming up" depends on today, so the client decides it |
 | `DELETE /v1/milestones/{id}` | Remove a date, and any yearly reminder with it. Either partner may, because it belongs to them both (DEC-16). Idempotent |
+
+### Timeline
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET /v1/timeline` | The couple's shared story: one read-only feed of what happened, newest first, drawn from seven other modules' own tables rather than stored anywhere itself — there is nothing to create, edit, or delete here. Query params: `before` (RFC3339 instant, optional — pages strictly earlier than it; absent means the most recent page), `filter` (`all` · `prayer` · `moments` · `plans`; unknown or absent means `all`), `limit` (`1`–`50`, default `30`, clamped rather than rejected). Answers `{ items: TimelineItem[], next }`, `next` an RFC3339 instant to pass back as the next page's `before`, or `null` once there is nothing further back |
+
+`prayer` is every **past** published prayer week (a week still open, or not yet
+shared, does not appear) plus every answered prayer, across every week the
+couple has ever had. `moments` is memories, journal entries, and
+appreciations. `plans` is finished goals and events that are done or whose
+day has passed — an event still ahead of the couple belongs on their
+calendar, not their history.
+
+A `TimelineItem` is `{ id, type, at, date, title, sub, path, photo_url?, actor_id? }`.
+`type` is one of `prayer_week`, `prayer_answered`, `memory`, `event`, `goal`,
+`journal`, `appreciation`. `at` is the instant the item sorts and pages by;
+`date` is that instant's **couple-local** calendar day (`YYYY-MM-DD`), for
+grouping by month on the client — computed here so a client never has to
+reason about the couple's timezone itself (DEC-27). `path` is where tapping
+the item goes. `photo_url` appears only on a `memory` that has a photo and
+only when Cloudinary is configured, versioned the same way `GET /v1/memories`
+already versions one. `actor_id` appears only when the item has a single
+actor (who answered a prayer, wrote a journal entry, sent an appreciation,
+created an event) — absent for a whole prayer week, a memory, and a finished
+goal, none of which belong to one partner more than the other.
+
+A finished goal's `at` is the last time it was touched (`updated_at`) — goals
+carries no separate "completed at" column, so the moment it was marked done
+stands in for when it happened. Paging is cursor-based on `at`, not an
+offset, so couples who don't come back for a week don't see items shift
+around when they do; ties (two items at the same instant) break the same way
+on every page, by `type` then `id`.
 
 ### Notifications
 

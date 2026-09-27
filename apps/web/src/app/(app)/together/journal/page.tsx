@@ -33,6 +33,7 @@ export default function Journal() {
   const [editing, setEditing] = useState<JournalEntry | null>(null);
   const me = couple.data?.me;
   const partner = couple.data?.partner?.display_name ?? "Partner";
+  const partnerPhoto = couple.data?.partner?.photo_url;
   const todayIso = iso(today());
   return (
     <>
@@ -72,6 +73,7 @@ export default function Journal() {
                       <div className="flex items-center gap-2.5">
                         <Initial
                           letter={(j.author_id === me?.id ? (me?.display_name ?? "Y") : partner)[0]}
+                          photoUrl={j.author_id === me?.id ? me?.photo_url : partnerPhoto}
                           size={26}
                         />
                         <span className="grow text-support text-stone">

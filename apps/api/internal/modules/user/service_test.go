@@ -2,12 +2,14 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
+	"github.com/falola13/amorae/apps/api/internal/platform/photos"
 )
 
 // fakeRepository is an in-memory stand-in for Repository so tests run without a database.
@@ -47,12 +49,43 @@ func (f *fakeRepository) UpdateLoginTime(_ context.Context, u User) (User, error
 	return u, nil
 }
 
+func (f *fakeRepository) SetPhoto(_ context.Context, id uuid.UUID, photoID string, at time.Time) error {
+	u, ok := f.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.PhotoID = photoID
+	u.UpdatedAt = at
+	f.users[id] = u
+	return nil
+}
+
+// fakePhotos is an in-memory stand-in for Photos so tests run without Cloudinary.
+type fakePhotos struct {
+	tickets   []string // public ids a ticket was issued for
+	destroyed []string // public ids destroyed
+}
+
+func (f *fakePhotos) Ticket(publicID string, _ time.Time) (photos.Ticket, error) {
+	f.tickets = append(f.tickets, publicID)
+	return photos.Ticket{UploadURL: "https://upload.example/" + publicID, Fields: map[string]string{"public_id": publicID}}, nil
+}
+
+func (f *fakePhotos) URL(publicID string, version int64) (string, error) {
+	return fmt.Sprintf("https://cdn.example/%s?v=%d", publicID, version), nil
+}
+
+func (f *fakePhotos) Destroy(_ context.Context, publicID string) error {
+	f.destroyed = append(f.destroyed, publicID)
+	return nil
+}
+
 func fixedNow() time.Time {
 	return time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 }
 
 func TestService_Get_NotFound(t *testing.T) {
-	svc := NewService(newFakeRepository(), fixedNow)
+	svc := NewService(newFakeRepository(), nil, fixedNow)
 
 	_, err := svc.Get(context.Background(), uuid.New())
 
@@ -70,7 +103,7 @@ func TestService_UpdateProfile_BumpsUpdatedAt(t *testing.T) {
 		CreatedAt:   time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		UpdatedAt:   time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
-	svc := NewService(newFakeRepository(original), fixedNow)
+	svc := NewService(newFakeRepository(original), nil, fixedNow)
 
 	updated, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{DisplayName: "  New Name  "})
 	if err != nil {
@@ -90,7 +123,7 @@ func TestService_UpdateProfile_BumpsUpdatedAt(t *testing.T) {
 
 func TestService_UpdateProfile_RejectsInvalidDisplayName(t *testing.T) {
 	original := User{ID: uuid.New(), Email: "a@b.com", DisplayName: "Name"}
-	svc := NewService(newFakeRepository(original), fixedNow)
+	svc := NewService(newFakeRepository(original), nil, fixedNow)
 
 	_, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{DisplayName: "   "})
 
@@ -102,7 +135,7 @@ func TestService_UpdateProfile_RejectsInvalidDisplayName(t *testing.T) {
 
 func TestService_UpdateProfile_Timezone(t *testing.T) {
 	original := User{ID: uuid.New(), DisplayName: "Ada", Timezone: DefaultTimezone}
-	svc := NewService(newFakeRepository(original), fixedNow)
+	svc := NewService(newFakeRepository(original), nil, fixedNow)
 
 	got, err := svc.UpdateProfile(context.Background(), original.ID, UpdateProfileInput{DisplayName: "Ada", Timezone: "Africa/Lagos"})
 	if err != nil {
@@ -128,7 +161,7 @@ func TestService_UpdateProfile_Timezone(t *testing.T) {
 
 func TestService_UpdateProfile_Birthday(t *testing.T) {
 	original := User{ID: uuid.New(), DisplayName: "Ada"}
-	svc := NewService(newFakeRepository(original), fixedNow)
+	svc := NewService(newFakeRepository(original), nil, fixedNow)
 	year := 1990
 
 	t.Run("absent leaves it alone", func(t *testing.T) {
@@ -178,6 +211,102 @@ func TestService_UpdateProfile_Birthday(t *testing.T) {
 		f := fieldsOf(t, err)
 		if f["birthday"] == "" {
 			t.Errorf("fields = %v, want a birthday error", f)
+		}
+	})
+}
+
+func TestService_PhotoTicket_Unavailable(t *testing.T) {
+	original := User{ID: uuid.New(), DisplayName: "Ada"}
+	svc := NewService(newFakeRepository(original), nil, fixedNow) // no Photos configured
+
+	_, err := svc.PhotoTicket(context.Background(), original.ID)
+
+	appErr, ok := apperr.As(err)
+	if !ok || appErr.Code != "photos_unavailable" {
+		t.Fatalf("PhotoTicket() error = %v, want photos_unavailable", err)
+	}
+}
+
+func TestService_PhotoTicket_OK(t *testing.T) {
+	original := User{ID: uuid.New(), DisplayName: "Ada"}
+	pics := &fakePhotos{}
+	svc := NewService(newFakeRepository(original), pics, fixedNow)
+
+	ticket, err := svc.PhotoTicket(context.Background(), original.ID)
+	if err != nil {
+		t.Fatalf("PhotoTicket() error = %v", err)
+	}
+	if len(pics.tickets) != 1 || pics.tickets[0] != PhotoPublicID(original.ID) {
+		t.Errorf("tickets = %v, want one for %s", pics.tickets, PhotoPublicID(original.ID))
+	}
+	if ticket.UploadURL == "" {
+		t.Error("ticket has no upload url")
+	}
+}
+
+func TestService_AttachPhoto(t *testing.T) {
+	original := User{ID: uuid.New(), DisplayName: "Ada"}
+
+	t.Run("unavailable without Photos configured", func(t *testing.T) {
+		svc := NewService(newFakeRepository(original), nil, fixedNow)
+		_, err := svc.AttachPhoto(context.Background(), original.ID)
+		appErr, ok := apperr.As(err)
+		if !ok || appErr.Code != "photos_unavailable" {
+			t.Fatalf("AttachPhoto() error = %v, want photos_unavailable", err)
+		}
+	})
+
+	t.Run("records the server-derived public id", func(t *testing.T) {
+		svc := NewService(newFakeRepository(original), &fakePhotos{}, fixedNow)
+		got, err := svc.AttachPhoto(context.Background(), original.ID)
+		if err != nil {
+			t.Fatalf("AttachPhoto() error = %v", err)
+		}
+		if !got.HasPhoto() || got.PhotoID != PhotoPublicID(original.ID) {
+			t.Errorf("PhotoID = %q, want %q", got.PhotoID, PhotoPublicID(original.ID))
+		}
+	})
+}
+
+func TestService_RemovePhoto_DestroysThenClears(t *testing.T) {
+	original := User{ID: uuid.New(), DisplayName: "Ada", PhotoID: PhotoPublicID(uuid.New())}
+	pics := &fakePhotos{}
+	svc := NewService(newFakeRepository(original), pics, fixedNow)
+
+	got, err := svc.RemovePhoto(context.Background(), original.ID)
+	if err != nil {
+		t.Fatalf("RemovePhoto() error = %v", err)
+	}
+	if got.HasPhoto() {
+		t.Error("RemovePhoto() left a photo behind")
+	}
+	if len(pics.destroyed) != 1 || pics.destroyed[0] != original.PhotoID {
+		t.Errorf("destroyed = %v, want [%s]", pics.destroyed, original.PhotoID)
+	}
+}
+
+func TestService_PhotoURL(t *testing.T) {
+	withPhoto := User{ID: uuid.New(), DisplayName: "Ada", PhotoID: "amorae/users/x/avatar", UpdatedAt: fixedNow()}
+	withoutPhoto := User{ID: uuid.New(), DisplayName: "Ben"}
+
+	t.Run("present when the user has a photo and Photos is configured", func(t *testing.T) {
+		svc := NewService(newFakeRepository(withPhoto), &fakePhotos{}, fixedNow)
+		if url := svc.PhotoURL(withPhoto); url == "" {
+			t.Error("PhotoURL() = \"\", want a url")
+		}
+	})
+
+	t.Run("absent without a photo", func(t *testing.T) {
+		svc := NewService(newFakeRepository(withoutPhoto), &fakePhotos{}, fixedNow)
+		if url := svc.PhotoURL(withoutPhoto); url != "" {
+			t.Errorf("PhotoURL() = %q, want empty", url)
+		}
+	})
+
+	t.Run("absent when Photos isn't configured, even with a photo id", func(t *testing.T) {
+		svc := NewService(newFakeRepository(withPhoto), nil, fixedNow)
+		if url := svc.PhotoURL(withPhoto); url != "" {
+			t.Errorf("PhotoURL() = %q, want empty", url)
 		}
 	})
 }

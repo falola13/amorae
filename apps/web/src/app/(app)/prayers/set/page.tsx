@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
-import { daysLabel } from "@/features/prayers/derive";
+import { daysLabel, isForDay, weekdayOf } from "@/features/prayers/derive";
 import { useHistory, usePublish, useSavePoints, useWeek } from "@/features/prayers/hooks";
 import { useDragReorder } from "@/features/prayers/use-drag-reorder";
-import { range } from "@/lib/dates";
+import { dayName, range } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import type { PrayerPoint } from "@/lib/api/types";
 import { Icon } from "@/components/icons";
@@ -119,9 +119,6 @@ export default function SetPrayers() {
               ) : null}
               <ol className="m-0 mt-6 list-none border-t border-line p-0" {...drag.listProps}>
                 {items.map((p, i) => {
-                  // Once the partner has prayed it (on any day this week), it can be reordered
-                  // but not edited or removed.
-                  const locked = w.locked.includes(p.id);
                   const body = (
                     <>
                       <span className="text-bodylg font-semibold tracking-[-0.01em]">
@@ -129,11 +126,6 @@ export default function SetPrayers() {
                       </span>
                       {p.text ? <span className="text-support text-stone">{p.text}</span> : null}
                       <span className="text-support text-stone">{daysLabel(p.weekdays)}</span>
-                      {locked ? (
-                        <span className="text-support text-stone">
-                          {partner} has prayed this one.
-                        </span>
-                      ) : null}
                     </>
                   );
                   return (
@@ -155,18 +147,12 @@ export default function SetPrayers() {
                       <span className="tabular w-[22px] self-start pt-[17px] text-[13px] font-semibold text-stone">
                         {String(i + 1).padStart(2, "0")}
                       </span>
-                      {locked ? (
-                        <div className="flex min-h-[72px] grow flex-col justify-center gap-0.5 py-3 text-ink">
-                          {body}
-                        </div>
-                      ) : (
-                        <Link
-                          href={routes.prayerEdit(p.id)}
-                          className="press flex min-h-[72px] grow flex-col justify-center gap-0.5 text-ink no-underline"
-                        >
-                          {body}
-                        </Link>
-                      )}
+                      <Link
+                        href={routes.prayerEdit(p.id)}
+                        className="press flex min-h-[72px] grow flex-col justify-center gap-0.5 text-ink no-underline"
+                      >
+                        {body}
+                      </Link>
                       <button
                         type="button"
                         aria-label={`Reorder ${p.title}. Use the arrow keys to move it.`}
@@ -206,6 +192,56 @@ export default function SetPrayers() {
                   </li>
                 )}
               </ol>
+              <section className="mt-8 border-t border-line pt-5">
+                <p className="m-0 text-[13px] font-semibold text-stone">This week</p>
+                <Para className="mt-1 text-stone">
+                  What&rsquo;s set for each day &mdash; a prayer with no days chosen shows up on all
+                  of them.
+                </Para>
+                <ol className="m-0 mt-3 list-none p-0">
+                  {w.days.map((day) => {
+                    const weekday = weekdayOf(day.date);
+                    const dayItems = items.filter((p) => isForDay(p, weekday));
+                    const isToday = w.today === day.date;
+                    const name = dayName(day.date);
+                    return (
+                      <li
+                        key={day.date}
+                        className={cx(
+                          "flex items-start justify-between gap-3 border-b border-line py-2.5 last:border-b-0",
+                          isToday && "-mx-3 rounded-btn bg-plum-tint px-3",
+                        )}
+                      >
+                        <div className="flex min-w-0 grow flex-col gap-0.5 py-1">
+                          <span
+                            className={cx(
+                              "text-[13px] font-semibold",
+                              isToday ? "text-plum" : "text-stone",
+                            )}
+                          >
+                            {name}
+                          </span>
+                          {dayItems.length === 0 ? (
+                            <span className="text-support text-stone">Nothing set</span>
+                          ) : (
+                            <span className="text-support text-ink">
+                              {dayItems.map((p) => p.title || "Untitled prayer").join(" · ")}
+                            </span>
+                          )}
+                        </div>
+                        {items.length < MAX ? (
+                          <Link
+                            href={`${routes.prayerEdit()}?day=${weekday}`}
+                            className="press shrink-0 self-center text-support font-semibold text-plum no-underline"
+                          >
+                            Add for {name}
+                          </Link>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
             </Main>
             <div className="flex shrink-0 flex-col gap-2 px-6 pt-4 pb-safe">
               {shared ? (

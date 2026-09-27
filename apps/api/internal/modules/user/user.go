@@ -20,6 +20,10 @@ import (
 var (
 	ErrNotFound   = apperr.NotFound("user_not_found", "User not found.")
 	ErrEmailTaken = apperr.Conflict("email_taken", "An account with this email already exists.")
+	// Same code and message as memories.ErrNoPhotos (photos.go): photos are
+	// the one feature that needs an account elsewhere that may not be
+	// configured, whichever module is asking.
+	ErrNoPhotos = apperr.Invalid("photos_unavailable", "Photos aren’t set up on this server yet.")
 )
 
 const maxDisplayNameRunes = 50
@@ -41,7 +45,12 @@ type User struct {
 	BirthMonth *int `json:"birth_month"`
 	BirthDay   *int `json:"birth_day"`
 	BirthYear  *int `json:"birth_year"`
+	// Cloudinary public id of this person's profile photo; empty means none.
+	// Mirrors memories.Memory.PhotoID (json:"-": PhotoURL is what a client sees).
+	PhotoID string `json:"-"`
 }
+
+func (u User) HasPhoto() bool { return u.PhotoID != "" }
 
 // Birthday is a validated month/day, with an optional year.
 type Birthday struct {
@@ -152,6 +161,15 @@ func validEmail(email string) bool {
 		return false
 	}
 	return addr.Address == email
+}
+
+// PhotoPublicID is where a person's own profile photo lives, derived and
+// never supplied — the same reasoning as photos.PublicID for a memory
+// (internal/platform/photos), scoped to the user rather than a couple's
+// memory, so a signed upload ticket can only ever write to this person's
+// own picture.
+func PhotoPublicID(userID uuid.UUID) string {
+	return fmt.Sprintf("amorae/users/%s/avatar", userID)
 }
 
 // ValidateDisplayName is exposed so UpdateProfile can re-run just this rule without going through New.

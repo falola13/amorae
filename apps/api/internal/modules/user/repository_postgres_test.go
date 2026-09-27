@@ -2,6 +2,8 @@ package user_test
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -206,6 +208,120 @@ func TestPostgresRepository_UpdateEmailAndTimezone(t *testing.T) {
 	reread, _ := repo.GetByID(ctx, a.ID)
 	if reread.Timezone != "Africa/Lagos" {
 		t.Errorf("timezone after Update = %q, want Africa/Lagos", reread.Timezone)
+	}
+}
+
+func TestPostgresRepository_SetPhoto(t *testing.T) {
+	db := dbtest.New(t)
+	repo := user.NewPostgresRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	u, err := user.New(uniqueEmail(t), "Ada", "hash", now)
+	if err != nil {
+		t.Fatalf("user.New: %v", err)
+	}
+	created, err := repo.Create(ctx, u)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	publicID := user.PhotoPublicID(created.ID)
+	if err := repo.SetPhoto(ctx, created.ID, publicID, now); err != nil {
+		t.Fatalf("SetPhoto: %v", err)
+	}
+	got, err := repo.GetByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got.PhotoID != publicID {
+		t.Errorf("PhotoID = %q, want %q", got.PhotoID, publicID)
+	}
+
+	// Clearing it (empty string) round-trips back to "", not a literal "null".
+	if err := repo.SetPhoto(ctx, created.ID, "", now); err != nil {
+		t.Fatalf("SetPhoto (clear): %v", err)
+	}
+	cleared, err := repo.GetByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetByID after clear: %v", err)
+	}
+	if cleared.HasPhoto() {
+		t.Errorf("PhotoID = %q, want cleared", cleared.PhotoID)
+	}
+
+	if err := repo.SetPhoto(ctx, uuid.New(), publicID, now); err != user.ErrNotFound {
+		t.Fatalf("SetPhoto unknown id: err = %v, want ErrNotFound", err)
+	}
+}
+
+// fakeDestroyer is an in-memory stand-in for Cloudinary's Destroy, so this
+// test runs without a real account.
+type fakeDestroyer struct{ destroyed []string }
+
+func (f *fakeDestroyer) Destroy(_ context.Context, publicID string) error {
+	f.destroyed = append(f.destroyed, publicID)
+	return nil
+}
+
+func TestDeletingRepository_DeleteMe_DestroysThePhotoFirst(t *testing.T) {
+	db := dbtest.New(t)
+	repo := user.NewPostgresRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	u, err := user.New(uniqueEmail(t), "Ada", "hash", now)
+	if err != nil {
+		t.Fatalf("user.New: %v", err)
+	}
+	created, err := repo.Create(ctx, u)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	publicID := user.PhotoPublicID(created.ID)
+	if err := repo.SetPhoto(ctx, created.ID, publicID, now); err != nil {
+		t.Fatalf("SetPhoto: %v", err)
+	}
+
+	destroyer := &fakeDestroyer{}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	deleting := user.NewDeletingRepository(repo, destroyer, log)
+
+	if err := deleting.DeleteMe(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteMe: %v", err)
+	}
+	if len(destroyer.destroyed) != 1 || destroyer.destroyed[0] != publicID {
+		t.Errorf("destroyed = %v, want [%s]", destroyer.destroyed, publicID)
+	}
+	if _, err := repo.GetByID(ctx, created.ID); err != user.ErrNotFound {
+		t.Fatalf("GetByID after delete: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeletingRepository_DeleteMe_NoPhotoNoDestroyCall(t *testing.T) {
+	db := dbtest.New(t)
+	repo := user.NewPostgresRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	u, err := user.New(uniqueEmail(t), "Ben", "hash", now)
+	if err != nil {
+		t.Fatalf("user.New: %v", err)
+	}
+	created, err := repo.Create(ctx, u)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	destroyer := &fakeDestroyer{}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	deleting := user.NewDeletingRepository(repo, destroyer, log)
+
+	if err := deleting.DeleteMe(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteMe: %v", err)
+	}
+	if len(destroyer.destroyed) != 0 {
+		t.Errorf("destroyed = %v, want none — this account never had a photo", destroyer.destroyed)
 	}
 }
 

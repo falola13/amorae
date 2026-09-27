@@ -1,12 +1,16 @@
 import { http } from "@/lib/api/http";
 import type { ChangeEmailInput, ChangePasswordInput, DeleteAccountInput } from "@/lib/api/schemas";
-import type { Couple, EndedCouple, User } from "@/lib/api/types";
+import type { Couple, EndedCouple, PhotoTicket, User } from "@/lib/api/types";
 
 export const coupleApi = {
   me: () => http.get<User>("/users/me").then((r) => r.data),
   // Email is not patchable here: changing it needs the current password (changeEmail).
   updateMe: (patch: Partial<Pick<User, "display_name" | "timezone">>) =>
     http.patch<User>("/users/me", patch).then((r) => r.data),
+  photoTicket: () => http.post<PhotoTicket>("/users/me/photo/ticket").then((r) => r.data),
+  /** Say the upload happened. No body: the server chose the only name it could go to. */
+  attachPhoto: () => http.put<User>("/users/me/photo").then((r) => r.data),
+  removePhoto: () => http.delete<User>("/users/me/photo").then((r) => r.data),
   changeEmail: (input: ChangeEmailInput) =>
     http.put<User>("/users/me/email", input).then((r) => r.data),
   changePassword: (input: ChangePasswordInput) =>

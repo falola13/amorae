@@ -11,11 +11,16 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/platform/apperr"
 	"github.com/falola13/amorae/apps/api/internal/platform/authctx"
 	"github.com/falola13/amorae/apps/api/internal/platform/httpx"
+	"github.com/falola13/amorae/apps/api/internal/platform/photos"
 )
 
 type service interface {
 	Get(ctx context.Context, id uuid.UUID) (User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, input UpdateProfileInput) (User, error)
+	PhotoTicket(ctx context.Context, userID uuid.UUID) (photos.Ticket, error)
+	AttachPhoto(ctx context.Context, userID uuid.UUID) (User, error)
+	RemovePhoto(ctx context.Context, userID uuid.UUID) (User, error)
+	PhotoURL(u User) string
 }
 
 // Handler is transport only; business rules live in Service.
@@ -31,6 +36,11 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /users/me", http.HandlerFunc(h.getMe))
 	r.HandleAuthed("PATCH /users/me", http.HandlerFunc(h.updateMe))
 	// DELETE /users/me is registered by auth: it re-checks the password.
+	// The browser uploads straight to Cloudinary; this only signs permission
+	// and then records that it happened (docs/API.md), same as memories'.
+	r.HandleAuthed("POST /users/me/photo/ticket", http.HandlerFunc(h.photoTicket))
+	r.HandleAuthed("PUT /users/me/photo", http.HandlerFunc(h.attachPhoto))
+	r.HandleAuthed("DELETE /users/me/photo", http.HandlerFunc(h.removePhoto))
 }
 
 func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +56,50 @@ func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.Data(w, http.StatusOK, ToDTO(u))
+	httpx.Data(w, http.StatusOK, ToDTOWithPhoto(u, h.svc.PhotoURL(u)))
+}
+
+func (h *Handler) photoTicket(w http.ResponseWriter, r *http.Request) {
+	id, ok := authctx.UserID(r.Context())
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+	ticket, err := h.svc.PhotoTicket(r.Context(), id)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, ticket)
+}
+
+func (h *Handler) attachPhoto(w http.ResponseWriter, r *http.Request) {
+	id, ok := authctx.UserID(r.Context())
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+	// No body on purpose: the ticket's name is server-derived, so there is nothing to send.
+	u, err := h.svc.AttachPhoto(r.Context(), id)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, ToDTOWithPhoto(u, h.svc.PhotoURL(u)))
+}
+
+func (h *Handler) removePhoto(w http.ResponseWriter, r *http.Request) {
+	id, ok := authctx.UserID(r.Context())
+	if !ok {
+		httpx.Error(w, r, apperr.Unauthenticated("unauthenticated", "Authentication required."))
+		return
+	}
+	u, err := h.svc.RemovePhoto(r.Context(), id)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, ToDTOWithPhoto(u, h.svc.PhotoURL(u)))
 }
 
 // Email is deliberately absent: changing it needs the current password, via
@@ -91,7 +144,7 @@ func (h *Handler) updateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.Data(w, http.StatusOK, ToDTO(u))
+	httpx.Data(w, http.StatusOK, ToDTOWithPhoto(u, h.svc.PhotoURL(u)))
 }
 
 // decodeBirthdayPatch reads a present "birthday" key: the JSON literal null

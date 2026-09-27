@@ -200,24 +200,6 @@ func TestPostgresRepository_LoadsAWholeWeek(t *testing.T) {
 		}
 	})
 
-	t.Run("it answers the question CanEditPoints asks", func(t *testing.T) {
-		prayed := rec.PrayedByOthers(ada)
-		if !prayed[rec.Points[0].ID] {
-			t.Error("the setter was told nobody had started, but Ben had")
-		}
-
-		rewritten := append([]prayers.Point(nil), rec.Points...)
-		rewritten[0].Title = "Something else entirely"
-		if err := prayers.CanEditPoints(rec.Week, ada, rewritten, prayed); err == nil {
-			t.Error("rewriting a prayed point should be refused")
-		}
-
-		// Adding is always allowed, however far into the week it is.
-		added := append(append([]prayers.Point(nil), rec.Points...), prayers.Point{Title: "One more"})
-		if err := prayers.CanEditPoints(rec.Week, ada, added, prayed); err != nil {
-			t.Errorf("adding a point was refused: %v", err)
-		}
-	})
 }
 
 func TestPostgresRepository_HistoryExcludesTheCurrentWeek(t *testing.T) {

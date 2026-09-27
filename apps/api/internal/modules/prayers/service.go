@@ -136,7 +136,9 @@ func (s *Service) Week(ctx context.Context, userID, weekID uuid.UUID) (Record, C
 	return rec, cc, err
 }
 
-// SavePoints replaces this week's points, subject to CanEditPoints.
+// SavePoints replaces this week's points. Either partner may edit or delete
+// any point at any time (DEC-33) — deleting one takes its completions with
+// it, which the UI confirms before asking for this.
 func (s *Service) SavePoints(ctx context.Context, userID uuid.UUID, points []Point) (Record, CoupleContext, error) {
 	rec, cc, err := s.Current(ctx, userID)
 	if err != nil {
@@ -145,9 +147,6 @@ func (s *Service) SavePoints(ctx context.Context, userID uuid.UUID, points []Poi
 
 	cleaned, err := ValidatePoints(points)
 	if err != nil {
-		return Record{}, CoupleContext{}, err
-	}
-	if err := CanEditPoints(rec.Week, userID, cleaned, rec.PrayedByOthers(userID)); err != nil {
 		return Record{}, CoupleContext{}, err
 	}
 	if err := s.repo.ReplacePoints(ctx, rec.ID, cleaned, s.now()); err != nil {

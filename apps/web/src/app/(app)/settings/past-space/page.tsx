@@ -103,7 +103,12 @@ function PastSpace({ space }: { space: EndedCouple }) {
               (i === space.people.length - 1 ? "" : " border-b border-line")
             }
           >
-            <Initial letter={person.display_name[0] ?? "?"} size={34} />
+            <Initial
+              letter={person.display_name[0] ?? "?"}
+              photoUrl={person.photo_url}
+              name={person.display_name}
+              size={34}
+            />
             <span className="flex min-w-0 grow flex-col gap-px">
               <span className="text-[16px] font-semibold text-ink">{person.display_name}</span>
               {person.role ? <span className="text-support text-stone">{person.role}</span> : null}

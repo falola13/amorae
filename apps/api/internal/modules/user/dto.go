@@ -18,8 +18,15 @@ type DTO struct {
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 	Birthday    *birthdayDTO `json:"birthday"`
+	// Signed, unguessable, generated per request; absent when there is no
+	// photo. Mirrors memories' memoryDTO.PhotoURL.
+	PhotoURL string `json:"photo_url,omitempty"`
 }
 
+// ToDTO renders a User without a photo_url — callers that have no Service
+// at hand (auth's AuthResult, the data export) never claimed a photo, so
+// they never had one to lose. ToDTOWithPhoto is what /users/me and its
+// writes use instead.
 func ToDTO(u User) DTO {
 	out := DTO{
 		ID:          u.ID.String(),
@@ -32,5 +39,13 @@ func ToDTO(u User) DTO {
 	if u.BirthMonth != nil && u.BirthDay != nil {
 		out.Birthday = &birthdayDTO{Month: *u.BirthMonth, Day: *u.BirthDay, Year: u.BirthYear}
 	}
+	return out
+}
+
+// ToDTOWithPhoto is ToDTO plus the caller-supplied photo_url (Service.PhotoURL) — separate
+// so ToDTO itself needs nothing beyond a User.
+func ToDTOWithPhoto(u User, photoURL string) DTO {
+	out := ToDTO(u)
+	out.PhotoURL = photoURL
 	return out
 }

@@ -162,7 +162,31 @@ export function Bar({ pct, label }: { pct: number; label: string }) {
   );
 }
 
-export function Initial({ letter, size = 28 }: { letter: string; size?: number }) {
+export function Initial({
+  letter,
+  size = 28,
+  photoUrl,
+  name,
+}: {
+  letter: string;
+  size?: number;
+  /** A signed, unguessable photo URL. Falls back to the initial when absent. */
+  photoUrl?: string | null;
+  /** Alt text for the photo — the person's name, not the initial. */
+  name?: string;
+}) {
+  if (photoUrl) {
+    return (
+      // Cloudinary already serves an optimised image; next/image would just add a redundant hop.
+      // eslint-disable-next-line @next/next/no-img-element -- already optimised at the CDN
+      <img
+        src={photoUrl}
+        alt={name ?? letter}
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   return (
     <span
       aria-hidden="true"

@@ -35,12 +35,18 @@ type personDTO struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	Role        string    `json:"role"`
+	// Signed, unguessable, generated per request; absent when there is no
+	// photo. Mirrors user.DTO.PhotoURL — the caller's own picture.
+	PhotoURL string `json:"photo_url,omitempty"`
 }
 
 type partnerDTO struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
+	// The other partner's picture, so each sees the other's — same field as
+	// personDTO, generated the same way.
+	PhotoURL string `json:"photo_url,omitempty"`
 }
 
 type onboardingDTO struct {
@@ -88,8 +94,11 @@ type OnboardingDto struct {
 	Notifications *bool `json:"notifications"`
 }
 
-// The partner's role is read from mine, not passed in, so it can't be mismatched to the wrong partner.
-func ToMineDTO(mine Mine, me user.User, partner *user.User) MineDTO {
+// The partner's role is read from mine, not passed in, so it can't be
+// mismatched to the wrong partner. mePhotoURL/partnerPhotoURL are generated
+// by the caller (user.Service.PhotoURL) — this package doesn't reach into
+// photos itself, same as it doesn't reach into passwords.
+func ToMineDTO(mine Mine, me user.User, mePhotoURL string, partner *user.User, partnerPhotoURL string) MineDTO {
 	timezone := me.Timezone
 	if timezone == "" {
 		timezone = user.DefaultTimezone
@@ -106,6 +115,7 @@ func ToMineDTO(mine Mine, me user.User, partner *user.User) MineDTO {
 			Timezone:    timezone,
 			CreatedAt:   me.CreatedAt,
 			UpdatedAt:   me.UpdatedAt,
+			PhotoURL:    mePhotoURL,
 		},
 		InviteCode: formatInviteCode(mine.InviteCode),
 		Onboarding: onboardingDTO{Couple: true},
@@ -121,7 +131,7 @@ func ToMineDTO(mine Mine, me user.User, partner *user.User) MineDTO {
 		out.StartedOn = &day
 	}
 	if partner != nil {
-		out.Partner = &partnerDTO{ID: partner.ID.String(), DisplayName: partner.DisplayName}
+		out.Partner = &partnerDTO{ID: partner.ID.String(), DisplayName: partner.DisplayName, PhotoURL: partnerPhotoURL}
 		if member, ok := mine.Member(partner.ID); ok {
 			out.Partner.Role = member.Role
 		}

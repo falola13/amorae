@@ -328,90 +328,6 @@ func TestValidatePoints_Weekdays(t *testing.T) {
 	})
 }
 
-func TestCanEditPoints(t *testing.T) {
-	setter, partner := uuid.New(), uuid.New()
-	first, second := uuid.New(), uuid.New()
-	week := Week{
-		SetterUserID: setter,
-		Status:       StatusPublished,
-		Points: []Point{
-			{ID: first, Position: 0, Title: "For his new job", Body: "That it settles."},
-			{ID: second, Position: 1, Title: "For her mother"},
-		},
-	}
-	prayed := map[uuid.UUID]bool{first: true}
-
-	t.Run("either partner may edit, unlocked points aside", func(t *testing.T) {
-		if err := CanEditPoints(week, setter, week.Points, nil); err != nil {
-			t.Errorf("the setter should be able to edit the week: %v", err)
-		}
-		if err := CanEditPoints(week, partner, week.Points, nil); err != nil {
-			t.Errorf("the partner should be able to edit the week too (DEC-33): %v", err)
-		}
-	})
-
-	unchanged := func() []Point { return append([]Point(nil), week.Points...) }
-
-	t.Run("adding is always allowed", func(t *testing.T) {
-		points := append(unchanged(), Point{Title: "For the move"})
-		if err := CanEditPoints(week, setter, points, prayed); err != nil {
-			t.Errorf("adding after the partner started was refused: %v", err)
-		}
-	})
-
-	t.Run("a point nobody has reached is still the setter's", func(t *testing.T) {
-		points := unchanged()
-		points[1].Title = "For her mother's health"
-		if err := CanEditPoints(week, setter, points, prayed); err != nil {
-			t.Errorf("editing an unprayed point was refused: %v", err)
-		}
-	})
-
-	t.Run("a prayed point cannot be reworded", func(t *testing.T) {
-		points := unchanged()
-		points[0].Body = "That he turns it down."
-		if err := CanEditPoints(week, setter, points, prayed); err == nil {
-			t.Error("a point the partner had prayed was rewritten under them")
-		}
-	})
-
-	t.Run("a prayed point cannot be taken away", func(t *testing.T) {
-		points := []Point{week.Points[1]}
-		if err := CanEditPoints(week, setter, points, prayed); err == nil {
-			t.Error("a point the partner had prayed was deleted under them")
-		}
-	})
-
-	t.Run("a prayed point may be moved", func(t *testing.T) {
-		// Position isn't part of what CanEditPoints locks.
-		points := []Point{week.Points[1], week.Points[0]}
-		points[0].Position, points[1].Position = 0, 1
-		if err := CanEditPoints(week, setter, points, prayed); err != nil {
-			t.Errorf("reordering was refused: %v", err)
-		}
-	})
-
-	t.Run("their own praying does not tie their hands", func(t *testing.T) {
-		points := unchanged()
-		points[0].Title = "For the new job"
-		if err := CanEditPoints(week, setter, points, nil); err != nil {
-			t.Errorf("the editor was blocked by their own completion: %v", err)
-		}
-	})
-
-	t.Run("the partner is locked out of a point they didn't pray, same as the setter would be", func(t *testing.T) {
-		// prayedByOthers is computed relative to the editor (Record.PrayedByOthers),
-		// so from the partner's side, "others" means the setter — the lock is
-		// symmetric, not tied to who happens to be the setter.
-		lockedForPartner := map[uuid.UUID]bool{first: true}
-		points := unchanged()
-		points[0].Title = "Something else"
-		if err := CanEditPoints(week, partner, points, lockedForPartner); err == nil {
-			t.Error("the partner rewrote a point the setter had prayed")
-		}
-	})
-}
-
 // errorOf runs fn, requires it to fail, and hands back the typed error.
 func errorOf(t *testing.T, fn func() error) *apperr.Error {
 	t.Helper()
@@ -471,7 +387,7 @@ func TestCanAnswer_OnlyOnceShared(t *testing.T) {
 	}
 }
 
-func TestToDTO_TodayDaysAndLocked(t *testing.T) {
+func TestToDTO_TodayAndDays(t *testing.T) {
 	viewer, partner := uuid.New(), uuid.New()
 	weekStart := date(2026, 9, 20) // a Sunday
 	sundayOnly := 1 << uint(time.Sunday)
@@ -519,9 +435,6 @@ func TestToDTO_TodayDaysAndLocked(t *testing.T) {
 		if len(out.Days[1].Points) != 1 {
 			t.Errorf("Monday has %d scheduled points, want 1 (every-day only)", len(out.Days[1].Points))
 		}
-		if len(out.Locked) != 1 || out.Locked[0] != sundaysOnly.String() {
-			t.Errorf("locked = %v, want [%s] (the partner already prayed it)", out.Locked, sundaysOnly)
-		}
 	})
 
 	t.Run("viewed as history, today is empty and completions are the whole week's", func(t *testing.T) {
@@ -531,13 +444,6 @@ func TestToDTO_TodayDaysAndLocked(t *testing.T) {
 		}
 		if len(out.PartnerCompleted) != 1 || out.PartnerCompleted[0] != sundaysOnly.String() {
 			t.Errorf("partner_completed = %v, want the week's union [%s]", out.PartnerCompleted, sundaysOnly)
-		}
-	})
-
-	t.Run("the partner's own view has nothing locked", func(t *testing.T) {
-		out := ToDTO(rec, partner, viewer, weekStart)
-		if len(out.Locked) != 0 {
-			t.Errorf("locked = %v, want none — nobody but the partner has prayed anything", out.Locked)
 		}
 	})
 }
