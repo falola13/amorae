@@ -347,7 +347,12 @@ export function HomeScreen() {
       </div>
 
       {w ? (
-        <PrayerFooter week={w} partner={partner} reminder={prefs.data ? reminder : null} />
+        <PrayerFooter
+          week={w}
+          partner={partner}
+          partnerPhoto={coupleData.partner?.photo_url}
+          reminder={prefs.data ? reminder : null}
+        />
       ) : null}
       {coupleData.partner ? <Nudge partner={partner} /> : null}
     </Main>
@@ -451,10 +456,12 @@ function Nudge({ partner }: { partner: string }) {
 function PrayerFooter({
   week: w,
   partner,
+  partnerPhoto,
   reminder,
 }: {
   week: PrayerWeek;
   partner: string;
+  partnerPhoto?: string | null;
   reminder: string | null;
 }) {
   const done = w.my_completed.length;
@@ -472,7 +479,7 @@ function PrayerFooter({
         </LinkButton>
       </div>
       <div className="mt-3.5 flex items-center gap-2 pb-4 text-support text-stone">
-        <Initial letter={partner[0]} size={18} />
+        <Initial letter={partner[0]} photoUrl={partnerPhoto} name={partner} size={18} />
         {total === 0
           ? "Nothing set for today"
           : partnerToday

@@ -2,8 +2,60 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { User } from "@/lib/api/types";
 import { keys } from "@/lib/query/keys";
+import { MAX_PHOTO_BYTES } from "@/features/together/writes";
 import { coupleApi } from "./api";
+
+// Same ten-megabyte cap Q-06 chose for memory photos (writes.ts), re-exported
+// here so the profile screen doesn't reach across features for one constant.
+export { MAX_PHOTO_BYTES };
+
+/** Ask for permission, upload, then record it — the three steps only work together. */
+async function putMyPhoto(photo: File): Promise<User> {
+  const ticket = await coupleApi.photoTicket();
+  const form = new FormData();
+  // Exactly what the server signed: the signature covers this list.
+  for (const [key, value] of Object.entries(ticket.fields)) form.append(key, value);
+  form.append("file", photo);
+
+  const upload = await fetch(ticket.upload_url, { method: "POST", body: form });
+  if (!upload.ok) {
+    // The body says why; the status alone cannot tell a wrong cloud name
+    // from a refused signature.
+    throw new Error(`photo upload refused (${upload.status}): ${await upload.text()}`);
+  }
+  return coupleApi.attachPhoto();
+}
+
+// The screen shows upload failures itself ("Photos aren't set up yet" or a
+// generic retry), so both opt out of the global error toast. A File cannot
+// survive the offline queue, so this is online-only like the memory photo writes.
+export function useUploadMyPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: putMyPhoto,
+    networkMode: "always",
+    meta: { handlesError: true },
+    onSuccess: (user) => {
+      qc.setQueryData(keys.me, user);
+      qc.invalidateQueries({ queryKey: keys.me });
+      qc.invalidateQueries({ queryKey: keys.couple });
+    },
+  });
+}
+export function useRemoveMyPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: coupleApi.removePhoto,
+    meta: { handlesError: true },
+    onSuccess: (user) => {
+      qc.setQueryData(keys.me, user);
+      qc.invalidateQueries({ queryKey: keys.me });
+      qc.invalidateQueries({ queryKey: keys.couple });
+    },
+  });
+}
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: coupleApi.me });
 export const useCouple = () => useQuery({ queryKey: keys.couple, queryFn: coupleApi.couple });

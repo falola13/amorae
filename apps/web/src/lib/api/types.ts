@@ -14,6 +14,8 @@ export interface User {
   display_name: string;
   timezone: string;
   birthday: Birthday | null;
+  /** Signed, unguessable, generated per request. Null when there is none. */
+  photo_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +31,8 @@ export interface Partner {
   display_name: string;
   /** How they label themselves in the couple ("Husband"), not a permission. */
   role: string;
+  /** Signed, unguessable, generated per request. Null when there is none. */
+  photo_url: string | null;
 }
 
 export interface Couple {
@@ -110,8 +114,6 @@ export interface PrayerWeek {
   today?: string;
   /** Sun..Sat for this week. */
   days: PrayerDay[];
-  /** Point ids I can't edit — my partner already prayed them on some day this week. */
-  locked: string[];
   reflection?: string;
 }
 
@@ -323,4 +325,34 @@ export interface SessionInfo {
   /** Absent until the session is used again after sign-in. */
   last_used_at?: string;
   expires_at: string;
+}
+
+export type TimelineFilter = "all" | "prayer" | "moments" | "plans";
+
+export type TimelineItemType =
+  "prayer_week" | "prayer_answered" | "memory" | "event" | "goal" | "journal" | "appreciation";
+
+/** One row of "Our story" (GET /v1/timeline), newest first. */
+export interface TimelineItem {
+  id: string;
+  type: TimelineItemType;
+  /** The instant, for ordering. */
+  at: string;
+  /** Couple-local date (YYYY-MM-DD), for month grouping and the day shown. */
+  date: string;
+  title: string;
+  /** One line, shown under the title. */
+  sub: string;
+  /** Where tapping the row goes, an in-app path. */
+  path: string;
+  /** A memory's photo, when it has one. */
+  photo_url?: string;
+  /** Who did this, when it's known — used to show their avatar. */
+  actor_id?: string;
+}
+
+export interface TimelinePage {
+  items: TimelineItem[];
+  /** The cursor for the next page, or null when this was the last one. */
+  next: string | null;
 }

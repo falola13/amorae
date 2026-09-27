@@ -1,143 +1,187 @@
 "use client";
 
 import Link from "next/link";
-import { useCouple } from "@/features/couple/hooks";
-import { DaysRow } from "@/features/prayers/components/days-row";
-import { setterLabel, prayerCount } from "@/features/prayers/derive";
-import { useHistory, useWeek } from "@/features/prayers/hooks";
-import { longDate, monthName } from "@/lib/dates";
-import { routes } from "@/lib/routes";
-import type { PrayerWeek } from "@/lib/api/types";
-import { Icon } from "@/components/icons";
+import { useState } from "react";
+
+import { Icon, type IconName } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
 import {
+  Button,
+  cx,
   EmptyState,
+  Initial,
   LinkButton,
-  Micro,
-  Ornament,
   Para,
   Skeleton,
   Title,
-  cx,
 } from "@/components/ui/kit";
-import { QueryState } from "@/components/ui/query-state";
+import { QueryState, inPage } from "@/components/ui/query-state";
+import { useCouple, useMe } from "@/features/couple/hooks";
+import { groupByMonth } from "@/features/timeline/derive";
+import { useTimeline } from "@/features/timeline/hooks";
+import { dayNum } from "@/lib/dates";
+import { routes } from "@/lib/routes";
+import type { TimelineFilter, TimelineItem } from "@/lib/api/types";
 
-function sinceLine(count: number, first?: string) {
-  const weeks = count === 1 ? "One week" : `${count} weeks`;
-  if (!first) return `${weeks} together.`;
-  return `${weeks} together, since ${longDate(first)} ${first.slice(0, 4)}.`;
-}
+const FILTERS: { value: TimelineFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "prayer", label: "Prayer" },
+  { value: "moments", label: "Moments" },
+  { value: "plans", label: "Plans" },
+];
 
-function Entry({
-  w,
-  now,
+const TYPE_ICON: Record<TimelineItem["type"], IconName> = {
+  prayer_week: "book",
+  prayer_answered: "check",
+  memory: "image",
+  event: "calendar",
+  goal: "target",
+  journal: "note",
+  appreciation: "heart",
+};
+
+function TimelineRow({
+  item,
+  photoUrl,
+  name,
   last,
-  partner,
-  meId,
 }: {
-  w: PrayerWeek;
-  now?: boolean;
+  item: TimelineItem;
+  photoUrl?: string | null;
+  name?: string;
   last?: boolean;
-  partner: string;
-  meId?: string;
 }) {
-  const meta = now
-    ? `${prayerCount(w.points.length)} · you ${w.my_completed.length} of ${w.points.length} so far`
-    : `${prayerCount(w.points.length)} · you ${w.my_completed.length} of ${w.points.length} · ${partner} ${w.partner_completed.length} of ${w.points.length}`;
   return (
     <Link
-      href={now ? routes.prayers : routes.historyWeek(w.id)}
-      className="press relative flex min-h-[84px] items-center gap-3 pl-[30px] text-ink no-underline"
+      href={item.path}
+      className={cx(
+        "press flex min-h-[62px] items-center gap-3.5 py-2.5 text-left no-underline",
+        !last && "border-b border-line",
+      )}
     >
-      <span aria-hidden="true" className="absolute bottom-0 left-1 top-0 w-px bg-line" />
-      <span
-        aria-hidden="true"
-        className={cx(
-          "absolute left-0 top-[22px] box-border h-[9px] w-[9px] rounded-full",
-          now ? "border-2 border-plum bg-plum" : "border-[1.5px] border-edge bg-bg",
-        )}
-      />
-      <span className={cx("flex grow flex-col gap-1.5 py-3.5", !last && "border-b border-line")}>
-        <span className="flex items-center gap-2.5 text-bodylg font-semibold tracking-[-0.01em]">
-          {longDate(w.week_start)}
-          {now ? (
-            <span className="rounded-full bg-plum-tint px-2 py-0.5 text-[12px] font-bold text-plum">
-              This week
-            </span>
-          ) : null}
-        </span>
-        <span className="flex flex-col gap-0.5">
-          <span className="text-[15px]">{setterLabel(w, meId, partner)} set the prayers</span>
-          <span className="text-support text-stone">{meta}</span>
-        </span>
-        {w.days.length > 0 ? (
-          <div className="max-w-[220px] pt-0.5">
-            <DaysRow days={w.days} today={w.today} partnerName={partner} />
-          </div>
-        ) : null}
+      <Icon name={TYPE_ICON[item.type]} size={22} className="text-stone" />
+      <span className="flex min-w-0 grow flex-col gap-px">
+        <span className="text-[16px] font-semibold text-ink">{item.title}</span>
+        <span className="truncate text-support text-stone">{item.sub}</span>
       </span>
-      <Icon name="right" size={18} className="text-stone" />
+      {item.photo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- already optimised at the CDN
+        <img
+          src={item.photo_url}
+          alt=""
+          className="h-10 w-10 shrink-0 rounded-btn bg-photo object-cover"
+        />
+      ) : null}
+      {item.actor_id ? <Initial letter={name?.[0] ?? "?"} photoUrl={photoUrl} name={name} /> : null}
+      <span className="shrink-0 tabular text-support text-stone">{dayNum(item.date)}</span>
     </Link>
   );
 }
 
 export default function History() {
-  const history = useHistory();
-  const week = useWeek();
+  const [filter, setFilter] = useState<TimelineFilter>("all");
+  const timeline = useTimeline(filter);
   const couple = useCouple();
-  const partner = couple.data?.partner?.display_name ?? "Your partner";
+  const me = useMe();
+
+  const meId = me.data?.id;
+  const partnerId = couple.data?.partner?.id;
+  const actor = (id?: string) => {
+    if (id === meId) return { name: me.data?.display_name, photoUrl: me.data?.photo_url };
+    if (id === partnerId)
+      return {
+        name: couple.data?.partner?.display_name,
+        photoUrl: couple.data?.partner?.photo_url,
+      };
+    return { name: undefined, photoUrl: undefined };
+  };
+
   return (
     <Main>
       <div className="pt-1.5">
-        <Title>History</Title>
+        <Title>Our story</Title>
       </div>
-      <QueryState queries={[history]} loading={<Skeleton lines={4} />}>
-        {(historyData) => {
-          const all = [
-            ...(week.data && week.data.status === "published" ? [week.data] : []),
-            ...historyData,
-          ];
-          if (all.length === 0) {
+      <Para className="mt-1.5">Everything you’ve done together, newest first.</Para>
+      <div role="tablist" aria-label="Filter" className="-mx-1 mt-3 flex flex-wrap gap-1">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            role="tab"
+            aria-selected={filter === f.value}
+            onClick={() => setFilter(f.value)}
+            className={cx(
+              "press h-9 rounded-full px-3.5 text-[14px] font-semibold",
+              filter === f.value ? "bg-plum-tint text-plum" : "text-stone",
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <QueryState
+        queries={[timeline]}
+        frame={inPage}
+        loading={
+          <div className="pt-4">
+            <Skeleton lines={4} />
+          </div>
+        }
+      >
+        {(data) => {
+          const items = data.pages.flatMap((p) => p.items);
+          if (items.length === 0) {
             return (
-              <EmptyState
-                ghost="dots"
-                title="Your first week will appear here"
-                text="Each Sunday, the week you’ve just finished is kept here for the two of you to look back on."
-                cta={<LinkButton href={routes.prayers}>Go to this week’s prayers</LinkButton>}
-              />
+              <div className="pt-4">
+                <EmptyState
+                  ghost="dots"
+                  title="Nothing here yet"
+                  text="Your story fills in as you go."
+                  cta={
+                    <LinkButton href={routes.together} variant="secondary">
+                      Back to Together
+                    </LinkButton>
+                  }
+                />
+              </div>
             );
           }
-          const groups: { month: string; weeks: PrayerWeek[] }[] = [];
-          for (const w of all) {
-            const m = monthName(w.week_start);
-            const g = groups[groups.length - 1];
-            if (g && g.month === m) g.weeks.push(w);
-            else groups.push({ month: m, weeks: [w] });
-          }
+          const groups = groupByMonth(items);
           return (
-            <>
-              <Para className="mt-1.5">Every prayer week the two of you have shared.</Para>
-              <div className="mt-2 flex flex-col pb-4">
-                {groups.map((g, gi) => (
-                  <div key={g.month}>
-                    <div className="pb-1.5 pl-[30px] pt-[18px]">
-                      <Micro>{g.month}</Micro>
-                    </div>
-                    {g.weeks.map((w, i) => (
-                      <Entry
-                        key={w.id}
-                        w={w}
-                        now={w.id === week.data?.id}
-                        partner={partner}
-                        meId={couple.data?.me.id}
-                        last={gi === groups.length - 1 && i === g.weeks.length - 1}
-                      />
-                    ))}
+            <div className="mt-2 flex flex-col pb-4">
+              {groups.map((g, gi) => (
+                <div key={`${g.month}-${gi}`}>
+                  <div className="pb-1.5 pt-[18px]">
+                    <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
+                      {g.month}
+                    </span>
                   </div>
-                ))}
-                <Ornament caption={sinceLine(all.length, all[all.length - 1]?.week_start)} />
-              </div>
-            </>
+                  {g.items.map((item, i) => {
+                    const who = actor(item.actor_id);
+                    return (
+                      <TimelineRow
+                        key={item.id}
+                        item={item}
+                        name={who.name}
+                        photoUrl={who.photoUrl}
+                        last={gi === groups.length - 1 && i === g.items.length - 1}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+              {timeline.hasNextPage ? (
+                <div className="pt-4">
+                  <Button
+                    variant="secondary"
+                    loading={timeline.isFetchingNextPage}
+                    onClick={() => timeline.fetchNextPage()}
+                  >
+                    Show earlier
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           );
         }}
       </QueryState>

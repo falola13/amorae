@@ -2,18 +2,17 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { lookupScripture, type LookupFailure, type Scripture } from "@/features/prayers/scripture";
+import { parseReference } from "@/lib/scripture/parse";
 import type { z } from "zod";
 
-import { Main } from "@/components/layout/screen";
 import {
   BareInput,
   BareTextarea,
   Button,
   ComposeBar,
-  LinkButton,
   Para,
   Sheet,
   Skeleton,
@@ -40,6 +39,10 @@ export default function EditPrayerPage() {
 function EditPrayer() {
   const params = useSearchParams();
   const id = params.get("id");
+  // Only meaningful for a brand-new prayer — the week planner's "Add for {day}" links land here
+  // with the day preselected; editing an existing point always keeps its own weekdays.
+  const dayParam = params.get("day");
+  const preselectDay = dayParam !== null && /^[0-6]$/.test(dayParam) ? Number(dayParam) : undefined;
   const week = useWeek();
   const couple = useCouple();
   const partner = couple.data?.partner?.display_name ?? "Your partner";
@@ -58,7 +61,12 @@ function EditPrayer() {
     formState: { errors, isDirty },
   } = useForm<Form>({
     resolver: zodResolver(prayerPointSchema),
-    defaultValues: { title: "", text: "", scripture: "", weekdays: [] },
+    defaultValues: {
+      title: "",
+      text: "",
+      scripture: "",
+      weekdays: preselectDay !== undefined ? [preselectDay] : [],
+    },
     values: point
       ? {
           title: point.title,
@@ -131,6 +139,15 @@ function EditPrayer() {
     : null;
   const shown = verse !== undefined ? verse : saved;
 
+  // Parsed locally, with no round trip, so the field can say what it heard as they type.
+  // Undefined typed text (nothing yet) and unparseable junk both mean "no preview" — the gentle
+  // hint below only shows once they've actually typed something that didn't parse.
+  const scriptureInput = watch("scripture");
+  const preview = useMemo(
+    () => (scriptureInput?.trim() ? parseReference(scriptureInput) : null),
+    [scriptureInput],
+  );
+
   const look = async (ref: string) => {
     const trimmed = ref.trim();
     if (!trimmed) {
@@ -140,7 +157,9 @@ function EditPrayer() {
     }
     setLooking(true);
     setFailure(null);
-    const result = await lookupScripture(trimmed);
+    // The parsed, tidied form is what actually gets looked up — "romans 8 28" and "Rom. 8:28"
+    // both resolve to the same canonical reference the server expects.
+    const result = await lookupScripture(parseReference(trimmed)?.canonical ?? trimmed);
     setLooking(false);
     if (!result.ok) {
       setFailure(result.failure);
@@ -164,28 +183,9 @@ function EditPrayer() {
       {(w) => {
         const points = w.points;
         const idx = points.findIndex((x) => x.id === id);
-
-        // Reachable via back button/old tab even though the list hides this link once the partner has prayed it.
-        if (idx !== -1 && id && w.locked.includes(id)) {
-          return (
-            <Main>
-              <div className="pt-3">
-                <h1 className="m-0 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
-                  {points[idx].title}
-                </h1>
-                <Para className="mt-1.5">
-                  {partner} has already prayed this one, so it stays as it is. You can still add new
-                  prayers, or change the ones they haven&rsquo;t reached.
-                </Para>
-              </div>
-              <div className="pt-6">
-                <LinkButton href={routes.prayersSet} variant="secondary">
-                  Back to the week
-                </LinkButton>
-              </div>
-            </Main>
-          );
-        }
+        // Any day this week, not just today — deleting still goes for both of you once either
+        // side of the couple has prayed it once.
+        const partnerPrayed = id ? w.days.some((d) => d.partner.includes(id)) : false;
 
         const onSubmit = async (v: Form) => {
           // The lookup runs on blur, and tapping Done straight from the field
@@ -195,7 +195,8 @@ function EditPrayer() {
           let words = shown?.text;
           // verse === null: they removed the words on purpose; don't bring them back.
           if (scripture && verse !== null && scripture !== shown?.reference) {
-            const found = await lookupScripture(scripture);
+            const canonical = parseReference(scripture)?.canonical ?? scripture;
+            const found = await lookupScripture(canonical);
             words = found.ok ? found.scripture.text : undefined;
             if (found.ok) scripture = found.scripture.reference;
           }
@@ -295,11 +296,17 @@ function EditPrayer() {
                   {...register("scripture", {
                     onBlur: (e) => {
                       const next = e.target.value.trim();
-                      if (next && next !== shown?.reference) void look(next);
+                      const canonical = parseReference(next)?.canonical;
+                      if (next && (canonical ?? next) !== shown?.reference) void look(next);
                       if (!next) setVerse(null);
                     },
                   })}
                 />
+                {scriptureInput?.trim() && !looking && !failure ? (
+                  <p className="m-0 pt-1 text-support text-stone">
+                    {preview ? preview.canonical : 'Try Book chapter:verse, like "John 3:16".'}
+                  </p>
+                ) : null}
                 {looking ? (
                   <p className="m-0 pt-1 text-support text-stone">Looking it up&hellip;</p>
                 ) : null}
@@ -359,8 +366,9 @@ function EditPrayer() {
                 labelledBy="del-prayer-h"
               >
                 <Para>
-                  “{points[idx]?.title}” goes for both of you, with its words and scripture. There
-                  is no undo.
+                  {partnerPrayed
+                    ? `${partner} has prayed this one — it goes for both of you.`
+                    : `“${points[idx]?.title}” goes for both of you, with its words and scripture. There is no undo.`}
                 </Para>
                 <div className="flex flex-col gap-1">
                   <Button

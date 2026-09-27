@@ -21,4 +21,5 @@ export const keys = {
   prefs: ["notifications", "preferences"] as const,
   sessions: ["sessions"] as const,
   inbox: ["notifications", "inbox"] as const,
+  timeline: (filter: string) => ["timeline", filter] as const,
 };

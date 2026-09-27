@@ -63,7 +63,7 @@ func (r *PostgresRepository) EnsureWeek(
 type Record struct {
 	Week
 	// user id -> the points that user has prayed on any day this week — the
-	// "ever this week" view History and the lock rule both want.
+	// "ever this week" view History wants.
 	Completed map[uuid.UUID][]uuid.UUID
 	// day (as WeekStart's date-only representation) -> user id -> the points
 	// that user prayed that specific day — what "today"'s my/partner lists,
@@ -71,24 +71,6 @@ type Record struct {
 	ByDay map[time.Time]map[uuid.UUID][]uuid.UUID
 	// user id -> what that person wrote about the week.
 	Reflections map[uuid.UUID]string
-}
-
-// PrayedByOthers is the set of point ids somebody other than `except` has
-// prayed, on any day this week — the input CanEditPoints needs.
-func (rec Record) PrayedByOthers(except uuid.UUID) map[uuid.UUID]bool {
-	var out map[uuid.UUID]bool
-	for userID, points := range rec.Completed {
-		if userID == except {
-			continue
-		}
-		for _, pointID := range points {
-			if out == nil {
-				out = make(map[uuid.UUID]bool, len(points))
-			}
-			out[pointID] = true
-		}
-	}
-	return out
 }
 
 func (r *PostgresRepository) WeekByID(ctx context.Context, coupleID, weekID uuid.UUID) (Record, error) {

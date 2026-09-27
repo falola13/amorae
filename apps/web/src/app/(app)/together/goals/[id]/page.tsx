@@ -119,6 +119,11 @@ export default function GoalDetail() {
                                   ? (couple.data?.me.display_name ?? "F")
                                   : partner)[0]
                               }
+                              photoUrl={
+                                p.user_id === couple.data?.me.id
+                                  ? couple.data?.me.photo_url
+                                  : couple.data?.partner?.photo_url
+                              }
                             />
                             <span className="grow text-[16px]">{fmt(p.amount)}</span>
                             <span className="tabular text-support text-stone">

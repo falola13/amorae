@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Field, Select } from "@/components/ui/kit";
 import { Icon } from "@/components/icons";
 import { maxDayInMonth } from "@/lib/api/schemas";
@@ -40,9 +41,23 @@ export function BirthdayField({
   hint?: string;
   error?: string;
 }) {
-  const month = value?.month ?? null;
-  const day = value?.day ?? null;
-  const year = value?.year ?? null;
+  // The form only holds a whole birthday or none, so a month picked before
+  // its day has to live here — reading it back from `value` wiped it, and the
+  // month select snapped back to empty the moment anything was chosen.
+  const [draft, setDraft] = useState<{
+    month: number | null;
+    day: number | null;
+    year: number | null;
+  }>({ month: value?.month ?? null, day: value?.day ?? null, year: value?.year ?? null });
+  // `seen` is the last value this field sent or was given. A value that
+  // differs from it came from outside (loaded, reset after save) and replaces
+  // the draft — adjusted during render rather than in an effect.
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    setDraft({ month: value?.month ?? null, day: value?.day ?? null, year: value?.year ?? null });
+  }
+  const { month, day, year } = draft;
 
   const dayOptions = [
     { value: "", label: "Day" },
@@ -55,13 +70,13 @@ export function BirthdayField({
   // Only a month and a day together make a birthday; either missing clears it.
   const set = (patch: { month?: number | null; day?: number | null; year?: number | null }) => {
     const m = patch.month !== undefined ? patch.month : month;
-    const d = patch.day !== undefined ? patch.day : day;
     const y = patch.year !== undefined ? patch.year : year;
-    if (!m || !d) {
-      onChange(null);
-      return;
-    }
-    onChange({ month: m, day: Math.min(d, maxDayInMonth(m, y)), year: y });
+    let d = patch.day !== undefined ? patch.day : day;
+    if (m && d) d = Math.min(d, maxDayInMonth(m, y));
+    const next = m && d ? { month: m, day: d, year: y } : null;
+    setDraft({ month: m, day: d, year: y });
+    setSeen(next); // ours, so the check above leaves the draft alone
+    onChange(next);
   };
 
   return (
@@ -104,7 +119,11 @@ export function BirthdayField({
       {value ? (
         <button
           type="button"
-          onClick={() => onChange(null)}
+          onClick={() => {
+            setDraft({ month: null, day: null, year: null });
+            setSeen(null);
+            onChange(null);
+          }}
           className="press self-start text-[13px] font-semibold text-plum"
         >
           Remove

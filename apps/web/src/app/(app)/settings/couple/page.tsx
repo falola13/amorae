@@ -49,9 +49,14 @@ export default function CouplePage() {
             </div>
 
             <Section label="The two of you" className="pt-[26px]">
-              <Person name={c.me.display_name} role={c.me.role} you />
+              <Person name={c.me.display_name} role={c.me.role} photoUrl={c.me.photo_url} you />
               {c.partner ? (
-                <Person name={c.partner.display_name} role={c.partner.role} last />
+                <Person
+                  name={c.partner.display_name}
+                  role={c.partner.role}
+                  photoUrl={c.partner.photo_url}
+                  last
+                />
               ) : (
                 <Row
                   icon="users"
@@ -128,17 +133,19 @@ export default function CouplePage() {
 function Person({
   name,
   role,
+  photoUrl,
   you,
   last,
 }: {
   name: string;
   role?: string;
+  photoUrl?: string | null;
   you?: boolean;
   last?: boolean;
 }) {
   return (
     <div className={cx("flex min-h-[62px] items-center gap-3.5", !last && "border-b border-line")}>
-      <Initial letter={name[0] ?? "?"} size={34} />
+      <Initial letter={name[0] ?? "?"} photoUrl={photoUrl} name={name} size={34} />
       <span className="flex min-w-0 grow flex-col gap-px">
         <span className="text-[16px] font-semibold text-ink">{name}</span>
         {role ? <span className="text-support text-stone">{role}</span> : null}

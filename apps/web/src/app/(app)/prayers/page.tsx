@@ -97,7 +97,15 @@ export default function PrayersPage() {
                   {setterWord(w, me.id, partner)}
                 </Micro>
               </div>
-              <Title className="mt-2">This week&rsquo;s prayers</Title>
+              <div className="mt-2 flex items-baseline justify-between gap-3">
+                <Title>This week&rsquo;s prayers</Title>
+                <Link
+                  href={routes.prayersSet}
+                  className="press shrink-0 text-support font-semibold text-plum no-underline"
+                >
+                  Edit the week
+                </Link>
+              </div>
               <div className="mt-5 flex flex-col gap-2.5">
                 <Segments total={total} done={done} />
                 <Para size="support">

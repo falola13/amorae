@@ -1,7 +1,6 @@
 package prayers
 
 import (
-	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,9 +59,6 @@ type weekDTO struct {
 	// Sunday through Saturday, always — a week without a today still has
 	// its seven days.
 	Days []dayDTO `json:"days"`
-	// Point ids `viewer` cannot edit: the other partner has prayed them, on
-	// any day this week.
-	Locked []string `json:"locked"`
 }
 
 // ToDTO renders one week as `viewer` is allowed to see it. `today` is the
@@ -85,7 +81,6 @@ func ToDTO(rec Record, viewer, partner uuid.UUID, today time.Time) weekDTO {
 		PartnerCompleted: []string{},
 		Reflection:       rec.Reflections[viewer],
 		Days:             make([]dayDTO, 0, 7),
-		Locked:           lockedIDs(rec.PrayedByOthers(viewer)),
 	}
 
 	for _, p := range visible {
@@ -168,17 +163,6 @@ func weekdaysList(mask int) []int {
 			out = append(out, d)
 		}
 	}
-	return out
-}
-
-// lockedIDs is the point ids a map of "prayed by the other partner" names,
-// sorted so the response is stable from one call to the next.
-func lockedIDs(prayedByOthers map[uuid.UUID]bool) []string {
-	out := make([]string, 0, len(prayedByOthers))
-	for id := range prayedByOthers {
-		out = append(out, id.String())
-	}
-	sort.Strings(out)
 	return out
 }
 

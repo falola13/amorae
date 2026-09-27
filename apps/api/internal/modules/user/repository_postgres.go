@@ -24,7 +24,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 }
 
 // userColumns is every column a User is read from, in scanUser's order.
-const userColumns = `id, email, display_name, password_hash, timezone, created_at, updated_at, last_login_at, birth_month, birth_day, birth_year`
+const userColumns = `id, email, display_name, password_hash, timezone, created_at, updated_at, last_login_at, birth_month, birth_day, birth_year, COALESCE(photo_id, '')`
 
 func (r *PostgresRepository) Create(ctx context.Context, u User) (User, error) {
 	_, err := r.db.Q(ctx).Exec(ctx, `
@@ -71,6 +71,23 @@ func (r *PostgresRepository) Update(ctx context.Context, u User) (User, error) {
 	}
 	return u, nil
 }
+
+// SetPhoto records or clears the profile picture's location; the id is
+// server-derived (PhotoPublicID), never a client's — mirrors
+// memories.PostgresRepository.SetPhoto.
+func (r *PostgresRepository) SetPhoto(ctx context.Context, id uuid.UUID, photoID string, at time.Time) error {
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		UPDATE users SET photo_id = $2, updated_at = $3 WHERE id = $1
+	`, id, nullIfEmpty(photoID), at)
+	if err != nil {
+		return fmt.Errorf("attaching photo: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *PostgresRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1
@@ -101,7 +118,7 @@ func (r *PostgresRepository) scanOne(ctx context.Context, query string, args ...
 	var u User
 	err := r.db.Q(ctx).QueryRow(ctx, query, args...).
 		Scan(&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.Timezone, &u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt,
-			&u.BirthMonth, &u.BirthDay, &u.BirthYear)
+			&u.BirthMonth, &u.BirthDay, &u.BirthYear, &u.PhotoID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return User{}, ErrNotFound
@@ -183,6 +200,14 @@ func (r *PostgresRepository) releaseCouple(ctx context.Context, userID, coupleID
 		return fmt.Errorf("transferring couple: %w", err)
 	}
 	return nil
+}
+
+// nullIfEmpty converts domain empty string to SQL NULL for nullable columns.
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // translateWriteErr maps the email-uniqueness violation to ErrEmailTaken so

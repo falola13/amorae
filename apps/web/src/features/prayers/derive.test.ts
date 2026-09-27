@@ -22,7 +22,6 @@ const week = (over: Partial<PrayerWeek> = {}): PrayerWeek => ({
   my_completed: [],
   partner_completed: [],
   days: [],
-  locked: [],
   ...over,
 });
 

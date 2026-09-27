@@ -41,9 +41,8 @@ const (
 )
 
 var (
-	ErrNotFound    = apperr.NotFound("prayer_week_not_found", "That prayer week isn’t here.")
-	ErrNotDraft    = apperr.Conflict("week_already_published", "This week has been shared already.")
-	ErrLockedByUse = apperr.Conflict("prayer_in_use", "Your partner has already prayed this one, so it stays as it is. You can still add more, or change the ones they haven’t reached.")
+	ErrNotFound = apperr.NotFound("prayer_week_not_found", "That prayer week isn’t here.")
+	ErrNotDraft = apperr.Conflict("week_already_published", "This week has been shared already.")
 	// A draft prayer hasn't been seen by the partner, so it can't be answered.
 	ErrNotShared = apperr.Conflict("prayer_not_shared", "This one hasn’t been shared yet.")
 	// No week exists until the couple has two members to set a rotation.
@@ -258,10 +257,10 @@ func CanAnswer(w Week) error {
 }
 
 // StatusFor is what `viewer` should be told the week's status is. Both
-// partners are told the same thing, draft or published — either may step in
-// on a draft (see CanEditPoints), so hiding it from one of them would just
-// be hiding work they're allowed to do. Kept as a function rather than a
-// raw field read so this boundary stays in one place.
+// partners are told the same thing, draft or published — either may edit or
+// publish a week at any time (DEC-33), so hiding it from one of them would
+// just be hiding work they're allowed to do. Kept as a function rather than
+// a raw field read so this boundary stays in one place.
 func StatusFor(w Week, viewer uuid.UUID) Status {
 	return w.Status
 }
@@ -270,40 +269,6 @@ func StatusFor(w Week, viewer uuid.UUID) Status {
 // either partner sees, for the reason StatusFor gives.
 func PointsFor(w Week, viewer uuid.UUID) []Point {
 	return w.Points
-}
-
-// CanEditPoints reports whether this edit is allowed: either partner may
-// write the week (DEC-33), but a point the OTHER partner has already prayed
-// — on any day this week — can't be reworded or removed (reordering is
-// fine). prayedByOthers excludes the editor's own completions, which don't
-// restrict them.
-func CanEditPoints(w Week, editor uuid.UUID, incoming []Point, prayedByOthers map[uuid.UUID]bool) error {
-	if len(prayedByOthers) == 0 {
-		return nil
-	}
-
-	kept := make(map[uuid.UUID]Point, len(incoming))
-	for _, p := range incoming {
-		if p.ID != (uuid.UUID{}) {
-			kept[p.ID] = p
-		}
-	}
-
-	for _, stored := range w.Points {
-		if !prayedByOthers[stored.ID] {
-			continue
-		}
-		sent, still := kept[stored.ID]
-		if !still {
-			// Dropped, which would delete it and their completion with it.
-			return ErrLockedByUse
-		}
-		if sent.Title != stored.Title || sent.Body != stored.Body ||
-			sent.Scripture != stored.Scripture || sent.Verse != stored.Verse {
-			return ErrLockedByUse
-		}
-	}
-	return nil
 }
 
 // Publishing is open to either partner (DEC-33); a caller has already been

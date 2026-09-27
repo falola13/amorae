@@ -17,10 +17,18 @@ const chipClass = (active: boolean, wide = false) =>
     active ? "bg-plum-tint text-plum" : "text-stone",
   );
 
+// Same-set comparison, order-independent — a quick choice is "active" whenever the value happens
+// to equal it, however it got there (tapping the chip, or picking the same days one at a time).
+const sameDays = (a: number[], b: number[]) =>
+  a.length === b.length && [...a].sort().every((d, i) => d === [...b].sort()[i]);
+
+const WEEKDAYS = [1, 2, 3, 4, 5];
+const WEEKEND = [0, 6];
+
 /**
- * "Every day" plus the seven weekdays, mutually exclusive with each other: picking a day drops
- * "Every day", and dropping the last picked day naturally lands back on `[]` — which already
- * means every day, so there is nothing special to do for it.
+ * Three quick choices — "Every day", "Weekdays" (Mon-Fri), "Weekend" (Sat-Sun) — plus the seven
+ * individual days, all mutually exclusive: picking any of them replaces the value outright, and
+ * dropping the last picked day naturally lands back on `[]`, which already means every day.
  */
 export function WeekdayChips({
   value,
@@ -49,6 +57,22 @@ export function WeekdayChips({
         className={chipClass(everyDay, true)}
       >
         Every day
+      </button>
+      <button
+        type="button"
+        aria-pressed={sameDays(value, WEEKDAYS)}
+        onClick={() => onChange(WEEKDAYS)}
+        className={chipClass(sameDays(value, WEEKDAYS), true)}
+      >
+        Weekdays
+      </button>
+      <button
+        type="button"
+        aria-pressed={sameDays(value, WEEKEND)}
+        onClick={() => onChange(WEEKEND)}
+        className={chipClass(sameDays(value, WEEKEND), true)}
+      >
+        Weekend
       </button>
       {DAYS.map((d) => (
         <button

@@ -26,6 +26,7 @@ type service interface {
 
 type users interface {
 	Get(ctx context.Context, id uuid.UUID) (user.User, error)
+	PhotoURL(u user.User) string
 }
 
 type Handler struct {
@@ -259,7 +260,11 @@ func (h *Handler) mineDTO(ctx context.Context, userID uuid.UUID, mine Mine) (Min
 		break
 	}
 
-	return ToMineDTO(mine, me, partner), nil
+	partnerPhotoURL := ""
+	if partner != nil {
+		partnerPhotoURL = h.users.PhotoURL(*partner)
+	}
+	return ToMineDTO(mine, me, h.users.PhotoURL(me), partner, partnerPhotoURL), nil
 }
 
 func (h *Handler) updateCouple(w http.ResponseWriter, r *http.Request) {
