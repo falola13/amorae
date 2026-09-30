@@ -344,3 +344,61 @@ func equalTypes(got, want []timeline.Type) bool {
 	}
 	return true
 }
+
+// A finished or left challenge is part of the story, and belongs to the
+// moments filter; one still going is not.
+func TestTimeline_Challenges(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := timeline.NewPostgresRepository(db)
+
+	coupleID, a, _ := pair(t, db)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	insert := func(title, status string, endedAt *time.Time, startedOn time.Time) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if _, err := db.Q(ctx).Exec(ctx, `
+			INSERT INTO challenges (id, couple_id, template, title, started_on, status, ended_at, created_by, created_at, updated_at)
+			VALUES ($1, $2, 'custom', $3, $4, $5, $6, $7, $8, $8)
+		`, id, coupleID, title, startedOn, status, endedAt, a, now); err != nil {
+			t.Fatalf("insert challenge: %v", err)
+		}
+		return id
+	}
+	finishedAt := now.Add(-2 * time.Hour)
+	endedAt := now.Add(-5 * time.Hour)
+	finished := insert("Our three days", "finished", &finishedAt, today.AddDate(0, 0, -3))
+	ended := insert("Advent together", "ended", &endedAt, today.AddDate(0, 0, -9))
+	insert("Still going", "active", nil, today)
+
+	got, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterMoments), nil, 20)
+	if err != nil {
+		t.Fatalf("Timeline: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != finished || got[1].ID != ended {
+		t.Fatalf("moments = %+v, want the finished one then the ended one, and not the active one", got)
+	}
+
+	f, e := got[0], got[1]
+	if f.Type != timeline.TypeChallenge || f.Title != "Our three days" || f.Sub != "Finished together" ||
+		f.Path != "/together/challenges/"+finished.String() || !f.At.Equal(finishedAt) || f.ActorID != uuid.Nil {
+		t.Errorf("finished = %+v", f)
+	}
+	if e.Sub != "Ended early" || e.Path != "/together/challenges/"+ended.String() || !e.At.Equal(endedAt) {
+		t.Errorf("ended = %+v", e)
+	}
+
+	// Not in the other filters, but in "all".
+	for _, f := range []timeline.Filter{timeline.FilterPrayer, timeline.FilterPlans} {
+		other, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(f), nil, 20)
+		if err != nil || len(other) != 0 {
+			t.Errorf("%s = %+v, err %v; want nothing", f, other, err)
+		}
+	}
+	all, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterAll), nil, 20)
+	if err != nil || len(all) != 2 {
+		t.Errorf("all = %+v, err %v; want the two kept challenges", all, err)
+	}
+}

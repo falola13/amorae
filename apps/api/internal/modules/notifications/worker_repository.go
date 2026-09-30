@@ -304,6 +304,9 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 
 // LiveChallenges reads day/total/marked-today from SQL, since started_on
 // and zone already sit together there; ForChallenge decides what to say.
+// Only an active challenge is nudged about, and only for the day that has
+// opened today (a mark, not a note on its own, is what settles it); once the
+// calendar has run past the last day there is no longer a "today" to nudge.
 func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT u.id, ch.id, ch.title, c.timezone,
@@ -315,6 +318,7 @@ func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCan
 		           JOIN challenge_progress pr ON pr.day_id = d.id AND pr.user_id = u.id
 		           WHERE d.challenge_id = ch.id
 		             AND d.n = ((now() AT TIME ZONE c.timezone)::date - ch.started_on) + 1
+		             AND pr.mark IS NOT NULL
 		       ) AS marked_today,
 		       COALESCE(p.challenges, false)
 		FROM challenges ch
@@ -323,6 +327,7 @@ func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCan
 		JOIN users u ON u.id = m.user_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
+		  AND ch.status = 'active'
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("finding challenges to nudge about: %w", err)

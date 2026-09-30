@@ -47,6 +47,9 @@ func (r *PostgresRepository) BothMarkedDays(ctx context.Context, since time.Time
 		JOIN users u ON u.id = m.user_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
+		  -- Finishing the last day is what ends a challenge, and "you have both
+		  -- finished" is that moment; one that was left is not congratulated.
+		  AND ch.status IN ('active', 'finished')
 		  AND (SELECT count(*) FROM couple_members m2
 		        WHERE m2.couple_id = c.id AND m2.ended_at IS NULL) = 2
 		  AND (SELECT count(*) FROM challenge_progress pr

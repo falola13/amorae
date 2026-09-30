@@ -1,5 +1,5 @@
 // Package timeline owns the couple's shared story: one read-only feed of
-// what happened, assembled from seven other modules' own tables rather than
+// what happened, assembled from eight other modules' own tables rather than
 // stored anywhere itself. There is nothing to write here — a memory, a
 // prayer answered, a finished goal each already belong to the module that
 // keeps them; this package only ever reads.
@@ -26,6 +26,7 @@ const (
 	TypeGoal           Type = "goal"
 	TypeJournal        Type = "journal"
 	TypeAppreciation   Type = "appreciation"
+	TypeChallenge      Type = "challenge"
 )
 
 // Filter is a client-facing grouping of Types — coarser than Type, and the
@@ -47,13 +48,13 @@ func TypesFor(f Filter) []Type {
 	case FilterPrayer:
 		return []Type{TypePrayerWeek, TypePrayerAnswered}
 	case FilterMoments:
-		return []Type{TypeMemory, TypeJournal, TypeAppreciation}
+		return []Type{TypeMemory, TypeJournal, TypeAppreciation, TypeChallenge}
 	case FilterPlans:
 		return []Type{TypeEvent, TypeGoal}
 	default:
 		return []Type{
 			TypePrayerWeek, TypePrayerAnswered, TypeMemory, TypeEvent,
-			TypeGoal, TypeJournal, TypeAppreciation,
+			TypeGoal, TypeJournal, TypeAppreciation, TypeChallenge,
 		}
 	}
 }

@@ -13,7 +13,11 @@ export const keys = {
   event: (id: string) => ["events", id] as const,
   goals: ["goals"] as const,
   goal: (id: string) => ["goals", id] as const,
+  /** Prefix of every challenge query: the current one, templates, past, and each by id. */
   challenge: ["challenge"] as const,
+  challengeTemplates: ["challenge", "templates"] as const,
+  challengePast: ["challenge", "past"] as const,
+  challengeById: (id: string) => ["challenge", "by", id] as const,
   journal: ["journal"] as const,
   appreciations: ["appreciations"] as const,
   memories: ["memories"] as const,
@@ -21,5 +25,7 @@ export const keys = {
   prefs: ["notifications", "preferences"] as const,
   sessions: ["sessions"] as const,
   inbox: ["notifications", "inbox"] as const,
+  /** Prefix of every timeline filter, for invalidating them all. */
+  timelineAll: ["timeline"] as const,
   timeline: (filter: string) => ["timeline", filter] as const,
 };

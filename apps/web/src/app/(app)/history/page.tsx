@@ -38,6 +38,7 @@ const TYPE_ICON: Record<TimelineItem["type"], IconName> = {
   goal: "target",
   journal: "note",
   appreciation: "heart",
+  challenge: "flag",
 };
 
 function TimelineRow({

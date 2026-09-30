@@ -18,7 +18,7 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Timeline is the couple's shared story, assembled from seven tables in one
+// Timeline is the couple's shared story, assembled from eight tables in one
 // query rather than one round trip per source. Every branch below joins the
 // couples row it belongs to for that couple's own timezone (DEC-27) — the
 // same "join couples for c.timezone" the journal and prayers repositories
@@ -179,6 +179,21 @@ WITH items AS (
 	FROM appreciations a
 	JOIN couples c ON c.id = a.couple_id
 	WHERE a.couple_id = $1
+
+	UNION ALL
+
+	-- A challenge that is over, finished together or left early. 'at' is the
+	-- moment it stopped being active.
+	SELECT 'challenge', ch.id,
+	       ch.ended_at,
+	       (ch.ended_at AT TIME ZONE c.timezone)::date,
+	       ch.title,
+	       CASE WHEN ch.status = 'finished' THEN 'Finished together' ELSE 'Ended early' END,
+	       ('/together/challenges/' || ch.id::text),
+	       NULL::text, NULL::uuid, NULL::timestamptz
+	FROM challenges ch
+	JOIN couples c ON c.id = ch.couple_id
+	WHERE ch.couple_id = $1 AND ch.status IN ('finished', 'ended') AND ch.ended_at IS NOT NULL
 )
 -- Stable ordering: "at" alone can tie (an event with no start time, two
 -- rows sharing an instant), so type and id break the tie the same way on

@@ -15,6 +15,14 @@ export const useGoals = () => useQuery({ queryKey: keys.goals, queryFn: api.goal
 export const useGoal = (id: string) =>
   useQuery({ queryKey: keys.goal(id), queryFn: () => api.goal(id), enabled: !!id });
 export const useChallenge = () => useQuery({ queryKey: keys.challenge, queryFn: api.challenge });
+export const useChallengeById = (id: string) =>
+  useQuery({
+    queryKey: keys.challengeById(id),
+    queryFn: () => api.challengeById(id),
+    enabled: !!id,
+  });
+export const usePastChallenges = () =>
+  useQuery({ queryKey: keys.challengePast, queryFn: api.challengePast });
 export const useJournal = () => useQuery({ queryKey: keys.journal, queryFn: api.journal });
 export const useAppreciations = () =>
   useQuery({ queryKey: keys.appreciations, queryFn: api.appreciations });
@@ -32,10 +40,12 @@ export const useCreateGoal = () => useWrite(w.createGoal);
 export const useUpdateGoal = () => useWrite(w.updateGoal);
 export const useAddProgress = () => useWrite(w.addProgress);
 export const useChallengeTemplates = () =>
-  useQuery({ queryKey: ["challenge", "templates"], queryFn: api.challengeTemplates });
+  useQuery({ queryKey: keys.challengeTemplates, queryFn: api.challengeTemplates });
 export const useStartChallenge = () => useWrite(w.startChallenge);
+export const useStartCustomChallenge = () => useWrite(w.startCustomChallenge);
 export const useLeaveChallenge = () => useWrite(w.leaveChallenge);
 export const useChallengeDay = () => useWrite(w.challengeDay);
+export const useChallengeReflection = () => useWrite(w.challengeReflection);
 export const useAddJournal = () => useWrite(w.addJournal);
 export const useUpdateJournal = () => useWrite(w.updateJournal);
 export const useDeleteJournal = () => useWrite(w.deleteJournal);

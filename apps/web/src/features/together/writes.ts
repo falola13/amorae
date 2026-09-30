@@ -1,11 +1,12 @@
 import type { EventInput, GoalInput } from "@/lib/api/schemas";
 import type {
   Challenge,
-  ChallengeDay,
+  ChallengeDayPatch,
   Event,
   JournalEntry,
   Memory,
   Milestone,
+  StartChallengeInput,
 } from "@/lib/api/types";
 import { keys } from "@/lib/query/keys";
 import { defineWrite } from "@/lib/query/mutations";
@@ -147,23 +148,31 @@ export const togetherWrites = {
   }),
   startChallenge: defineWrite({
     mutationKey: ["challenge", "start"],
-    mutationFn: (template: string) => api.startChallenge(template),
-    invalidates: [keys.challenge],
+    mutationFn: (input: StartChallengeInput) => api.startChallenge(input),
+    invalidates: [keys.challenge, keys.timelineAll],
     // Starting a second one is refused by the server, so a replay after a
     // dropped response finds the one it already made.
     idempotent: "one challenge at a time, enforced by a unique index on the couple.",
   }),
+  // The make-our-own form shows the server's field errors beside the fields, so no toast on top.
+  startCustomChallenge: defineWrite({
+    mutationKey: ["challenge", "start-custom"],
+    mutationFn: (input: StartChallengeInput) => api.startChallenge(input),
+    invalidates: [keys.challenge, keys.timelineAll],
+    handlesError: true,
+    onlineOnly: true,
+  }),
   leaveChallenge: defineWrite({
     mutationKey: ["challenge", "leave"],
     mutationFn: () => api.leaveChallenge(),
-    invalidates: [keys.challenge],
+    invalidates: [keys.challenge, keys.timelineAll],
     idempotent: "leaving one that has already gone leaves the same nothing behind.",
   }),
   challengeDay: defineWrite({
     mutationKey: ["challenge", "day"],
-    mutationFn: ({ n, patch }: { n: number; patch: Partial<ChallengeDay> }) =>
+    mutationFn: ({ n, patch }: { n: number; patch: ChallengeDayPatch }) =>
       api.challengeDay(n, patch),
-    invalidates: [keys.challenge],
+    invalidates: [keys.challenge, keys.timelineAll],
     idempotent: "a patch of one numbered day; the same patch twice is the same day.",
     // Same reasoning as the checklist: a day you mark should look marked.
     // Only this person's own mark moves — the partner's is theirs (DEC-30).
@@ -172,6 +181,12 @@ export const togetherWrites = {
         c ? { ...c, days: c.days.map((d) => (d.n === n ? { ...d, ...patch } : d)) } : c,
       );
     },
+  }),
+  challengeReflection: defineWrite({
+    mutationKey: ["challenge", "reflection"],
+    mutationFn: ({ id, text }: { id: string; text: string }) => api.challengeReflection(id, text),
+    invalidates: [keys.challenge],
+    idempotent: "the reflection is replaced, so the same text sent twice is the same reflection.",
   }),
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
