@@ -25,6 +25,7 @@ import { useInbox } from "@/features/notifications/hooks";
 import { setterWord, todaysPoints } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
+import { HomeChallengeCard } from "./challenge-card";
 import { useEvents, useGoals, useMilestones, useNudge } from "@/features/together/hooks";
 import {
   celebrationCopy,
@@ -242,6 +243,8 @@ export function HomeScreen() {
           </LinkButton>
         </div>
       ) : null}
+
+      {alone ? null : <HomeChallengeCard partner={partner} />}
 
       {/* Side by side from `lg`; a single column would leave the right half empty. */}
       <div className="flex flex-col lg:mt-6 lg:flex-row lg:items-start lg:gap-8">

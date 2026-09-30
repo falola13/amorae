@@ -417,11 +417,14 @@ partner actually prayed that day.
 | `GET`, `POST /v1/goals` · `GET /v1/goals/:id` | `unit` is `naira` or `count`; amounts are whole units, never a float. A goal has **no** running total field: it is the sum of `progress[].amount`, so a client that adds it up can never disagree with one that was told (BR-GOAL-01). Another couple's goal is 404 (DEC-19) |
 | `PATCH /v1/goals/:id` | 200 `Goal`. Either partner may edit any field or set `done`; an absent field is left alone |
 | `POST /v1/goals/:id/progress` `{ amount }` | Appends an entry carrying the caller's `user_id` and today's date. A negative amount is allowed — a correction is how a wrong number is fixed, and deleting the entry would lose that it happened. Zero is 400 |
-| `GET /v1/challenges/templates` | The curated catalogue: `key`, `title`, `blurb`, `days` |
-| `POST /v1/challenges` `{ template }` | 201 `Challenge`. One at a time: 409 `challenge_already_running`, 400 `challenge_unknown` |
-| `GET /v1/challenges/current` | `Challenge`, or 404 `challenge_not_found` — which is the answer for a couple who have not started one, not a failure |
-| `DELETE /v1/challenges/current` | 204. Leaves it, freeing them to start another |
-| `PATCH /v1/challenges/current/days/:n` `{ done?, skipped? }` | 200 `Challenge`. Marks the day **for the caller only** (DEC-30); `done` and `skipped` in the response are theirs, `partner_done` and `partner_skipped` are the other's. `false` un-marks it, which is not the same as skipping; sending neither is 400 |
+| `GET /v1/challenges/templates` | The library: `[{ key, title, blurb, days, season, category }]`. `season` is `""`, `advent` or `lent`; `category` is `connection`, `faith`, `service` or `season`. Keys: `seven-days-of-noticing`, `seven-days-of-praying-together`, `fourteen-days-of-small-things`, `seven-days-of-gratitude`, `seven-days-of-serving-each-other`, `fourteen-days-in-the-psalms`, `ten-conversations`, `advent` (24 days), `lent` (40 days) |
+| `POST /v1/challenges` `{ template }` or `{ custom: { title, prompts } }` | 201 `Challenge`. Either one of the library's `key`s, or the couple's own: `title` up to 80 characters, 3 to 40 `prompts` of up to 200 characters each, none empty after trimming — stored with `template: "custom"`. Sending both is 400 `validation_failed` on `template`. Field errors are keyed `custom.title` and `custom.prompts`. `created_by` records who started it, for either kind. One *active* at a time: 409 `challenge_already_running`; an unknown key is 400 `challenge_unknown` |
+| `GET /v1/challenges/current` | The active `Challenge`, or 404 `challenge_not_found` — the answer for a couple with nothing going (including one who has just finished), not a failure. A `Challenge` is `{ id, template, title, status, started_on, ended_at, today_n, created_by, reflection?, partner_reflection?, days }`: `status` is `active`, `finished` or `ended`; `ended_at` is an RFC3339 instant or `null`; `today_n` is the day the couple is on, from 1, held at the last day; `created_by` is a user id or `null`; `reflection` and `partner_reflection` appear only once it is over and only when written. Each day is `{ n, text, date, open, done, skipped?, partner_done?, partner_skipped?, note, partner_note }`, `date` the couple-local `YYYY-MM-DD` it opens on and `open` whether it has |
+| `GET /v1/challenges/past` | Finished and left challenges, newest first: `[{ id, title, template, status, started_on, ended_at, days, my_done, partner_done }]`. `status` is `finished` or `ended`; `my_done` and `partner_done` count days marked done (not skipped) |
+| `GET /v1/challenges/:id` | The full `Challenge` for any of the couple's challenges, going or kept. Another couple's, or an unknown id, is 404 `challenge_not_found` |
+| `DELETE /v1/challenges/current` | 204. Leaves it, freeing them to start another — but nothing is deleted: it becomes `status: "ended"` with `ended_at` set, keeping its days, marks and notes. 404 `challenge_not_found` if nothing is active |
+| `PATCH /v1/challenges/current/days/:n` `{ done?, skipped?, note? }` | 200 `Challenge`. Marks the day **for the caller only** (DEC-30); `done`, `skipped` and `note` in the response are theirs, `partner_done`, `partner_skipped` and `partner_note` are the other's. `false` un-marks it, which is not the same as skipping; `note` is up to 280 characters (400 `validation_failed` on `note`), `""` clears it, and it may be sent with a mark or on its own. Sending none of the three is 400. Days open one a day on the **couple's** calendar (day *n* opens on `started_on` + *n* − 1 in their timezone, for both of them); a mark or note on a day that has not opened is 409 `day_not_open`, though earlier days can always be caught up on. The write that leaves every current member with every day marked (done or skipped) also finishes the challenge — the response then has `status: "finished"`. Once finished or ended, any write is 409 `challenge_over` |
+| `PUT /v1/challenges/:id/reflection` `{ text }` | 200 `Challenge`. One reflection per person, up to 1000 characters (400 `validation_failed` on `text`); `""` removes the caller's own. Only once the challenge is finished or ended — on an active one it is 409 `challenge_not_over` |
 | `POST /internal/tick` | Not part of the product API: one pass of the notification worker, for deployments with nowhere to run a long-lived process (`docs/DEPLOYMENT.md`). Outside `/v1`, outside the envelope, and absent entirely unless `TICK_SECRET` is set. Takes the secret as a bearer token and answers 404 to anything else, so a caller without it learns nothing. Answers `{"status","sent"}`; a pass already running answers `{"status":"already running"}` rather than starting a second. Safe to expose: every send is claimed by a row first, so a thousand calls still send each notification once |
 | `GET`, `POST /v1/journal` | `{ tag, text }`. The couple's shared notebook, newest first, the same for both. `tag` is one of `Gratitude`, `Reflection`, `Memory`, `Appreciation`, `Plans`, matched exactly. The author is the session and the date is the couple's local day — neither is taken from the request |
 | `PATCH /v1/journal/:id` `{ tag, text }` | 200 the updated entry, same shape as `POST`. Only the entry's author may edit it — the couple's partner gets 404, same as another couple's entry entirely (DEC-19). The date it was filed under never moves |
@@ -444,18 +447,18 @@ partner actually prayed that day.
 
 | Endpoint | Notes |
 | --- | --- |
-| `GET /v1/timeline` | The couple's shared story: one read-only feed of what happened, newest first, drawn from seven other modules' own tables rather than stored anywhere itself — there is nothing to create, edit, or delete here. Query params: `before` (RFC3339 instant, optional — pages strictly earlier than it; absent means the most recent page), `filter` (`all` · `prayer` · `moments` · `plans`; unknown or absent means `all`), `limit` (`1`–`50`, default `30`, clamped rather than rejected). Answers `{ items: TimelineItem[], next }`, `next` an RFC3339 instant to pass back as the next page's `before`, or `null` once there is nothing further back |
+| `GET /v1/timeline` | The couple's shared story: one read-only feed of what happened, newest first, drawn from eight other modules' own tables rather than stored anywhere itself — there is nothing to create, edit, or delete here. Query params: `before` (RFC3339 instant, optional — pages strictly earlier than it; absent means the most recent page), `filter` (`all` · `prayer` · `moments` · `plans`; unknown or absent means `all`), `limit` (`1`–`50`, default `30`, clamped rather than rejected). Answers `{ items: TimelineItem[], next }`, `next` an RFC3339 instant to pass back as the next page's `before`, or `null` once there is nothing further back |
 
 `prayer` is every **past** published prayer week (a week still open, or not yet
 shared, does not appear) plus every answered prayer, across every week the
-couple has ever had. `moments` is memories, journal entries, and
-appreciations. `plans` is finished goals and events that are done or whose
+couple has ever had. `moments` is memories, journal entries,
+appreciations, and challenges that are over (finished together or left early). `plans` is finished goals and events that are done or whose
 day has passed — an event still ahead of the couple belongs on their
 calendar, not their history.
 
 A `TimelineItem` is `{ id, type, at, date, title, sub, path, photo_url?, actor_id? }`.
 `type` is one of `prayer_week`, `prayer_answered`, `memory`, `event`, `goal`,
-`journal`, `appreciation`. `at` is the instant the item sorts and pages by;
+`journal`, `appreciation`, `challenge`. `at` is the instant the item sorts and pages by;
 `date` is that instant's **couple-local** calendar day (`YYYY-MM-DD`), for
 grouping by month on the client — computed here so a client never has to
 reason about the couple's timezone itself (DEC-27). `path` is where tapping
@@ -465,6 +468,8 @@ already versions one. `actor_id` appears only when the item has a single
 actor (who answered a prayer, wrote a journal entry, sent an appreciation,
 created an event) — absent for a whole prayer week, a memory, and a finished
 goal, none of which belong to one partner more than the other.
+
+A `challenge` item is a finished or ended challenge: `title` is the challenge's title, `sub` is `Finished together` or `Ended early`, `at` is when it stopped being active (`ended_at`), and `path` is `/together/challenges/<id>`. One still going is not in the timeline.
 
 A finished goal's `at` is the last time it was touched (`updated_at`) — goals
 carries no separate "completed at" column, so the moment it was marked done
@@ -508,10 +513,10 @@ them — the cron tick is the only thing that ever finds them due.
 | `journal` | A journal entry is written | The other partner | `/together/journal` | `journal` | Immediate — poked by `journal.Add` |
 | `goal` | Progress is logged on a goal that isn't finished | The other partner | `/together/goals` | `goals` (**off** by default — opt-in) | Immediate — poked by `goals.LogProgress` |
 | `goal_crossing` | A contribution just crossed 50% or 100% of a goal's target | Both partners | `/together/goals` | `goal_milestones` | Immediate — poked by `goals.LogProgress` (same write as `goal`) |
-| `challenge` | A live challenge's day isn't marked yet, past the morning | Self | `/together/challenges` | `challenges` (**off** by default — opt-in) | Scheduled (perishable — a held one is simply dropped, not queued) |
+| `challenge` | The day that has opened today on an active challenge isn't marked yet (a note alone does not count), past the morning | Self | `/together/challenges` | `challenges` (**off** by default — opt-in) | Scheduled (perishable — a held one is simply dropped, not queued) |
 | `prayer_answered` | A prayer is marked answered, past its 1-minute undo window | The other partner | `/prayers/answered` | `prayer_answered` | Immediate — poked by `prayers.SetAnswered` (only on marking answered, not on taking it back) |
 | `both_prayed` | Both partners have prayed everything scheduled for today | Both partners | `/prayers` | `together` | Immediate — poked by `prayers.SetCompletion` (only on marking done, not on unmarking) |
-| `both_marked` | Both partners have marked a challenge day | Both partners | `/together/challenges` | `together` | Immediate — poked by `challenges.Mark` (only on marking, not on clearing) |
+| `both_marked` | Both partners have marked a day of an active challenge, or the one that just finished it (not one that was left) | Both partners | `/together/challenges` | `together` | Immediate — poked by `challenges.Mark` (only on marking, not on clearing) |
 | `memory_on_this_day` | A memory's date recurs today | Both partners (one notification per day, oldest memory named) | `/together/memories` | `memories` | Scheduled |
 | `event_over` | An event has just finished | Both partners on a `together` event, creator only on `mine` | `/together/events/{id}` | `event_followups` | Scheduled |
 | `event_added` | A `together` event is created | The other partner (never the creator, never for a `mine` event) | `/together/events/{id}` | `partner_events` | Immediate — poked by `events.Create` |

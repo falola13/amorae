@@ -60,6 +60,8 @@ export const routes = {
   memories: "/together/memories",
   milestones: "/together/milestones",
   challenges: "/together/challenges",
+  challengeNew: "/together/challenges/new",
+  challenge: (id: string) => `/together/challenges/${seg(id)}`,
 
   // Settings
   settings: "/settings",

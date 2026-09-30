@@ -160,24 +160,50 @@ export interface Goal {
   done: boolean;
 }
 
-/** One day of a challenge. `done`/`skipped` are yours; partner_* sit alongside,
- *  and neither side can change the other's (DEC-30). */
+/** One day of a challenge. `done`/`skipped`/`note` are yours; partner_* sit
+ *  alongside, and neither side can change the other's (DEC-30). */
 export interface ChallengeDay {
   n: number;
   text: string;
+  /** Couple-local date this day opens (YYYY-MM-DD). */
+  date: string;
+  /** Whether the day has arrived — a future day is locked. */
+  open: boolean;
   done: boolean;
   skipped?: boolean;
   partner_done?: boolean;
   partner_skipped?: boolean;
+  /** A line about what you did; empty when there isn't one. */
+  note?: string;
+  partner_note?: string;
 }
+
+/** What a day's PATCH can change. */
+export interface ChallengeDayPatch {
+  done?: boolean;
+  skipped?: boolean;
+  note?: string;
+}
+
+export type ChallengeStatus = "active" | "finished" | "ended";
 
 export interface Challenge {
   id: string;
   template: string;
   title: string;
+  status: ChallengeStatus;
   started_on: string;
+  ended_at: string | null;
+  /** The day number that is "today" for both of you (may run past the last day once it is over). */
+  today_n: number;
+  created_by: string | null;
   days: ChallengeDay[];
+  /** Your "looking back" note, once it is over. */
+  reflection?: string;
+  partner_reflection?: string;
 }
+
+export type ChallengeCategory = "connection" | "faith" | "service" | "season";
 
 /** One of the curated challenges a couple can start. */
 export interface ChallengeTemplate {
@@ -185,7 +211,27 @@ export interface ChallengeTemplate {
   title: string;
   blurb: string;
   days: number;
+  category: ChallengeCategory;
+  /** Set for ones that belong to a time of year; empty otherwise. */
+  season: "" | "advent" | "lent";
 }
+
+/** One earlier challenge in the list of past ones. */
+export interface ChallengePast {
+  id: string;
+  title: string;
+  template: string;
+  status: "finished" | "ended";
+  started_on: string;
+  ended_at: string | null;
+  days: number;
+  my_done: number;
+  partner_done: number;
+}
+
+/** What starting a challenge takes: a curated one by key, or your own. */
+export type StartChallengeInput =
+  { template: string } | { custom: { title: string; prompts: string[] } };
 
 export type JournalTag = "Gratitude" | "Reflection" | "Memory" | "Appreciation" | "Plans";
 
@@ -330,7 +376,14 @@ export interface SessionInfo {
 export type TimelineFilter = "all" | "prayer" | "moments" | "plans";
 
 export type TimelineItemType =
-  "prayer_week" | "prayer_answered" | "memory" | "event" | "goal" | "journal" | "appreciation";
+  | "prayer_week"
+  | "prayer_answered"
+  | "memory"
+  | "event"
+  | "goal"
+  | "journal"
+  | "appreciation"
+  | "challenge";
 
 /** One row of "Our story" (GET /v1/timeline), newest first. */
 export interface TimelineItem {

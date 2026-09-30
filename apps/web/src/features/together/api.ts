@@ -2,8 +2,10 @@ import { apiPath, http } from "@/lib/api/http";
 import type {
   Appreciation,
   Challenge,
-  ChallengeDay,
+  ChallengeDayPatch,
+  ChallengePast,
   ChallengeTemplate,
+  StartChallengeInput,
   Event,
   Goal,
   JournalEntry,
@@ -48,11 +50,17 @@ export const togetherApi = {
   challenge: () => http.get<Challenge>("/challenges/current").then((r) => r.data),
   challengeTemplates: () =>
     http.get<ChallengeTemplate[]>("/challenges/templates").then((r) => r.data),
-  startChallenge: (template: string) =>
-    http.post<Challenge>("/challenges", { template }).then((r) => r.data),
+  challengePast: () => http.get<ChallengePast[]>("/challenges/past").then((r) => r.data),
+  challengeById: (id: string) =>
+    http.get<Challenge>(apiPath`/challenges/${id}`).then((r) => r.data),
+  startChallenge: (input: StartChallengeInput) =>
+    http.post<Challenge>("/challenges", input).then((r) => r.data),
   leaveChallenge: () => http.delete("/challenges/current").then(() => undefined),
-  challengeDay: (n: number, patch: Partial<ChallengeDay>) =>
+  challengeDay: (n: number, patch: ChallengeDayPatch) =>
     http.patch<Challenge>(apiPath`/challenges/current/days/${n}`, patch).then((r) => r.data),
+  /** Only once it is over; empty text removes it. */
+  challengeReflection: (id: string, text: string) =>
+    http.put<Challenge>(apiPath`/challenges/${id}/reflection`, { text }).then((r) => r.data),
 
   journal: () => http.get<JournalEntry[]>("/journal").then((r) => r.data),
   addJournal: (tag: JournalEntry["tag"], text: string, key?: string) =>

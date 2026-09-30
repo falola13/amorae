@@ -49,10 +49,11 @@ export default function Together() {
     .sort((a, b) => a.date.localeCompare(b.date));
   const nextEvent = upcoming[0];
   const activeGoals = (goals.data ?? []).filter((g) => !g.done).length;
-  const challengeDay = challenge.data?.days.find((d) => !d.done && !d.skipped);
+  // The shared calendar day, not "my first unanswered one" — the two of you
+  // are on the same day now.
   const challengeLine = challenge.data
-    ? challengeDay
-      ? `${challenge.data.title}, day ${challengeDay.n}`
+    ? challenge.data.status === "active"
+      ? `${challenge.data.title}, day ${challenge.data.today_n} of ${challenge.data.days.length}`
       : `${challenge.data.title}, finished`
     : "Something short, together";
   const lastWritten = (journal.data ?? [])[0];
