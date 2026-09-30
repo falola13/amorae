@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { BareTextarea, Button, Sheet } from "@/components/ui/kit";
-import { useAddMemory, useCompleteEvent } from "@/features/together/hooks";
+import { useAddMemory, useEventOutcome } from "@/features/together/hooks";
 import type { Event } from "@/lib/api/types";
 import { longDate } from "@/lib/dates";
 
@@ -20,7 +20,7 @@ export function KeepAsMemorySheet({
   onKept?: () => void;
 }) {
   const add = useAddMemory();
-  const complete = useCompleteEvent();
+  const outcome = useEventOutcome();
   const [note, setNote] = useState(e.notes ?? "");
 
   const keep = (ev: React.FormEvent) => {
@@ -36,7 +36,7 @@ export function KeepAsMemorySheet({
       {
         onSuccess: () => {
           // Only after the memory is stored — the other order could close the event while it never landed.
-          if (!e.done) complete.mutate({ id: e.id, done: true });
+          if (!e.done) outcome.mutate({ id: e.id, outcome: "happened" });
           onClose();
           onKept?.();
         },

@@ -20,6 +20,8 @@ import type { EventInput, GoalInput } from "@/lib/api/schemas";
  *  first answer back rather than making a second row (FR-PWA-009). */
 export type MemoryText = Pick<Memory, "title" | "date" | "location" | "note">;
 
+export type EventOutcome = "happened" | "didnt_happen" | "none";
+
 const withKey = (key?: string) => (key ? { headers: { "Idempotency-Key": key } } : undefined);
 
 export const togetherApi = {
@@ -34,6 +36,8 @@ export const togetherApi = {
       ? http.post<Event>(apiPath`/events/${id}/complete`)
       : http.delete<Event>(apiPath`/events/${id}/complete`)
     ).then((r) => r.data),
+  eventOutcome: (id: string, outcome: EventOutcome) =>
+    http.put<Event>(apiPath`/events/${id}/outcome`, { outcome }).then((r) => r.data),
   deleteEvent: (id: string) => http.delete(apiPath`/events/${id}`).then(() => undefined),
   checklist: (id: string, item: string, done: boolean) =>
     http.patch<Event>(apiPath`/events/${id}/checklist/${item}`, { done }).then((r) => r.data),

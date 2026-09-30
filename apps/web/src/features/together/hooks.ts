@@ -34,6 +34,7 @@ export const useMilestones = () => useQuery({ queryKey: keys.milestones, queryFn
 export const useSaveEvent = () => useWrite(w.saveEvent);
 export const usePatchEvent = () => useWrite(w.patchEvent);
 export const useCompleteEvent = () => useWrite(w.completeEvent);
+export const useEventOutcome = () => useWrite(w.eventOutcome);
 export const useDeleteEvent = () => useWrite(w.deleteEvent);
 export const useChecklist = () => useWrite(w.checklist);
 export const useCreateGoal = () => useWrite(w.createGoal);

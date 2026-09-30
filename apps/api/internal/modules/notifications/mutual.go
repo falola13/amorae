@@ -155,9 +155,9 @@ func yearsAgo(years int) string {
 // still a fair question; a week after is somebody rummaging.
 const eventOverGrace = 24 * time.Hour
 
-// ForEventOver asks, once, whether an event that has just finished is worth
-// keeping. It leads to the event, where keeping it is already the first
-// thing offered once it is over.
+// ForEventOver asks, once, how an event that has just finished went — unless
+// they have already said, either way. It leads to the event, where saying so
+// (and keeping it) is already on offer once it is over.
 //
 // Not perishable: asked at eleven at night it waits until morning rather
 // than being dropped, because the question keeps.
@@ -185,7 +185,7 @@ func ForEventOver(c EventCandidate, now time.Time) (Notification, bool) {
 		Key: c.EventID.String(),
 		Message: push.Message{
 			Title: "How was it?",
-			Body:  title + " — keep it as a memory.",
+			Body:  title,
 			Path:  "/together/events/" + c.EventID.String(),
 			Tag:   KindEventOver,
 		},

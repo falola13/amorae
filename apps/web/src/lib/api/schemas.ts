@@ -121,13 +121,31 @@ export const prayerPointSchema = z.object({
   weekdays: z.array(z.number().int().min(0).max(6)).optional(),
 });
 
+/** One of the reminder phrases, or "at HH:MM" (24h) for a set time on the day. */
+const REMINDER_PHRASES = [
+  "at the time",
+  "10 minutes before",
+  "30 minutes before",
+  "1 hour before",
+  "2 hours before",
+  "the morning of",
+  "1 day before",
+];
+const isReminder = (r: string) =>
+  REMINDER_PHRASES.includes(r) || /^at ([01]\d|2[0-3]):[0-5]\d$/.test(r);
+
 export const eventSchema = z.object({
   title: z.string().trim().min(1, "What would you like to do together?").max(80),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date."),
   start_time: z.string().optional(),
   end_time: z.string().optional(),
   location: z.string().trim().max(120).optional(),
-  reminder: z.string().trim().max(40).optional(),
+  // Absent leaves them alone; [] clears them.
+  reminders: z
+    .array(z.string().trim().max(40))
+    .max(3, "Three reminders at most.")
+    .refine((rs) => rs.every(isReminder), "Pick a valid reminder.")
+    .optional(),
   notes: z.string().trim().max(1000).optional(),
   // Sent whole: an item left out is an item removed.
   checklist: z.array(z.string()).max(20).optional(),

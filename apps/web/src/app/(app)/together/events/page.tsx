@@ -1,9 +1,9 @@
 "use client";
 
 import { useCouple } from "@/features/couple/hooks";
-import { eventOwnerLabel } from "@/features/together/events";
+import { eventOwnerLabel, eventPhase, nowLabel } from "@/features/together/events";
 import { useEvents } from "@/features/together/hooks";
-import { iso, relativeDay, stillAhead, time12 } from "@/lib/dates";
+import { iso, relativeDay, time12 } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { DateRow } from "@/components/ui/date-row";
 import { today } from "@/lib/today";
@@ -50,20 +50,42 @@ export default function Events() {
                 />
               );
             }
-            // "Coming up" checks the actual time, not just the date, so an early-morning event moves to Earlier once it's past.
+            // One rule (eventPhase) decides the section, so an event moves on as its time does.
             const now = today();
-            const up = eventsData
-              .filter((e) => !e.done && stillAhead(e.date, e.start_time, now))
-              .sort((a, b) =>
-                (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")),
-              );
-            const past = eventsData
-              .filter((e) => e.done || !stillAhead(e.date, e.start_time, now))
-              .sort((a, b) =>
-                (b.date + (b.start_time ?? "")).localeCompare(a.date + (a.start_time ?? "")),
-              );
+            const byStart = (x: { date: string; start_time?: string }) =>
+              x.date + (x.start_time ?? "");
+            const phased = eventsData.map((e) => ({ e, phase: eventPhase(e, now) }));
+            const ongoing = phased
+              .filter((x) => x.phase === "ongoing")
+              .map((x) => x.e)
+              .sort((a, b) => byStart(a).localeCompare(byStart(b)));
+            const up = phased
+              .filter((x) => x.phase === "upcoming")
+              .map((x) => x.e)
+              .sort((a, b) => byStart(a).localeCompare(byStart(b)));
+            const past = phased
+              .filter((x) => x.phase === "over")
+              .map((x) => x.e)
+              .sort((a, b) => byStart(b).localeCompare(byStart(a)));
             return (
               <>
+                {ongoing.length ? (
+                  <Section label="Happening now" className="mt-5">
+                    {ongoing.map((e) => {
+                      const owner = eventOwnerLabel(e, meId, partnerName);
+                      const base = `${nowLabel(e)}${e.location ? ` · ${e.location}` : ""}`;
+                      return (
+                        <DateRow
+                          key={e.id}
+                          date={e.date}
+                          title={e.title}
+                          sub={owner ? `${base} · ${owner}` : base}
+                          href={routes.event(e.id)}
+                        />
+                      );
+                    })}
+                  </Section>
+                ) : null}
                 {up.length ? (
                   <Section label="Coming up" className="mt-5">
                     {up.map((e) => {
@@ -84,9 +106,11 @@ export default function Events() {
                   <Section label="Earlier" className="mb-4 mt-6">
                     {past.map((e) => {
                       const owner = eventOwnerLabel(e, meId, partnerName);
-                      const base = e.done
-                        ? "Done together"
-                        : `${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}`;
+                      const base = e.didnt_happen
+                        ? "Didn’t happen"
+                        : e.done
+                          ? "Done"
+                          : `${relativeDay(e.date, todayIso)}${e.start_time ? `, ${time12(e.start_time)}` : ""}`;
                       return (
                         <DateRow
                           key={e.id}

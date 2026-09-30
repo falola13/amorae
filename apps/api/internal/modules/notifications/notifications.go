@@ -295,9 +295,9 @@ func EventOverAt(date time.Time, startTime, endTime string, zone *time.Location)
 // eventReminderLead matches reminder phrases like "an hour before".
 var eventReminderLead = regexp.MustCompile(`^(\d{1,3}|a|an|the) (minute|hour|day)s? before$`)
 
-// EventReminderAt is when an event's reminder fires, in the couple's zone
-// (DEC-27, not each partner's own). With no start time, falls back to the
-// morning of the day.
+// EventReminderAt is when one of an event's reminders fires, in the couple's
+// zone (DEC-27, not each partner's own). With no start time, falls back to
+// the morning of the day — except "at 16:00", which is that time regardless.
 func EventReminderAt(date time.Time, startTime, reminder string, zone *time.Location) (time.Time, bool) {
 	r := strings.ToLower(strings.TrimSpace(reminder))
 	if r == "" {
@@ -318,6 +318,11 @@ func EventReminderAt(date time.Time, startTime, reminder string, zone *time.Loca
 			return morningOf(day), true
 		}
 		return start, true
+	}
+	// A set clock time on the event's day, whether or not the event has a
+	// start of its own — useful through a long or all-day event.
+	if strings.HasPrefix(r, "at ") {
+		return startOf(day, r[len("at "):], zone)
 	}
 
 	m := eventReminderLead.FindStringSubmatch(r)

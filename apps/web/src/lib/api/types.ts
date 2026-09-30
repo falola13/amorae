@@ -130,10 +130,13 @@ export interface Event {
   start_time?: string;
   end_time?: string;
   location?: string;
-  reminder?: string;
+  /** 0..3 phrases from REMINDER_OPTIONS, or "at HH:MM" (a set time on the day). */
+  reminders: string[];
   notes?: string;
   checklist: ChecklistItem[];
   done: boolean;
+  /** Marked as not having happened. Never true together with `done`. */
+  didnt_happen: boolean;
   /** "together" (both of you) or "mine" (just one of you). */
   kind: "together" | "mine";
   /** Who made it. Absent (null) on events from before this was recorded. */

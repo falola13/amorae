@@ -14,7 +14,7 @@ type Repository interface {
 	ByID(ctx context.Context, coupleID, eventID uuid.UUID) (Event, error)
 	Create(ctx context.Context, e Event, at time.Time) (uuid.UUID, error)
 	Update(ctx context.Context, e Event, replaceChecklist bool, at time.Time) error
-	SetDone(ctx context.Context, coupleID, eventID uuid.UUID, done bool, at time.Time) error
+	SetOutcome(ctx context.Context, coupleID, eventID uuid.UUID, done, didntHappen bool, at time.Time) error
 	SetChecklistItem(ctx context.Context, coupleID, eventID, itemID uuid.UUID, done bool, at time.Time) error
 	Delete(ctx context.Context, coupleID, eventID uuid.UUID) error
 }
@@ -74,7 +74,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in Input) (Event
 		return Event{}, err
 	}
 	// Only a "together" event ever produces a notification (RecentlyWritten
-	// excludes "mine" at the query itself) — poking unconditionally costs
+	// excludes "mine" at the query itself) â poking unconditionally costs
 	// nothing when there is nothing due.
 	s.poker.Poke()
 	return s.repo.ByID(ctx, coupleID, id)
@@ -96,7 +96,7 @@ func (s *Service) Update(ctx context.Context, userID, eventID uuid.UUID, in Inpu
 		return Event{}, ErrNotFound
 	}
 	// Who it is for is the one thing even a "together" event's other
-	// partner cannot reassign — everything else about it is theirs equally.
+	// partner cannot reassign â everything else about it is theirs equally.
 	if in.Kind != nil && current.CreatedBy != nil && *current.CreatedBy != userID {
 		return Event{}, apperr.Validation(map[string]string{
 			"kind": "Only whoever made it can change who it's for.",
@@ -113,7 +113,30 @@ func (s *Service) Update(ctx context.Context, userID, eventID uuid.UUID, in Inpu
 	return s.repo.ByID(ctx, coupleID, eventID)
 }
 
+// SetDone is complete/uncomplete, kept as they were: happened, or not said yet.
 func (s *Service) SetDone(ctx context.Context, userID, eventID uuid.UUID, done bool) (Event, error) {
+	if done {
+		return s.SetOutcome(ctx, userID, eventID, OutcomeHappened)
+	}
+	return s.SetOutcome(ctx, userID, eventID, OutcomeNone)
+}
+
+// SetOutcome records how an event went. Done and didn't-happen are one
+// answer with three values, so setting either clears the other.
+func (s *Service) SetOutcome(ctx context.Context, userID, eventID uuid.UUID, outcome string) (Event, error) {
+	done, didntHappen := false, false
+	switch outcome {
+	case OutcomeHappened:
+		done = true
+	case OutcomeDidntHappen:
+		didntHappen = true
+	case OutcomeNone:
+	default:
+		return Event{}, apperr.Validation(map[string]string{
+			"outcome": "Choose happened, didn’t happen, or none.",
+		})
+	}
+
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
 		return Event{}, err
@@ -125,7 +148,7 @@ func (s *Service) SetDone(ctx context.Context, userID, eventID uuid.UUID, done b
 	if !mayTouch(current, userID) {
 		return Event{}, ErrNotFound
 	}
-	if err := s.repo.SetDone(ctx, coupleID, eventID, done, s.now()); err != nil {
+	if err := s.repo.SetOutcome(ctx, coupleID, eventID, done, didntHappen, s.now()); err != nil {
 		return Event{}, err
 	}
 	return s.repo.ByID(ctx, coupleID, eventID)

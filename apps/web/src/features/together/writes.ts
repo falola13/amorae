@@ -10,7 +10,7 @@ import type {
 } from "@/lib/api/types";
 import { keys } from "@/lib/query/keys";
 import { defineWrite } from "@/lib/query/mutations";
-import { togetherApi as api, type MemoryText } from "./api";
+import { togetherApi as api, type EventOutcome, type MemoryText } from "./api";
 
 /** Ten megabytes, the cap Q-06 chose. Checked before anything is sent. */
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -90,6 +90,23 @@ export const togetherWrites = {
     mutationFn: ({ id, done }: { id: string; done: boolean }) => api.completeEvent(id, done),
     invalidates: [keys.events],
     idempotent: "sets the flag to a given value rather than toggling it.",
+  }),
+  // Says how it went: happened, didn't, or neither yet.
+  eventOutcome: defineWrite({
+    mutationKey: ["events", "outcome"],
+    mutationFn: ({ id, outcome }: { id: string; outcome: EventOutcome }) =>
+      api.eventOutcome(id, outcome),
+    invalidates: [keys.events],
+    idempotent: "sets the outcome to a given value rather than toggling it.",
+    optimistic: (qc, { id, outcome }) => {
+      const set = (e: Event): Event => ({
+        ...e,
+        done: outcome === "happened",
+        didnt_happen: outcome === "didnt_happen",
+      });
+      qc.setQueryData<Event>(keys.event(id), (e) => (e ? set(e) : e));
+      qc.setQueryData<Event[]>(keys.events, (list) => list?.map((e) => (e.id === id ? set(e) : e)));
+    },
   }),
   checklist: defineWrite({
     mutationKey: ["events", "checklist"],

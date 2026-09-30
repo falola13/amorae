@@ -246,3 +246,102 @@ func TestValidate_ReportsEverythingAtOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestValidate_Reminders(t *testing.T) {
+	base := Event{Title: "x", Date: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)}
+	with := func(rs ...string) (Event, error) {
+		return base.Validate(Input{Reminders: &rs}, false)
+	}
+
+	t.Run("the order given is the order kept", func(t *testing.T) {
+		e, err := with("1 day before", "at the time", "the morning of")
+		if err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+		want := []string{"1 day before", "at the time", "the morning of"}
+		if len(e.Reminders) != len(want) {
+			t.Fatalf("reminders = %v, want %v", e.Reminders, want)
+		}
+		for i := range want {
+			if e.Reminders[i] != want[i] {
+				t.Errorf("reminders = %v, want %v", e.Reminders, want)
+			}
+		}
+	})
+
+	t.Run("every phrase the app offers is accepted", func(t *testing.T) {
+		for _, ok := range []string{
+			"at the time", "10 minutes before", "30 minutes before", "1 hour before",
+			"2 hours before", "the morning of", "1 day before", "an hour before",
+		} {
+			if _, err := with(ok); err != nil {
+				t.Errorf("Validate refused %q: %v", ok, err)
+			}
+		}
+	})
+
+	t.Run("a clock time on the day is accepted", func(t *testing.T) {
+		for _, ok := range []string{"at 16:00", "at 00:00", "at 23:59"} {
+			if _, err := with(ok); err != nil {
+				t.Errorf("Validate refused %q: %v", ok, err)
+			}
+		}
+	})
+
+	t.Run("a clock time that is not one is refused", func(t *testing.T) {
+		for _, bad := range []string{"at 25:00", "at 16:60", "at 9:00", "at 4pm", "at"} {
+			fields := fieldsOf(t, func() error { _, err := with(bad); return err }())
+			if fields["reminders"] == "" {
+				t.Errorf("%q: fields = %v, want reminders", bad, fields)
+			}
+		}
+	})
+
+	t.Run("a phrase that is not a choice is refused", func(t *testing.T) {
+		for _, bad := range []string{"when you get a chance", "0 hours before", "1 week before", "soon"} {
+			fields := fieldsOf(t, func() error { _, err := with(bad); return err }())
+			if fields["reminders"] == "" {
+				t.Errorf("%q: fields = %v, want reminders", bad, fields)
+			}
+		}
+	})
+
+	t.Run("three are fine and four are not", func(t *testing.T) {
+		if _, err := with("at the time", "1 hour before", "1 day before"); err != nil {
+			t.Errorf("three reminders refused: %v", err)
+		}
+		fields := fieldsOf(t, func() error {
+			_, err := with("at the time", "1 hour before", "1 day before", "the morning of")
+			return err
+		}())
+		if fields["reminders"] == "" {
+			t.Errorf("fields = %v, want reminders", fields)
+		}
+	})
+
+	t.Run("the same one twice is refused, however it is spelled", func(t *testing.T) {
+		fields := fieldsOf(t, func() error { _, err := with("1 hour before", " 1 Hour Before"); return err }())
+		if fields["reminders"] == "" {
+			t.Errorf("fields = %v, want reminders", fields)
+		}
+	})
+
+	t.Run("an empty list clears them, and absent leaves them", func(t *testing.T) {
+		withOne := base
+		withOne.Reminders = []string{"at the time"}
+		cleared, err := withOne.Validate(Input{Reminders: &[]string{}}, false)
+		if err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+		if len(cleared.Reminders) != 0 {
+			t.Errorf("reminders = %v, want none", cleared.Reminders)
+		}
+		kept, err := withOne.Validate(Input{Notes: ptr("bring the tickets")}, false)
+		if err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+		if len(kept.Reminders) != 1 {
+			t.Errorf("reminders = %v, want them left alone", kept.Reminders)
+		}
+	})
+}

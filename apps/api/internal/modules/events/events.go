@@ -17,7 +17,7 @@ import (
 const (
 	maxTitleRunes     = 80
 	maxLocationRunes  = 120
-	maxReminderRunes  = 40
+	MaxReminders      = 3
 	maxNotesRunes     = 1000
 	maxItemRunes      = 120
 	MaxChecklistItems = 20
@@ -28,6 +28,13 @@ var ErrNotFound = apperr.NotFound("event_not_found", "That event isn’t here.")
 var (
 	day       = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	clockTime = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+
+	// The two shapes of reminder the worker reads besides the fixed phrases:
+	// a lead ("an hour before", "45 minutes before") and a set clock time on
+	// the event's day. Kept in step with notifications.EventReminderAt, which
+	// is what turns them into a send time — events cannot import it.
+	reminderLead = regexp.MustCompile(`^(\d{1,3}|a|an|the) (minute|hour|day)s? before$`)
+	reminderAt   = regexp.MustCompile(`^at ([01][0-9]|2[0-3]):[0-5][0-9]$`)
 )
 
 type Event struct {
@@ -46,15 +53,26 @@ type Event struct {
 	StartTime string // "19:00", or empty
 	EndTime   string
 	Location  string
-	Reminder  string
+	// In the order they were given; empty means none.
+	Reminders []string
 	Notes     string
-	Done      bool
-	Checklist []ChecklistItem
+	// Done and DidntHappen are the outcome, never both true; neither is "not
+	// said yet".
+	Done        bool
+	DidntHappen bool
+	Checklist   []ChecklistItem
 }
 
 const (
 	KindTogether = "together"
 	KindMine     = "mine"
+)
+
+// What can be said about how an event went; "none" takes it back.
+const (
+	OutcomeHappened    = "happened"
+	OutcomeDidntHappen = "didnt_happen"
+	OutcomeNone        = "none"
 )
 
 type ChecklistItem struct {
@@ -71,7 +89,7 @@ type Input struct {
 	StartTime *string
 	EndTime   *string
 	Location  *string
-	Reminder  *string
+	Reminders *[]string
 	Notes     *string
 	Checklist *[]string
 	Kind      *string
@@ -118,7 +136,14 @@ func (e Event) Validate(in Input, creating bool) (Event, error) {
 	}
 
 	e.Location = optionalText(in.Location, e.Location, maxLocationRunes, "location", fields)
-	e.Reminder = optionalText(in.Reminder, e.Reminder, maxReminderRunes, "reminder", fields)
+	if in.Reminders != nil {
+		reminders, msg := validateReminders(*in.Reminders)
+		if msg != "" {
+			fields["reminders"] = msg
+		} else {
+			e.Reminders = reminders
+		}
+	}
 	e.Notes = optionalText(in.Notes, e.Notes, maxNotesRunes, "notes", fields)
 
 	if in.Kind != nil {
@@ -207,4 +232,47 @@ func validateChecklist(texts []string) ([]ChecklistItem, error) {
 		return nil, apperr.Validation(fields)
 	}
 	return items, nil
+}
+
+// validateReminders replaces the whole list, like the checklist: the order is
+// kept, and blank entries are dropped rather than rejected. Phrases are read
+// case-insensitively and stored lowercased, so "1 Hour Before" and
+// "1 hour before" are the same reminder.
+func validateReminders(in []string) ([]string, string) {
+	const choices = "Up to three reminders, each one of the choices."
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, r := range in {
+		r = strings.ToLower(strings.TrimSpace(r))
+		switch {
+		case r == "":
+			continue
+		case !validReminder(r):
+			return nil, choices
+		case seen[r]:
+			return nil, "Pick each reminder only once."
+		}
+		seen[r] = true
+		out = append(out, r)
+	}
+	if len(out) > MaxReminders {
+		return nil, choices
+	}
+	return out, ""
+}
+
+func validReminder(r string) bool {
+	switch r {
+	case "at the time", "the morning of":
+		return true
+	}
+	if reminderAt.MatchString(r) {
+		return true
+	}
+	m := reminderLead.FindStringSubmatch(r)
+	if m == nil {
+		return false
+	}
+	// "0 hours before" is not a lead.
+	return strings.Trim(m[1], "0") != ""
 }
