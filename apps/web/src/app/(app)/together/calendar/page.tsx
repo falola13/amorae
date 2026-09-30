@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
 import { useWeek } from "@/features/prayers/hooks";
-import { eventOwnerLabel } from "@/features/together/events";
+import { eventOwnerLabel, remindersSummary } from "@/features/together/events";
 import { useEvents, useMilestones } from "@/features/together/hooks";
 import { occursOn, yearsBy } from "@/features/together/milestones";
 import {
@@ -149,7 +149,13 @@ export default function Calendar() {
             for (const e of eventsData)
               if (!e.done) {
                 const owner = eventOwnerLabel(e, meId, partnerName);
-                const base = e.location ?? (e.reminder ? `Reminder ${e.reminder}` : "");
+                const base =
+                  e.location ??
+                  (e.reminders.length > 1
+                    ? remindersSummary(e.reminders)
+                    : e.reminders.length
+                      ? `Reminder ${remindersSummary(e.reminders).toLowerCase()}`
+                      : "");
                 push(e.date, {
                   at: e.start_time ?? "",
                   rank: 1,

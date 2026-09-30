@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import { isAlone } from "./derive";
+import type { Event } from "@/lib/api/types";
+import { isAlone, todayEvent, upcomingEvents } from "./derive";
 
 const apiError = (code: string) => new ApiError(409, code, "");
 
@@ -22,5 +23,38 @@ describe("isAlone", () => {
   it("does not mistake an unrelated failure for being alone", () => {
     expect(isAlone(true, apiError("internal_error"))).toBe(false);
     expect(isAlone(true, new Error("network"))).toBe(false);
+  });
+});
+
+describe("upcomingEvents", () => {
+  const ev = (o: Partial<Event>): Event => ({
+    id: "1",
+    title: "Dinner",
+    date: "2026-09-30",
+    reminders: [],
+    checklist: [],
+    done: false,
+    didnt_happen: false,
+    kind: "together",
+    created_by: null,
+    ...o,
+  });
+  const now = new Date(2026, 8, 30, 19, 0);
+
+  it("keeps ongoing and upcoming events, earliest first, and drops over ones", () => {
+    const list = [
+      ev({ id: "late", start_time: "21:00" }),
+      ev({ id: "now", start_time: "18:00", end_time: "21:00" }),
+      ev({ id: "over", start_time: "10:00", end_time: "11:00" }),
+      ev({ id: "done", start_time: "20:00", done: true }),
+      ev({ id: "no", start_time: "20:00", didnt_happen: true }),
+      ev({ id: "tomorrow", date: "2026-10-01" }),
+    ];
+    expect(upcomingEvents(list, now).map((e) => e.id)).toEqual(["now", "late", "tomorrow"]);
+  });
+
+  it("keeps a no-time event on its day and picks it as today's", () => {
+    const up = upcomingEvents([ev({ id: "all-day" })], now);
+    expect(todayEvent(up, "2026-09-30")?.id).toBe("all-day");
   });
 });

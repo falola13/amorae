@@ -402,3 +402,57 @@ func TestTimeline_Challenges(t *testing.T) {
 		t.Errorf("all = %+v, err %v; want the two kept challenges", all, err)
 	}
 }
+
+// An event is history once it is done, or once it is over and nobody said it
+// did not happen. "Over" is the notifications rule in SQL: its end time, else
+// its start plus two hours, else eight the next morning.
+func TestTimeline_EventInclusion(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := timeline.NewPostgresRepository(db)
+	coupleID, a, _ := pair(t, db)
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	add := func(title string, days int, start, end *string, done, didntHappen bool) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if _, err := db.Q(ctx).Exec(ctx, `
+			INSERT INTO events (id, couple_id, title, date, start_time, end_time, done, didnt_happen, created_by, kind, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5::time, $6::time, $7, $8, $9, 'together', now(), now())
+		`, id, coupleID, title, today.AddDate(0, 0, days), start, end, done, didntHappen, a); err != nil {
+			t.Fatalf("insert event: %v", err)
+		}
+		return id
+	}
+	str := func(s string) *string { return &s }
+
+	cases := []struct {
+		name string
+		id   uuid.UUID
+		want bool
+	}{
+		{"done, still ahead", add("done ahead", 3, nil, nil, true, false), true},
+		{"over, nobody said", add("over quietly", -2, nil, nil, false, false), true},
+		{"over by its end time", add("ended last night", -1, str("19:00"), str("23:00"), false, false), true},
+		{"over by start plus two hours", add("late dinner", -2, str("23:30"), nil, false, false), true},
+		{"over since midnight, today", add("ended at midnight", 0, nil, str("00:00"), false, false), true},
+		{"said not to have happened", add("cancelled", -2, nil, nil, false, true), false},
+		{"still ahead", add("next week", 5, nil, nil, false, false), false},
+		{"a whole day today is not over until tomorrow morning", add("all day today", 0, nil, nil, false, false), false},
+		{"not over by its end time yet", add("ends tomorrow night", 1, str("19:00"), str("23:00"), false, false), false},
+	}
+
+	got, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterPlans), nil, 50)
+	if err != nil {
+		t.Fatalf("Timeline: %v", err)
+	}
+	in := map[uuid.UUID]bool{}
+	for _, it := range got {
+		in[it.ID] = true
+	}
+	for _, tc := range cases {
+		if in[tc.id] != tc.want {
+			t.Errorf("%s: on the timeline = %v, want %v", tc.name, in[tc.id], tc.want)
+		}
+	}
+}

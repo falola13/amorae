@@ -8,8 +8,10 @@ import { Controller, useForm } from "react-hook-form";
 import { BareInput, BareTextarea, ComposeBar, Para, Skeleton, cx } from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { PickRow } from "@/components/ui/pick-row";
+import { RemindersEditor } from "@/features/together/components/reminders-editor";
+import { isApiError } from "@/lib/api/errors";
 import { useCouple } from "@/features/couple/hooks";
-import { canChangeEventKind, REMINDER_OPTIONS } from "@/features/together/events";
+import { canChangeEventKind } from "@/features/together/events";
 import { useEvent, useSaveEvent } from "@/features/together/hooks";
 import { usePrefs } from "@/features/settings/hooks";
 import { eventSchema, type EventInput } from "@/lib/api/schemas";
@@ -76,6 +78,7 @@ function EventComposer({
     control,
     watch,
     setValue,
+    setError,
     formState: { errors, dirtyFields },
   } = useForm<EventInput>({
     resolver: zodResolver(eventSchema),
@@ -86,7 +89,7 @@ function EventComposer({
           start_time: event.start_time ?? "",
           end_time: event.end_time ?? "",
           location: event.location ?? "",
-          reminder: event.reminder ?? "",
+          reminders: event.reminders ?? [],
           notes: event.notes ?? "",
           kind: event.kind,
         }
@@ -97,7 +100,7 @@ function EventComposer({
           end_time: "",
           location: "",
           // What new events had before there was a setting for it.
-          reminder: "1 hour before",
+          reminders: ["1 hour before"],
           notes: "",
           kind: "together",
         },
@@ -108,9 +111,10 @@ function EventComposer({
   // keeps whatever the event already had).
   useEffect(() => {
     // Checked against undefined, not falsy: "" is a real choice (no reminder).
-    if (event || dirtyFields.reminder || prefs.data?.default_event_reminder === undefined) return;
-    setValue("reminder", prefs.data.default_event_reminder);
-  }, [event, prefs.data?.default_event_reminder, dirtyFields.reminder, setValue]);
+    if (event || dirtyFields.reminders || prefs.data?.default_event_reminder === undefined) return;
+    const d = prefs.data.default_event_reminder;
+    setValue("reminders", d ? [d] : []);
+  }, [event, prefs.data?.default_event_reminder, dirtyFields.reminders, setValue]);
 
   const kind = watch("kind");
   // Only the creator gets to change this; an edit by anyone else keeps it hidden.
@@ -123,7 +127,8 @@ function EventComposer({
       start_time: v.start_time || undefined,
       end_time: v.end_time || undefined,
       location: v.location || undefined,
-      reminder: v.reminder || undefined,
+      // Always sent: on an edit, [] is how the last one is cleared.
+      reminders: v.reminders ?? [],
       notes: v.notes || undefined,
       kind: canPickKind ? v.kind : undefined,
     };
@@ -132,6 +137,10 @@ function EventComposer({
       {
         onSuccess: () => router.replace(editId ? routes.event(editId) : routes.events),
         onQueued: () => router.replace(editId ? routes.event(editId) : routes.events),
+        onError: (err) => {
+          const m = isApiError(err) ? err.fields?.reminders : undefined;
+          if (m) setError("reminders", { message: m });
+        },
       },
     );
   };
@@ -254,17 +263,13 @@ function EventComposer({
             )}
           />
           <Controller
-            name="reminder"
+            name="reminders"
             control={control}
             render={({ field }) => (
-              <PickRow
-                icon="bell"
-                label="Reminder"
-                value={field.value ?? ""}
-                options={REMINDER_OPTIONS}
+              <RemindersEditor
+                value={field.value ?? []}
                 onChange={field.onChange}
-                placeholder="None"
-                last
+                error={errors.reminders?.message}
               />
             )}
           />

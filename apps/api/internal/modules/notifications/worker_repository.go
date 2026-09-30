@@ -105,24 +105,27 @@ func (r *PostgresRepository) candidates(ctx context.Context, query string, args 
 	return out, nil
 }
 
-// DueEventReminders casts a wide net (±2 days); EventReminderAt in Go
-// decides the exact moment. start_time comes back as text since it's a wall
-// clock in the couple's zone, not a driver TIME value.
+// DueEventReminders returns one candidate per reminder an event carries, so
+// each is judged (and keyed) on its own. It casts a wide net (±2 days);
+// EventReminderAt in Go decides the exact moment. start_time comes back as
+// text since it's a wall clock in the couple's zone, not a driver TIME value.
 func (r *PostgresRepository) DueEventReminders(ctx context.Context, now time.Time) ([]EventCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT u.id, e.id, e.title, c.timezone, e.date,
 		       COALESCE(to_char(e.start_time, 'HH24:MI'), ''),
 		       COALESCE(to_char(e.end_time, 'HH24:MI'), ''),
-		       e.reminder,
+		       rem.reminder,
 		       COALESCE(p.event_reminders, true)
 		FROM events e
+		CROSS JOIN LATERAL unnest(e.reminders) AS rem(reminder)
 		JOIN couples c ON c.id = e.couple_id
 		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
 		JOIN users u ON u.id = m.user_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
 		  AND NOT e.done
-		  AND COALESCE(e.reminder, '') <> ''
+		  AND NOT e.didnt_happen
+		  AND rem.reminder <> ''
 		  AND e.date BETWEEN ($1 AT TIME ZONE c.timezone)::date - 2
 		                 AND ($1 AT TIME ZONE c.timezone)::date + 2
 		  -- A "mine" event's reminder is its creator's alone.

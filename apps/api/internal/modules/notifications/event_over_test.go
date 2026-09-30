@@ -55,7 +55,7 @@ func TestForEventOver(t *testing.T) {
 		if n.Message.Title != "How was it?" {
 			t.Errorf("title = %q", n.Message.Title)
 		}
-		if n.Message.Body != "Dinner at Terra — keep it as a memory." {
+		if n.Message.Body != "Dinner at Terra" {
 			t.Errorf("body = %q", n.Message.Body)
 		}
 		// Keyed by the event, so it is asked once and never again.

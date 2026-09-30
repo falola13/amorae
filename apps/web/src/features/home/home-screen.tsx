@@ -26,6 +26,7 @@ import { setterWord, todaysPoints } from "@/features/prayers/derive";
 import { useHistory, useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
 import { HomeChallengeCard } from "./challenge-card";
+import { eventPhase, nowLabel } from "@/features/together/events";
 import { useEvents, useGoals, useMilestones, useNudge } from "@/features/together/hooks";
 import {
   celebrationCopy,
@@ -90,9 +91,9 @@ export function HomeScreen() {
   const partner = coupleData.partner?.display_name ?? "your partner";
   // Not a failure — no week exists until there's a partner; see isAlone.
   const alone = isAlone(Boolean(coupleData.partner), week.error);
-  const upcoming = upcomingEvents(events.data ?? [], today());
-  const todays = todayEvent(upcoming, todayIso);
-  const nextEvent = nextUpcomingEvent(upcoming, todayIso);
+  const upcoming = upcomingEvents(events.data ?? [], now);
+  const todays = todayEvent(upcoming, todayIso, now);
+  const nextEvent = nextUpcomingEvent(upcoming, todayIso, now);
   const goal = activeGoal(goals.data ?? []);
   const lastWeek = lastWeekSummary(history.data, me.id);
   const reminder = reminderLabel(prefs.data);
@@ -259,8 +260,12 @@ export function HomeScreen() {
                 {todays.title}
               </span>
               <span className="text-[15px] text-stone">
-                {time12(todays.start_time)}
-                {todays.start_time && todays.location ? " · " : ""}
+                {eventPhase(todays, now) === "ongoing"
+                  ? nowLabel(todays)
+                  : time12(todays.start_time)}
+                {(eventPhase(todays, now) === "ongoing" || todays.start_time) && todays.location
+                  ? " · "
+                  : ""}
                 {todays.location ?? ""}
               </span>
             </span>

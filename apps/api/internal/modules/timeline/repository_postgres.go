@@ -126,8 +126,11 @@ WITH items AS (
 
 	UNION ALL
 
-	-- Anything already done, or whose day has passed — an event still ahead
-	-- of the couple belongs on their calendar, not their history.
+	-- Anything done, or over without being said not to have happened — an
+	-- event still ahead of the couple belongs on their calendar, not their
+	-- history. "Over" is notifications.EventOverAt in SQL: its end time, else
+	-- its start plus two hours (eventLength), else 08:00 the next day
+	-- (reminderMorning). Change one, change the other.
 	SELECT 'event', e.id,
 	       ((e.date::timestamp + COALESCE(e.start_time, '00:00'::time)) AT TIME ZONE c.timezone),
 	       e.date,
@@ -143,7 +146,14 @@ WITH items AS (
 	JOIN couples c ON c.id = e.couple_id
 	LEFT JOIN users u ON u.id = e.created_by
 	WHERE e.couple_id = $1
-	  AND (e.done OR e.date < (now() AT TIME ZONE c.timezone)::date)
+	  AND (e.done OR (
+	       NOT e.didnt_happen
+	       AND (CASE
+	                WHEN e.end_time IS NOT NULL THEN e.date::timestamp + e.end_time
+	                WHEN e.start_time IS NOT NULL THEN e.date::timestamp + e.start_time + interval '2 hours'
+	                ELSE e.date::timestamp + interval '1 day 8 hours'
+	            END) AT TIME ZONE c.timezone <= now()
+	  ))
 
 	UNION ALL
 

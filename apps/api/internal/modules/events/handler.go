@@ -18,6 +18,7 @@ type service interface {
 	Create(ctx context.Context, userID uuid.UUID, in Input) (Event, error)
 	Update(ctx context.Context, userID, eventID uuid.UUID, in Input) (Event, error)
 	SetDone(ctx context.Context, userID, eventID uuid.UUID, done bool) (Event, error)
+	SetOutcome(ctx context.Context, userID, eventID uuid.UUID, outcome string) (Event, error)
 	SetChecklistItem(ctx context.Context, userID, eventID, itemID uuid.UUID, done bool) (Event, error)
 	Delete(ctx context.Context, userID, eventID uuid.UUID) error
 }
@@ -38,6 +39,7 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("DELETE /events/{id}", http.HandlerFunc(h.remove))
 	r.HandleAuthed("POST /events/{id}/complete", http.HandlerFunc(h.complete))
 	r.HandleAuthed("DELETE /events/{id}/complete", http.HandlerFunc(h.uncomplete))
+	r.HandleAuthed("PUT /events/{id}/outcome", http.HandlerFunc(h.outcome))
 	r.HandleAuthed("PATCH /events/{id}/checklist/{item}", http.HandlerFunc(h.checklistItem))
 }
 
@@ -49,17 +51,20 @@ type checklistDTO struct {
 }
 
 type eventDTO struct {
-	ID        string         `json:"id"`
-	Title     string         `json:"title"`
-	Date      string         `json:"date"`
-	StartTime string         `json:"start_time,omitempty"`
-	EndTime   string         `json:"end_time,omitempty"`
-	Location  string         `json:"location,omitempty"`
-	Reminder  string         `json:"reminder,omitempty"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Date      string `json:"date"`
+	StartTime string `json:"start_time,omitempty"`
+	EndTime   string `json:"end_time,omitempty"`
+	Location  string `json:"location,omitempty"`
+	// Always an array, never null.
+	Reminders []string       `json:"reminders"`
 	Notes     string         `json:"notes,omitempty"`
 	Checklist []checklistDTO `json:"checklist"`
 	Done      bool           `json:"done"`
-	Kind      string         `json:"kind"`
+	// Said not to have happened; never true together with done.
+	DidntHappen bool   `json:"didnt_happen"`
+	Kind        string `json:"kind"`
 	// Null on an event from before ownership existed.
 	CreatedBy *string `json:"created_by"`
 }
@@ -72,12 +77,13 @@ func toDTO(e Event) eventDTO {
 		StartTime: e.StartTime,
 		EndTime:   e.EndTime,
 		Location:  e.Location,
-		Reminder:  e.Reminder,
+		Reminders: append(make([]string, 0, len(e.Reminders)), e.Reminders...),
 		Notes:     e.Notes,
 		// Always an array, never null, so a client can map over it.
-		Checklist: make([]checklistDTO, 0, len(e.Checklist)),
-		Done:      e.Done,
-		Kind:      e.Kind,
+		Checklist:   make([]checklistDTO, 0, len(e.Checklist)),
+		Done:        e.Done,
+		DidntHappen: e.DidntHappen,
+		Kind:        e.Kind,
 	}
 	if e.CreatedBy != nil {
 		id := e.CreatedBy.String()
@@ -98,7 +104,7 @@ type inputRequest struct {
 	StartTime *string   `json:"start_time"`
 	EndTime   *string   `json:"end_time"`
 	Location  *string   `json:"location"`
-	Reminder  *string   `json:"reminder"`
+	Reminders *[]string `json:"reminders"`
 	Notes     *string   `json:"notes"`
 	Checklist *[]string `json:"checklist"`
 	Kind      *string   `json:"kind"`
@@ -108,6 +114,10 @@ func (r inputRequest) input() Input { return Input(r) }
 
 type doneRequest struct {
 	Done bool `json:"done"`
+}
+
+type outcomeRequest struct {
+	Outcome string `json:"outcome"`
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +195,20 @@ func (h *Handler) setDone(w http.ResponseWriter, r *http.Request, done bool) {
 		return
 	}
 	e, err := h.svc.SetDone(r.Context(), userID, eventID, done)
+	respond(w, r, e, err, http.StatusOK)
+}
+
+func (h *Handler) outcome(w http.ResponseWriter, r *http.Request) {
+	userID, eventID, ok := callerAndEvent(w, r)
+	if !ok {
+		return
+	}
+	var req outcomeRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	e, err := h.svc.SetOutcome(r.Context(), userID, eventID, req.Outcome)
 	respond(w, r, e, err, http.StatusOK)
 }
 

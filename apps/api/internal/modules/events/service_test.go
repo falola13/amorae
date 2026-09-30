@@ -55,12 +55,13 @@ func (f *fakeRepo) Update(_ context.Context, e Event, _ bool, _ time.Time) error
 	return nil
 }
 
-func (f *fakeRepo) SetDone(_ context.Context, coupleID, eventID uuid.UUID, done bool, _ time.Time) error {
+func (f *fakeRepo) SetOutcome(_ context.Context, coupleID, eventID uuid.UUID, done, didntHappen bool, _ time.Time) error {
 	e, ok := f.events[eventID]
 	if !ok || e.CoupleID != coupleID {
 		return ErrNotFound
 	}
 	e.Done = done
+	e.DidntHappen = didntHappen
 	f.events[eventID] = e
 	return nil
 }
@@ -297,6 +298,96 @@ func TestService_OnlyTheCreatorChangesKind(t *testing.T) {
 		}
 		if _, err := svc.Update(context.Background(), partner, id, Input{Kind: ptr("mine")}); err != nil {
 			t.Errorf("a pre-existing event refused a kind change: %v", err)
+		}
+	})
+}
+
+func TestService_SetOutcome(t *testing.T) {
+	repo := newFakeRepo()
+	svc, coupleID := serviceFor(repo)
+	creator, partner := uuid.New(), uuid.New()
+	ctx := context.Background()
+
+	t.Run("happened marks it done", func(t *testing.T) {
+		e := togetherEvent(t, repo, coupleID, creator)
+		got, err := svc.SetOutcome(ctx, creator, e.ID, OutcomeHappened)
+		if err != nil {
+			t.Fatalf("SetOutcome: %v", err)
+		}
+		if !got.Done || got.DidntHappen {
+			t.Errorf("done = %v, didnt_happen = %v", got.Done, got.DidntHappen)
+		}
+	})
+
+	t.Run("didnt_happen replaces done rather than joining it", func(t *testing.T) {
+		e := togetherEvent(t, repo, coupleID, creator)
+		if _, err := svc.SetOutcome(ctx, creator, e.ID, OutcomeHappened); err != nil {
+			t.Fatalf("SetOutcome: %v", err)
+		}
+		got, err := svc.SetOutcome(ctx, partner, e.ID, OutcomeDidntHappen)
+		if err != nil {
+			t.Fatalf("SetOutcome: %v", err)
+		}
+		if got.Done || !got.DidntHappen {
+			t.Errorf("done = %v, didnt_happen = %v", got.Done, got.DidntHappen)
+		}
+		back, err := svc.SetOutcome(ctx, partner, e.ID, OutcomeHappened)
+		if err != nil {
+			t.Fatalf("SetOutcome: %v", err)
+		}
+		if !back.Done || back.DidntHappen {
+			t.Errorf("done = %v, didnt_happen = %v", back.Done, back.DidntHappen)
+		}
+	})
+
+	t.Run("none clears both", func(t *testing.T) {
+		e := togetherEvent(t, repo, coupleID, creator)
+		if _, err := svc.SetOutcome(ctx, creator, e.ID, OutcomeDidntHappen); err != nil {
+			t.Fatalf("SetOutcome: %v", err)
+		}
+		got, err := svc.SetOutcome(ctx, creator, e.ID, OutcomeNone)
+		if err != nil {
+			t.Fatalf("SetOutcome: %v", err)
+		}
+		if got.Done || got.DidntHappen {
+			t.Errorf("done = %v, didnt_happen = %v, want neither", got.Done, got.DidntHappen)
+		}
+	})
+
+	t.Run("complete and uncomplete still work, and uncomplete clears didnt_happen too", func(t *testing.T) {
+		e := togetherEvent(t, repo, coupleID, creator)
+		got, err := svc.SetDone(ctx, creator, e.ID, true)
+		if err != nil || !got.Done {
+			t.Fatalf("SetDone(true) = %+v, %v", got, err)
+		}
+		if _, err := svc.SetOutcome(ctx, creator, e.ID, OutcomeDidntHappen); err != nil {
+			t.Fatalf("SetOutcome: %v", err)
+		}
+		got, err = svc.SetDone(ctx, creator, e.ID, false)
+		if err != nil || got.Done || got.DidntHappen {
+			t.Errorf("SetDone(false) = %+v, %v", got, err)
+		}
+	})
+
+	t.Run("anything else is refused", func(t *testing.T) {
+		e := togetherEvent(t, repo, coupleID, creator)
+		fields := fieldsOf(t, func() error { _, err := svc.SetOutcome(ctx, creator, e.ID, "maybe"); return err }())
+		if fields["outcome"] == "" {
+			t.Errorf("fields = %v, want outcome", fields)
+		}
+	})
+
+	t.Run("a mine event's outcome is its creator's alone", func(t *testing.T) {
+		e := togetherEvent(t, repo, coupleID, creator)
+		e.Kind = KindMine
+		repo.events[e.ID] = e
+		for _, outcome := range []string{OutcomeHappened, OutcomeDidntHappen, OutcomeNone} {
+			if _, err := svc.SetOutcome(ctx, partner, e.ID, outcome); err != ErrNotFound {
+				t.Errorf("%s by the partner: err = %v, want ErrNotFound", outcome, err)
+			}
+		}
+		if _, err := svc.SetOutcome(ctx, creator, e.ID, OutcomeDidntHappen); err != nil {
+			t.Errorf("the creator was refused: %v", err)
 		}
 	})
 }

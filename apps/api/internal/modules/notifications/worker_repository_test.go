@@ -121,3 +121,109 @@ func TestPostgresRepository_ImportantDates_DerivedRows(t *testing.T) {
 		t.Error("Ada's birthday never reached Bo")
 	}
 }
+
+// seedEvent writes an event dated `days` from today (the couple is UTC).
+func seedEvent(t *testing.T, db *database.DB, coupleID, creator uuid.UUID, title string, days int, reminders []string, kind string, done, didntHappen bool) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+	id := uuid.New()
+	date := time.Now().UTC().AddDate(0, 0, days)
+	if reminders == nil {
+		reminders = []string{}
+	}
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO events (id, couple_id, title, date, start_time, reminders, done, didnt_happen, created_by, kind, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, '19:00', $5, $6, $7, $8, $9, now(), now())
+	`, id, coupleID, title, date, reminders, done, didntHappen, creator, kind); err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	return id
+}
+
+func TestPostgresRepository_DueEventReminders_OnePerReminder(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := notifications.NewPostgresRepository(db)
+	coupleID, a, b := pair(t, db)
+
+	several := seedEvent(t, db, coupleID, a, "Dinner", 0, []string{"1 hour before", "at 16:00", "the morning of"}, "together", false, false)
+	none := seedEvent(t, db, coupleID, a, "Nothing set", 0, nil, "together", false, false)
+	done := seedEvent(t, db, coupleID, a, "Done", 0, []string{"1 hour before"}, "together", true, false)
+	didnt := seedEvent(t, db, coupleID, a, "Didnt", 0, []string{"1 hour before"}, "together", false, true)
+	mine := seedEvent(t, db, coupleID, a, "Dentist", 0, []string{"at 09:00"}, "mine", false, false)
+
+	got, err := repo.DueEventReminders(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("DueEventReminders: %v", err)
+	}
+
+	perUser := map[uuid.UUID]map[string]int{}
+	for _, c := range got {
+		if perUser[c.EventID] == nil {
+			perUser[c.EventID] = map[string]int{}
+		}
+		perUser[c.EventID][c.UserID.String()+"|"+c.Reminder]++
+	}
+
+	// Three reminders, two partners: six candidates, one for each pairing.
+	if n := len(perUser[several]); n != 6 {
+		t.Errorf("an event with three reminders gave %d candidates for two people, want 6: %v", n, perUser[several])
+	}
+	for _, r := range []string{"1 hour before", "at 16:00", "the morning of"} {
+		for _, u := range []uuid.UUID{a, b} {
+			if perUser[several][u.String()+"|"+r] != 1 {
+				t.Errorf("no single candidate for %s / %q", u, r)
+			}
+		}
+	}
+	for name, id := range map[string]uuid.UUID{"no reminders": none, "done": done, "didnt_happen": didnt} {
+		if len(perUser[id]) != 0 {
+			t.Errorf("%s still came back to be reminded about: %v", name, perUser[id])
+		}
+	}
+	// A mine event's reminder is its creator's alone.
+	if len(perUser[mine]) != 1 || perUser[mine][a.String()+"|at 09:00"] != 1 {
+		t.Errorf("a mine event's reminders = %v, want only its creator's", perUser[mine])
+	}
+}
+
+func TestPostgresRepository_EndedEvents_SkipsAnsweredOnes(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := notifications.NewPostgresRepository(db)
+	coupleID, a, b := pair(t, db)
+
+	open := seedEvent(t, db, coupleID, a, "Open", -1, nil, "together", false, false)
+	done := seedEvent(t, db, coupleID, a, "Done", -1, nil, "together", true, false)
+	didnt := seedEvent(t, db, coupleID, a, "Didnt", -1, nil, "together", false, true)
+
+	// Bo turned follow-ups off; Ada never touched hers.
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO notification_preferences (user_id, event_followups) VALUES ($1, false)
+	`, b); err != nil {
+		t.Fatalf("set preference: %v", err)
+	}
+
+	got, err := repo.EndedEvents(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("EndedEvents: %v", err)
+	}
+	followups := map[uuid.UUID]map[uuid.UUID]bool{}
+	for _, c := range got {
+		if followups[c.EventID] == nil {
+			followups[c.EventID] = map[uuid.UUID]bool{}
+		}
+		followups[c.EventID][c.UserID] = c.Prefs.EventFollowups
+	}
+
+	if len(followups[open]) != 2 {
+		t.Fatalf("an event nobody has answered came back for %d people, want 2", len(followups[open]))
+	}
+	// The switch that gates "how was it?" is the one read, not event_reminders.
+	if !followups[open][a] || followups[open][b] {
+		t.Errorf("event_followups = %v, want Ada on and Bo off", followups[open])
+	}
+	if len(followups[done]) != 0 || len(followups[didnt]) != 0 {
+		t.Errorf("an event that has been answered came back: done=%v didnt_happen=%v", followups[done], followups[didnt])
+	}
+}

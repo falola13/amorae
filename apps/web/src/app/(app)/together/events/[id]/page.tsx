@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  useCompleteEvent,
   useDeleteEvent,
+  useEventOutcome,
   useEvent,
   useChecklist,
   usePatchEvent,
@@ -14,17 +14,19 @@ import {
   canManageEvent,
   eventAddedByLabel,
   eventOwnerLabel,
-  REMINDER_OPTIONS,
+  eventPhase,
+  nowLabel,
 } from "@/features/together/events";
 import { KeepAsMemorySheet } from "@/features/together/components/keep-as-memory-sheet";
 import { useCouple } from "@/features/couple/hooks";
-import { stillAhead } from "@/lib/dates";
+import { RemindersEditor } from "@/features/together/components/reminders-editor";
 import { today } from "@/lib/today";
 import { Icon } from "@/components/icons";
 import { PickRow } from "@/components/ui/pick-row";
 import type { Event } from "@/lib/api/types";
 import type { EventInput } from "@/lib/api/schemas";
 import { weekdayDate } from "@/lib/dates";
+import type { EventOutcome } from "@/features/together/api";
 import { routes } from "@/lib/routes";
 import { Main } from "@/components/layout/screen";
 import { QueryState, inPage } from "@/components/ui/query-state";
@@ -75,14 +77,11 @@ function When({ event, canEdit }: { event: Event; canEdit: boolean }) {
         onChange={canEdit ? set("location") : undefined}
         placeholder="Add a place"
       />
-      <PickRow
-        icon="bell"
-        label="Reminder"
-        value={event.reminder ?? ""}
-        options={REMINDER_OPTIONS}
-        onChange={canEdit ? set("reminder") : undefined}
-        placeholder="None"
-        last
+      <RemindersEditor
+        value={event.reminders ?? []}
+        onChange={
+          canEdit ? (next) => patch.mutate({ id: event.id, patch: { reminders: next } }) : undefined
+        }
       />
     </div>
   );
@@ -114,7 +113,7 @@ export default function EventDetail() {
   const router = useRouter();
   const ev = useEvent(id);
   const toggle = useChecklist();
-  const complete = useCompleteEvent();
+  const outcome = useEventOutcome();
   const remove = useDeleteEvent();
   const couple = useCouple();
   const meId = couple.data?.me.id;
@@ -144,8 +143,21 @@ export default function EventDetail() {
         }
       >
         {(e) => {
-          const over = !stillAhead(e.date, e.start_time, today());
+          const phase = eventPhase(e, today());
+          const over = phase === "over";
+          const ongoing = phase === "ongoing";
           const canEdit = canManageEvent(e, meId);
+          // Leaving for the list only where the event drops out of view (marking it done from the page).
+          const setOutcome = (o: EventOutcome, leave = false) =>
+            outcome.mutate(
+              { id: e.id, outcome: o },
+              leave
+                ? {
+                    onSuccess: () => router.replace(routes.events),
+                    onQueued: () => router.replace(routes.events),
+                  }
+                : undefined,
+            );
           const ownerLabel = eventOwnerLabel(e, meId, partnerName);
           const addedByLabel = eventAddedByLabel(e, meId, partnerName);
           return (
@@ -157,6 +169,16 @@ export default function EventDetail() {
                 <Title size="lg" className="mt-2">
                   {e.title}
                 </Title>
+                {ongoing ? (
+                  <Para size="support" className="mt-1 font-semibold text-plum">
+                    Happening now{e.end_time ? ` · ${nowLabel(e).replace("Now · ", "")}` : ""}
+                  </Para>
+                ) : null}
+                {e.didnt_happen ? (
+                  <Para size="support" className="mt-1">
+                    Marked as didn&rsquo;t happen.
+                  </Para>
+                ) : null}
                 {ownerLabel || addedByLabel ? (
                   <Para size="support" className="mt-0.5">
                     {ownerLabel ?? addedByLabel}
@@ -193,51 +215,42 @@ export default function EventDetail() {
               </Main>
               {canEdit ? (
                 <BottomActions>
-                  {/* Once an event is over, "mark as done" is replaced by keep-as-memory / it-didn't-happen. */}
-                  {e.done || over ? (
-                    <Button variant="secondary" icon="image" onClick={() => setKeeping(true)}>
-                      {e.done ? "Keep it as a memory" : "Keep this as a memory"}
-                    </Button>
-                  ) : null}
-                  {!e.done && over ? (
-                    <Button
-                      variant="text"
-                      onClick={() =>
-                        complete.mutate(
-                          { id: e.id, done: true },
-                          {
-                            onSuccess: () => router.replace(routes.events),
-                            onQueued: () => router.replace(routes.events),
-                          },
-                        )
-                      }
-                    >
-                      It didn&rsquo;t happen
-                    </Button>
-                  ) : null}
-                  {!e.done && !over ? (
+                  {/* Before it's over: mark it done. After: say how it went. */}
+                  {!e.done && !e.didnt_happen && !over ? (
                     <Button
                       variant="secondary"
                       icon="check"
-                      onClick={() =>
-                        complete.mutate(
-                          { id: e.id, done: true },
-                          {
-                            onSuccess: () => router.replace(routes.events),
-                            onQueued: () => router.replace(routes.events),
-                          },
-                        )
-                      }
+                      onClick={() => setOutcome("happened", true)}
                     >
                       Mark as done
                     </Button>
                   ) : null}
+                  {!e.done && !e.didnt_happen && over ? (
+                    <>
+                      <Button icon="check" onClick={() => setOutcome("happened", true)}>
+                        We did it
+                      </Button>
+                      <Button variant="secondary" icon="image" onClick={() => setKeeping(true)}>
+                        Keep as a memory
+                      </Button>
+                      <Button variant="text" onClick={() => setOutcome("didnt_happen", true)}>
+                        It didn&rsquo;t happen
+                      </Button>
+                    </>
+                  ) : null}
                   {e.done ? (
-                    <Button
-                      variant="text"
-                      onClick={() => complete.mutate({ id: e.id, done: false })}
-                    >
-                      Not done yet
+                    <>
+                      <Button variant="secondary" icon="image" onClick={() => setKeeping(true)}>
+                        Keep it as a memory
+                      </Button>
+                      <Button variant="text" onClick={() => setOutcome("none")}>
+                        Not done after all
+                      </Button>
+                    </>
+                  ) : null}
+                  {e.didnt_happen ? (
+                    <Button variant="text" onClick={() => setOutcome("happened")}>
+                      It happened after all
                     </Button>
                   ) : null}
                   <Button variant="text" className="text-red" onClick={() => setConfirming(true)}>

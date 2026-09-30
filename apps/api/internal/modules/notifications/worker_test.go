@@ -493,6 +493,12 @@ func TestEventReminderAt(t *testing.T) {
 		{name: "all-day event", start: "", reminder: "1 hour before", want: "2026-09-25 08:00"},
 		{name: "all-day, at the time", start: "", reminder: "at the time", want: "2026-09-25 08:00"},
 		{name: "all-day, day before", start: "", reminder: "1 day before", want: "2026-09-24 08:00"},
+		// A set clock time on the event's day, with or without a start of its own.
+		{name: "at a clock time", start: "19:30", reminder: "at 16:00", want: "2026-09-25 16:00"},
+		{name: "at a clock time, all-day", start: "", reminder: "at 14:15", want: "2026-09-25 14:15"},
+		{name: "at a clock time, after the start", start: "19:30", reminder: "at 21:00", want: "2026-09-25 21:00"},
+		{name: "a clock time that is not one", start: "19:30", reminder: "at 25:00", none: true},
+		{name: "a clock time without its minutes", start: "19:30", reminder: "at 9", none: true},
 		{name: "no reminder", start: "19:30", reminder: "", none: true},
 		{name: "a phrase we cannot read", start: "19:30", reminder: "when you get a chance", none: true},
 		{name: "zero is not a lead", start: "19:30", reminder: "0 hours before", none: true},
@@ -1149,4 +1155,49 @@ func TestForWritten_PrayerAnswered(t *testing.T) {
 			t.Error("a switch that is off still sent a notification")
 		}
 	})
+}
+
+// Each reminder an event carries arrives as a candidate of its own, so the
+// worker sends whichever are due, each once.
+func TestWorkerTick_EventWithSeveralReminders(t *testing.T) {
+	// The worker's clock reads 18:30 UTC on the 23rd.
+	event := func(reminder string) EventCandidate {
+		return EventCandidate{
+			UserID: uuid.New(), EventID: uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+			Title: "Dinner at Terra", Timezone: "UTC",
+			Date: time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC), StartTime: "20:00",
+			Reminder: reminder, Prefs: Preferences{EventReminders: true},
+		}
+	}
+	user := uuid.New()
+	one, two, later := event("at 18:00"), event("at 18:30"), event("at the time")
+	one.UserID, two.UserID, later.UserID = user, user, user
+
+	repo := newFakeRepo()
+	repo.events = []EventCandidate{one, two, later}
+	repo.subs = []Subscription{{Endpoint: "https://push.example/abc", P256dh: "k", Auth: "a"}}
+	sender := &fakeSender{}
+	w := workerFor(repo, sender)
+
+	sent, err := w.Tick(context.Background())
+	if err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if sent != 2 {
+		t.Errorf("sent = %d, want the two that are due and not the one still to come", sent)
+	}
+
+	sent, err = w.Tick(context.Background())
+	if err != nil {
+		t.Fatalf("second Tick: %v", err)
+	}
+	if sent != 0 || len(sender.sent) != 2 {
+		t.Errorf("a second tick re-sent them: sent=%d messages=%d", sent, len(sender.sent))
+	}
+
+	first, _ := ForEventReminder(one, time.Date(2026, 9, 23, 18, 30, 0, 0, time.UTC))
+	second, _ := ForEventReminder(two, time.Date(2026, 9, 23, 18, 30, 0, 0, time.UTC))
+	if first.Key == second.Key {
+		t.Error("two reminders on one event share a key, so only one of them could be sent")
+	}
 }

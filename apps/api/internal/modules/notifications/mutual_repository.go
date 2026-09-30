@@ -258,8 +258,7 @@ func (r *PostgresRepository) EndedEvents(ctx context.Context, now time.Time) ([]
 		SELECT u.id, e.id, e.title, c.timezone, e.date,
 		       COALESCE(to_char(e.start_time, 'HH24:MI'), ''),
 		       COALESCE(to_char(e.end_time, 'HH24:MI'), ''),
-		       COALESCE(e.reminder, ''),
-		       COALESCE(p.event_reminders, true)
+		       COALESCE(p.event_followups, true)
 		FROM events e
 		JOIN couples c ON c.id = e.couple_id
 		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
@@ -267,6 +266,7 @@ func (r *PostgresRepository) EndedEvents(ctx context.Context, now time.Time) ([]
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
 		  AND NOT e.done
+		  AND NOT e.didnt_happen
 		  AND e.date BETWEEN ($1 AT TIME ZONE c.timezone)::date - 2
 		                 AND ($1 AT TIME ZONE c.timezone)::date
 		  -- A "mine" event is only ever its creator's to be asked about.
@@ -281,7 +281,7 @@ func (r *PostgresRepository) EndedEvents(ctx context.Context, now time.Time) ([]
 	for rows.Next() {
 		var c EventCandidate
 		if err := rows.Scan(&c.UserID, &c.EventID, &c.Title, &c.Timezone, &c.Date,
-			&c.StartTime, &c.EndTime, &c.Reminder, &c.Prefs.EventReminders); err != nil {
+			&c.StartTime, &c.EndTime, &c.Prefs.EventFollowups); err != nil {
 			return nil, fmt.Errorf("scanning an event that is over: %w", err)
 		}
 		out = append(out, c)

@@ -12,6 +12,8 @@ import {
   useMilestones,
 } from "@/features/together/hooks";
 import { useAnswered } from "@/features/prayers/hooks";
+import { eventPhase } from "@/features/together/events";
+import type { Event } from "@/lib/api/types";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
 import { iso, longDate, relativeDay, time12 } from "@/lib/dates";
 import { isAbsence } from "@/lib/api/envelope";
@@ -44,10 +46,25 @@ export default function Together() {
   const partner = couple.data?.partner?.display_name ?? "your partner";
   const todayIso = iso(today());
 
-  const upcoming = (events.data ?? [])
-    .filter((e) => !e.done && e.date >= todayIso)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const nextEvent = upcoming[0];
+  const now = today();
+  const phases = (events.data ?? []).map((e) => ({ e, phase: eventPhase(e, now) }));
+  const byStart = (a: Event, b: Event) =>
+    (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? ""));
+  const ongoingCount = phases.filter((x) => x.phase === "ongoing").length;
+  const upcoming = phases
+    .filter((x) => x.phase === "upcoming")
+    .map((x) => x.e)
+    .sort(byStart);
+  const nextEvent = phases
+    .filter((x) => x.phase !== "over")
+    .map((x) => x.e)
+    .sort(byStart)[0];
+  const eventsLine = [
+    ongoingCount ? `${ongoingCount} happening now` : "",
+    upcoming.length ? `${upcoming.length} coming up` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const activeGoals = (goals.data ?? []).filter((g) => !g.done).length;
   // The shared calendar day, not "my first unanswered one" — the two of you
   // are on the same day now.
@@ -96,10 +113,7 @@ export default function Together() {
           <Row
             icon="pin"
             title="Events"
-            sub={summary(
-              events,
-              upcoming.length ? `${upcoming.length} coming up` : "Add something you’d love to do",
-            )}
+            sub={summary(events, eventsLine || "Add something you’d love to do")}
             href={routes.events}
             last
           />

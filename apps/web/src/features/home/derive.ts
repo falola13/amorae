@@ -1,23 +1,29 @@
 import { sumOf } from "@/features/together/goals";
 import type { Event, Goal, NotificationPrefs, PrayerWeek } from "@/lib/api/types";
 import { isApiError } from "@/lib/api/errors";
-import { stillAhead, time12 } from "@/lib/dates";
+import { eventPhase } from "@/features/together/events";
+import { time12 } from "@/lib/dates";
 
 // True if no partner, or the API's 409 waiting_for_partner (only returned once a week was asked for).
 export const isAlone = (hasPartner: boolean, weekError: unknown): boolean =>
   !hasPartner || (isApiError(weekError) && weekError.code === "waiting_for_partner");
 
-/** Events not yet done and not yet over, earliest first. */
+/** Events still coming up or happening now, earliest first. */
 export const upcomingEvents = (events: Event[], now: Date): Event[] =>
   events
-    .filter((e) => !e.done && stillAhead(e.date, e.start_time, now))
+    .filter((e) => eventPhase(e, now) !== "over")
     .sort((a, b) => (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")));
 
-export const todayEvent = (upcoming: Event[], todayIso: string): Event | undefined =>
-  upcoming.find((e) => e.date === todayIso);
+/** Today's event: one on today's date, or an overnight one from yesterday that's still going. */
+export const todayEvent = (upcoming: Event[], todayIso: string, now?: Date): Event | undefined =>
+  upcoming.find((e) => e.date === todayIso || (now && eventPhase(e, now) === "ongoing"));
 
-export const nextUpcomingEvent = (upcoming: Event[], todayIso: string): Event | undefined =>
-  upcoming.find((e) => e.date !== todayIso);
+export const nextUpcomingEvent = (
+  upcoming: Event[],
+  todayIso: string,
+  now?: Date,
+): Event | undefined =>
+  upcoming.find((e) => e.date !== todayIso && !(now && eventPhase(e, now) === "ongoing"));
 
 /** The one goal still in progress, with its running total. */
 export const activeGoal = (goals: Goal[]): { goal: Goal; total: number } | null => {
