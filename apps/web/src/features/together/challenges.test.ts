@@ -5,6 +5,8 @@ import {
   currentSeason,
   challengesLine,
   customProblem,
+  customPrompts,
+  linesToPrompts,
   dayDateLabel,
   easterSunday,
   groupTemplates,
@@ -13,7 +15,6 @@ import {
   isCatchUp,
   opensLabel,
   pickSuggestions,
-  resizePrompts,
   runningKeys,
   shownDay,
   todaysDay,
@@ -223,18 +224,31 @@ describe("groupTemplates", () => {
 });
 
 describe("custom challenge helpers", () => {
-  it("resizes keeping what is written", () => {
-    expect(resizePrompts(["a", "b"], 4)).toEqual(["a", "b", "", ""]);
-    expect(resizePrompts(["a", "b", "c", "d"], 3)).toEqual(["a", "b", "c"]);
+  it("repeats one line for a habit — thirty days of the same thing", () => {
+    const p = customPrompts("same", "  No soda, fruit only ", 30, "");
+    expect(p).toHaveLength(30);
+    expect(new Set(p)).toEqual(new Set(["No soda, fruit only"]));
   });
-  it("keeps the count within 3 to 40", () => {
-    expect(resizePrompts([], 1)).toHaveLength(3);
-    expect(resizePrompts([], 99)).toHaveLength(40);
-    expect(resizePrompts([], Number.NaN)).toHaveLength(3);
+  it("takes a pasted list one line per day, ignoring blanks", () => {
+    expect(linesToPrompts("Pray\r\n\n  Cook \nWalk\n")).toEqual(["Pray", "Cook", "Walk"]);
+    expect(customPrompts("each", "ignored", 7, "a\nb\nc")).toEqual(["a", "b", "c"]);
+  });
+  it("allows up to a hundred days, not past it", () => {
+    expect(customProblem("T", customPrompts("same", "x", 100, ""))).toBeNull();
+    expect(customProblem("T", customPrompts("same", "x", 101, ""))).toBe(
+      "Choose between 3 and 100 days.",
+    );
+    expect(customProblem("T", customPrompts("same", "x", Number.NaN, ""))).toBe(
+      "Choose between 3 and 100 days.",
+    );
   });
   it("names the first problem", () => {
     expect(customProblem(" ", ["a", "b", "c"])).toBe("Give it a name.");
     expect(customProblem("T", ["a", "", "c"])).toBe("Each day needs a line.");
+    expect(customProblem("T", customPrompts("same", " ", 7, ""))).toBe("Each day needs a line.");
+    expect(customProblem("T", ["a", "b", "x".repeat(201)])).toBe(
+      "Keep each day under 200 characters.",
+    );
     expect(customProblem("T", ["a", "b", "c"])).toBeNull();
   });
 });
