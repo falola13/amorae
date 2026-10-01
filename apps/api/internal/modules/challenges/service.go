@@ -11,21 +11,26 @@ import (
 
 type Repository interface {
 	// Latest is the couple's newest challenge of any status, read as of
-	// `now` in their own zone; the active one, when there is one, is always
-	// the newest. ErrNotFound when they have never had one.
+	// `now` in their own zone; when any are active, the most recently started
+	// of those. ErrNotFound when they have never had one.
 	Latest(ctx context.Context, coupleID uuid.UUID, now time.Time) (Challenge, error)
+	// Active is every challenge the couple has going, oldest started first.
+	Active(ctx context.Context, coupleID uuid.UUID, now time.Time) ([]Challenge, error)
 	// Get is any one of the couple's challenges; ErrNoSuchChallenge otherwise.
 	Get(ctx context.Context, coupleID, id uuid.UUID, now time.Time) (Challenge, error)
 	// Past is the couple's finished and left challenges, newest first, with
 	// the caller's count and their partner's.
 	Past(ctx context.Context, coupleID, userID uuid.UUID) ([]Summary, error)
+	// Start begins a challenge unless the couple already has MaxActive going
+	// (ErrTooMany) or the same curated one (ErrAlreadyRunning).
 	Start(ctx context.Context, coupleID, createdBy uuid.UUID, t Template, on time.Time) (uuid.UUID, error)
-	// Record writes one person's entry for one day of the active challenge
+	// Record writes one person's entry for one day of an active challenge
 	// and, in the same write, finishes the challenge if that made every
 	// member's every day marked. ErrOver when it is no longer active.
-	Record(ctx context.Context, coupleID, userID uuid.UUID, n int, e Entry, at time.Time) error
-	// End leaves the active challenge, keeping it; ErrNotFound when none is.
-	End(ctx context.Context, coupleID uuid.UUID, at time.Time) error
+	Record(ctx context.Context, coupleID, userID, id uuid.UUID, n int, e Entry, at time.Time) error
+	// End leaves an active challenge, keeping it; ErrNotFound when it is not
+	// one that is going.
+	End(ctx context.Context, coupleID, id uuid.UUID, at time.Time) error
 	// SetReflection saves, or with "" removes, one person's reflection on a
 	// challenge that is over.
 	SetReflection(ctx context.Context, coupleID, userID, id uuid.UUID, text string, at time.Time) error
@@ -59,8 +64,27 @@ type Viewer struct {
 	Partner uuid.UUID
 }
 
-// Current is the challenge that is going; a couple with none — even one who
-// has just finished one — gets ErrNotFound.
+// Active is everything the couple has going, oldest started first; empty
+// when there is nothing.
+func (s *Service) Active(ctx context.Context, userID uuid.UUID) ([]Viewer, error) {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	list, err := s.repo.Active(ctx, coupleID, s.now())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Viewer, 0, len(list))
+	for _, c := range list {
+		out = append(out, Viewer{Challenge: c, Me: userID})
+	}
+	return out, nil
+}
+
+// Current is the most recently started challenge that is going; a couple
+// with none — even one who has just finished one — gets ErrNotFound. It is
+// what the older, single-challenge routes act on.
 func (s *Service) Current(ctx context.Context, userID uuid.UUID) (Viewer, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
@@ -113,10 +137,11 @@ func (s *Service) Start(ctx context.Context, userID uuid.UUID, in StartInput) (V
 	if err != nil {
 		return Viewer{}, err
 	}
-	if _, err := s.repo.Start(ctx, coupleID, userID, t, s.now()); err != nil {
+	id, err := s.repo.Start(ctx, coupleID, userID, t, s.now())
+	if err != nil {
 		return Viewer{}, err
 	}
-	return s.Current(ctx, userID)
+	return s.Get(ctx, userID, id)
 }
 
 func templateFor(in StartInput) (Template, error) {
@@ -132,7 +157,7 @@ func templateFor(in StartInput) (Template, error) {
 // Mark records what this partner says about a day, and only theirs (DEC-30):
 // a mark, a note, or both. Days open on the calendar, one a day, but a day
 // already open stays open.
-func (s *Service) Mark(ctx context.Context, userID uuid.UUID, n int, done, skipped *bool, note *string) (Viewer, error) {
+func (s *Service) Mark(ctx context.Context, userID, id uuid.UUID, n int, done, skipped *bool, note *string) (Viewer, error) {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
 		return Viewer{}, err
@@ -143,7 +168,7 @@ func (s *Service) Mark(ctx context.Context, userID uuid.UUID, n int, done, skipp
 		return Viewer{}, err
 	}
 
-	c, err := s.repo.Latest(ctx, coupleID, s.now())
+	c, err := s.repo.Get(ctx, coupleID, id, s.now())
 	if err != nil {
 		return Viewer{}, err
 	}
@@ -157,7 +182,7 @@ func (s *Service) Mark(ctx context.Context, userID uuid.UUID, n int, done, skipp
 		return Viewer{}, ErrDayNotOpen
 	}
 
-	if err := s.repo.Record(ctx, coupleID, userID, n, entry, s.now()); err != nil {
+	if err := s.repo.Record(ctx, coupleID, userID, c.ID, n, entry, s.now()); err != nil {
 		return Viewer{}, err
 	}
 	if entry.SetMark {
@@ -169,14 +194,15 @@ func (s *Service) Mark(ctx context.Context, userID uuid.UUID, n int, done, skipp
 	return s.Get(ctx, userID, c.ID)
 }
 
-// Leave ends the active challenge but keeps it — its days, marks and notes —
-// so it can be looked back on and something new can be started.
-func (s *Service) Leave(ctx context.Context, userID uuid.UUID) error {
+// Leave ends one active challenge but keeps it — its days, marks and notes —
+// so it can be looked back on and something new can be started. One that is
+// already over is not there to leave: ErrNotFound.
+func (s *Service) Leave(ctx context.Context, userID, id uuid.UUID) error {
 	coupleID, err := s.couples.CoupleFor(ctx, userID)
 	if err != nil {
 		return err
 	}
-	return s.repo.End(ctx, coupleID, s.now())
+	return s.repo.End(ctx, coupleID, id, s.now())
 }
 
 // Reflect saves what this person took from a challenge that is over; empty

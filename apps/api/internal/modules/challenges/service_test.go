@@ -13,6 +13,7 @@ import (
 
 type fakeRepo struct {
 	current  Challenge
+	active   []Challenge
 	records  int
 	entries  []Entry
 	started  []Template
@@ -23,6 +24,9 @@ type fakeRepo struct {
 func (r *fakeRepo) Latest(context.Context, uuid.UUID, time.Time) (Challenge, error) {
 	return r.current, nil
 }
+func (r *fakeRepo) Active(context.Context, uuid.UUID, time.Time) ([]Challenge, error) {
+	return r.active, nil
+}
 func (r *fakeRepo) Get(_ context.Context, _, id uuid.UUID, _ time.Time) (Challenge, error) {
 	if id != r.current.ID {
 		return Challenge{}, ErrNoSuchChallenge
@@ -32,14 +36,14 @@ func (r *fakeRepo) Get(_ context.Context, _, id uuid.UUID, _ time.Time) (Challen
 func (r *fakeRepo) Past(context.Context, uuid.UUID, uuid.UUID) ([]Summary, error) { return nil, nil }
 func (r *fakeRepo) Start(_ context.Context, _, _ uuid.UUID, t Template, _ time.Time) (uuid.UUID, error) {
 	r.started = append(r.started, t)
-	return uuid.New(), nil
+	return r.current.ID, nil
 }
-func (r *fakeRepo) Record(_ context.Context, _, _ uuid.UUID, _ int, e Entry, _ time.Time) error {
+func (r *fakeRepo) Record(_ context.Context, _, _, _ uuid.UUID, _ int, e Entry, _ time.Time) error {
 	r.records++
 	r.entries = append(r.entries, e)
 	return nil
 }
-func (r *fakeRepo) End(context.Context, uuid.UUID, time.Time) error {
+func (r *fakeRepo) End(context.Context, uuid.UUID, uuid.UUID, time.Time) error {
 	r.ended++
 	return nil
 }
@@ -87,7 +91,7 @@ func TestMark_PokesOnlyWhenMarking(t *testing.T) {
 
 	done := true
 	t.Run("marking a day pokes", func(t *testing.T) {
-		if _, err := svc.Mark(context.Background(), uuid.New(), 1, &done, nil, nil); err != nil {
+		if _, err := svc.Mark(context.Background(), uuid.New(), repo.current.ID, 1, &done, nil, nil); err != nil {
 			t.Fatalf("Mark: %v", err)
 		}
 		if poker.pokes != 1 {
@@ -101,7 +105,7 @@ func TestMark_PokesOnlyWhenMarking(t *testing.T) {
 	t.Run("clearing a mark pokes nobody", func(t *testing.T) {
 		poker.pokes = 0
 		notDone := false
-		if _, err := svc.Mark(context.Background(), uuid.New(), 1, &notDone, nil, nil); err != nil {
+		if _, err := svc.Mark(context.Background(), uuid.New(), repo.current.ID, 1, &notDone, nil, nil); err != nil {
 			t.Fatalf("Mark (clear): %v", err)
 		}
 		if poker.pokes != 0 {
@@ -115,7 +119,7 @@ func TestMark_PokesOnlyWhenMarking(t *testing.T) {
 	t.Run("a note on its own pokes nobody", func(t *testing.T) {
 		poker.pokes = 0
 		note := "That was lovely."
-		if _, err := svc.Mark(context.Background(), uuid.New(), 1, nil, nil, &note); err != nil {
+		if _, err := svc.Mark(context.Background(), uuid.New(), repo.current.ID, 1, nil, nil, &note); err != nil {
 			t.Fatalf("Mark (note): %v", err)
 		}
 		e := repo.entries[2]
@@ -134,7 +138,7 @@ func TestMark_Pacing(t *testing.T) {
 		if note == nil {
 			d = &done
 		}
-		_, err := svc.Mark(context.Background(), uuid.New(), n, d, nil, note)
+		_, err := svc.Mark(context.Background(), uuid.New(), repo.current.ID, n, d, nil, note)
 		return err
 	}
 
@@ -301,7 +305,7 @@ func TestLeave_GoesThroughEnd(t *testing.T) {
 	couple := uuid.New()
 	repo := &fakeRepo{current: running(couple, onDay(2))}
 	svc := NewService(repo, fakeCouples{id: couple}, time.Now, &fakePoker{})
-	if err := svc.Leave(context.Background(), uuid.New()); err != nil || repo.ended != 1 {
+	if err := svc.Leave(context.Background(), uuid.New(), repo.current.ID); err != nil || repo.ended != 1 {
 		t.Errorf("ended = %d, err = %v", repo.ended, err)
 	}
 }

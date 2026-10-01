@@ -15,9 +15,10 @@ import (
 
 var (
 	ErrNotFound = apperr.NotFound("challenge_not_found", "You don’t have a challenge going.")
-	// Only one challenge at a time.
-	ErrAlreadyRunning = apperr.Conflict("challenge_already_running",
-		"You already have a challenge going. Finish or leave that one first.")
+	// The same curated challenge twice at once; one they wrote can be repeated.
+	ErrAlreadyRunning = apperr.Conflict("challenge_already_running", "That one’s already running.")
+	// MaxActive going at once.
+	ErrTooMany         = apperr.Conflict("too_many_challenges", "Three at once is plenty — finish or end one first.")
 	ErrUnknownTemplate = apperr.Invalid("challenge_unknown", "That challenge isn’t one of ours.")
 	ErrUnknownDay      = apperr.NotFound("challenge_day_not_found", "That day isn’t part of this challenge.")
 	// Days open one at a time, on the couple's own calendar.
@@ -30,7 +31,8 @@ var (
 	ErrNoSuchChallenge = apperr.NotFound("challenge_not_found", "We can’t find that challenge.")
 )
 
-// Status is where a challenge is up to. Only one per couple is active.
+// Status is where a challenge is up to. A couple can have several active, up
+// to MaxActive.
 type Status string
 
 const (
@@ -38,6 +40,11 @@ const (
 	StatusFinished Status = "finished"
 	StatusEnded    Status = "ended"
 )
+
+// MaxActive is how many challenges a couple can have going at once. More than
+// this is not a practice, it is a pile; the limit is enforced when one is
+// started, not by the schema.
+const MaxActive = 3
 
 const (
 	MaxNoteRunes       = 280

@@ -14,7 +14,8 @@ export const useEvent = (id: string) =>
 export const useGoals = () => useQuery({ queryKey: keys.goals, queryFn: api.goals });
 export const useGoal = (id: string) =>
   useQuery({ queryKey: keys.goal(id), queryFn: () => api.goal(id), enabled: !!id });
-export const useChallenge = () => useQuery({ queryKey: keys.challenge, queryFn: api.challenge });
+export const useActiveChallenges = () =>
+  useQuery({ queryKey: keys.challengeActive, queryFn: api.challengeActive });
 export const useChallengeById = (id: string) =>
   useQuery({
     queryKey: keys.challengeById(id),

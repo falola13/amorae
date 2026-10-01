@@ -74,6 +74,41 @@ export function homeChallengeDay(c: Challenge | undefined): ChallengeDay | null 
   return d;
 }
 
+export interface HomeChallengeRow {
+  c: Challenge;
+  day: ChallengeDay;
+}
+
+/** How many running challenges a couple can have at once. */
+export const MAX_ACTIVE = 3;
+export const TOO_MANY = "Three at once is plenty — finish or end one first.";
+
+/** One row per running challenge whose today is open and unmarked, at most three. */
+export function homeChallengeRows(list: readonly Challenge[] | undefined): HomeChallengeRow[] {
+  const rows: HomeChallengeRow[] = [];
+  for (const c of list ?? []) {
+    const day = homeChallengeDay(c);
+    if (day) rows.push({ c, day });
+  }
+  return rows.slice(0, MAX_ACTIVE);
+}
+
+/** The day a running challenge is on: today's, or the last one when it has run past. */
+export const todaysDay = (c: Challenge): ChallengeDay | undefined =>
+  c.days.find((d) => d.n === c.today_n) ?? c.days[c.days.length - 1];
+
+/** The template keys that are running now, so the library can mark them. */
+export const runningKeys = (list: readonly Challenge[] | undefined): Set<string> =>
+  new Set((list ?? []).filter((c) => c.status === "active").map((c) => c.template));
+
+/** The Together hub's line for challenges. */
+export function challengesLine(list: readonly Challenge[]): string {
+  if (list.length === 0) return "Something short, together";
+  if (list.length === 1)
+    return `${list[0].title}, day ${shownDay(list[0])} of ${list[0].days.length}`;
+  return `${list.length} running`;
+}
+
 /** How many days each of you marked done. */
 export const doneCount = (c: Challenge): { mine: number; partner: number } => ({
   mine: c.days.filter((d) => d.done).length,

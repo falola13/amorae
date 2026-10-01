@@ -171,3 +171,64 @@ func TestPostgresRepository_BothMarkedDays_ActiveAndJustFinishedOnly(t *testing.
 		t.Errorf("a note counted as a mark: %d notifications", got)
 	}
 }
+
+// A couple can run several at once: every active one is a candidate for each
+// partner, oldest started first (the order the combined push names them in).
+func TestPostgresRepository_LiveChallenges_SeveralActiveOldestFirst(t *testing.T) {
+	db := dbtest.New(t)
+	repo := notifications.NewPostgresRepository(db)
+	coupleID, a, _ := pair(t, db)
+	older, _ := seedChallenge(t, db, coupleID, "active")
+	newer, _ := seedChallenge(t, db, coupleID, "active")
+	if _, err := db.Q(context.Background()).Exec(context.Background(), `
+		UPDATE challenges SET created_at = now() - interval '1 hour' WHERE id = $1
+	`, older); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	all, err := repo.LiveChallenges(context.Background())
+	if err != nil {
+		t.Fatalf("LiveChallenges: %v", err)
+	}
+	var order []uuid.UUID
+	for _, c := range all {
+		if c.UserID == a {
+			order = append(order, c.ChallengeID)
+		}
+	}
+	if len(order) != 2 || order[0] != older || order[1] != newer {
+		t.Errorf("Ada's candidates = %v, want [%v %v]", order, older, newer)
+	}
+}
+
+// "Both of you" is per challenge: two challenges that were both done on the
+// same day are two notifications, each keyed by its own challenge.
+func TestPostgresRepository_BothMarkedDays_PerChallenge(t *testing.T) {
+	db := dbtest.New(t)
+	repo := notifications.NewPostgresRepository(db)
+	coupleID, a, b := pair(t, db)
+	one, oneDays := seedChallenge(t, db, coupleID, "active")
+	two, twoDays := seedChallenge(t, db, coupleID, "active")
+	for _, day := range []uuid.UUID{oneDays[0], twoDays[0]} {
+		progress(t, db, day, a, strp("done"), "")
+		progress(t, db, day, b, strp("done"), "")
+	}
+
+	all, err := repo.BothMarkedDays(context.Background(), time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("BothMarkedDays: %v", err)
+	}
+	keys := map[string]bool{}
+	for _, c := range all {
+		if c.ChallengeID == one || c.ChallengeID == two {
+			n, ok := notifications.ForBothMarked(c)
+			if !ok {
+				continue
+			}
+			keys[c.UserID.String()+"/"+n.Key] = true
+		}
+	}
+	if len(keys) != 4 {
+		t.Errorf("distinct (person, key) pairs = %d, want 4: two people for each of two challenges (%v)", len(keys), keys)
+	}
+}

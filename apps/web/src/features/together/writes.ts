@@ -38,6 +38,14 @@ async function putPhoto(memoryID: string, photo: File): Promise<Memory> {
 const K =
   "the API keeps the reply against the key, so a second send replays the first answer instead of creating a second row.";
 
+/** What a challenge write refreshes: the running list, each one by id, the past list, the story. */
+const CHALLENGE_STATE = [
+  keys.challengeActive,
+  keys.challengesById,
+  keys.challengePast,
+  keys.timelineAll,
+] as const;
+
 export const togetherWrites = {
   // A create with no key of its own: replayed after a dropped response it would
   // make a second one. Online-only until the endpoint takes an idempotency key
@@ -166,37 +174,38 @@ export const togetherWrites = {
   startChallenge: defineWrite({
     mutationKey: ["challenge", "start"],
     mutationFn: (input: StartChallengeInput) => api.startChallenge(input),
-    invalidates: [keys.challenge, keys.timelineAll],
-    // Starting a second one is refused by the server, so a replay after a
-    // dropped response finds the one it already made.
-    idempotent: "one challenge at a time, enforced by a unique index on the couple.",
+    invalidates: CHALLENGE_STATE,
+    // Starting one that is already running is refused by the server, so a replay
+    // after a dropped response is refused rather than doubled.
+    idempotent: "the same challenge cannot run twice at once; a replay is refused, not doubled.",
   }),
   // The make-our-own form shows the server's field errors beside the fields, so no toast on top.
   startCustomChallenge: defineWrite({
     mutationKey: ["challenge", "start-custom"],
     mutationFn: (input: StartChallengeInput) => api.startChallenge(input),
-    invalidates: [keys.challenge, keys.timelineAll],
+    invalidates: CHALLENGE_STATE,
     handlesError: true,
     onlineOnly: true,
   }),
   leaveChallenge: defineWrite({
     mutationKey: ["challenge", "leave"],
-    mutationFn: () => api.leaveChallenge(),
-    invalidates: [keys.challenge, keys.timelineAll],
+    mutationFn: (id: string) => api.leaveChallenge(id),
+    invalidates: CHALLENGE_STATE,
     idempotent: "leaving one that has already gone leaves the same nothing behind.",
   }),
   challengeDay: defineWrite({
     mutationKey: ["challenge", "day"],
-    mutationFn: ({ n, patch }: { n: number; patch: ChallengeDayPatch }) =>
-      api.challengeDay(n, patch),
-    invalidates: [keys.challenge, keys.timelineAll],
+    mutationFn: ({ id, n, patch }: { id: string; n: number; patch: ChallengeDayPatch }) =>
+      api.challengeDay(id, n, patch),
+    invalidates: CHALLENGE_STATE,
     idempotent: "a patch of one numbered day; the same patch twice is the same day.",
     // Same reasoning as the checklist: a day you mark should look marked.
     // Only this person's own mark moves — the partner's is theirs (DEC-30).
-    optimistic: (qc, { n, patch }) => {
-      qc.setQueryData<Challenge>(keys.challenge, (c) =>
-        c ? { ...c, days: c.days.map((d) => (d.n === n ? { ...d, ...patch } : d)) } : c,
-      );
+    optimistic: (qc, { id, n, patch }) => {
+      const mark = (c: Challenge): Challenge =>
+        c.id === id ? { ...c, days: c.days.map((d) => (d.n === n ? { ...d, ...patch } : d)) } : c;
+      qc.setQueryData<Challenge[]>(keys.challengeActive, (list) => list?.map(mark));
+      qc.setQueryData<Challenge>(keys.challengeById(id), (c) => (c ? mark(c) : c));
     },
   }),
   challengeReflection: defineWrite({
