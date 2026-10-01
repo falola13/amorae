@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Main } from "@/components/layout/screen";
@@ -17,7 +17,7 @@ import {
 import { useChallengeDay, useLeaveChallenge } from "@/features/together/hooks";
 import type { Challenge, ChallengeDay } from "@/lib/api/types";
 import { iso } from "@/lib/dates";
-import { routes } from "@/lib/routes";
+import { keys } from "@/lib/query/keys";
 import { today } from "@/lib/today";
 import { dayDateLabel, isCatchUp, opensLabel, shownDay } from "../challenges";
 import { ChallengeNoteSheet } from "./challenge-note-sheet";
@@ -125,7 +125,7 @@ function DayItem({
 
 /** A challenge that is running: one shared "Day N of M", each day's marks and notes. */
 export function ChallengeActive({ c, partner }: { c: Challenge; partner: string }) {
-  const router = useRouter();
+  const qc = useQueryClient();
   const set = useChallengeDay();
   const leave = useLeaveChallenge();
   const [ending, setEnding] = useState(false);
@@ -136,7 +136,7 @@ export function ChallengeActive({ c, partner }: { c: Challenge; partner: string 
   const todayOpen = todayDay && !todayDay.done && !todayDay.skipped ? todayDay : null;
   const noted = noting ? c.days.find((d) => d.n === noting.n) : undefined;
 
-  const skip = (n: number) => set.mutate({ n, patch: { skipped: true } });
+  const skip = (n: number) => set.mutate({ id: c.id, n, patch: { skipped: true } });
   const save = (note: string) => {
     if (!noting) return;
     const { n, marking } = noting;
@@ -144,19 +144,21 @@ export function ChallengeActive({ c, partner }: { c: Challenge; partner: string 
     // Marking and noting go in one request, so the last day's note is not lost to the challenge closing.
     const patch = marking ? { done: true, ...(note ? { note } : {}) } : { note };
     set.mutate(
-      { n, patch },
+      { id: c.id, n, patch },
       {
         onSuccess: (v) => {
           close();
-          if (v.status !== "active") router.replace(routes.challenge(v.id));
+          // The last day closes it: show the finish view here, right away.
+          if (v.status !== "active") qc.setQueryData(keys.challengeById(v.id), v);
         },
         onQueued: close,
       },
     );
   };
   const end = () =>
-    leave.mutate(undefined, {
-      onSuccess: () => router.replace(routes.challenge(c.id)),
+    // Stay on this page: once it refreshes as ended, the finish view takes its place.
+    leave.mutate(c.id, {
+      onSuccess: () => setEnding(false),
       onQueued: () => setEnding(false),
     });
 

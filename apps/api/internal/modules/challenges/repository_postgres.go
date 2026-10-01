@@ -21,8 +21,8 @@ func NewPostgresRepository(db *database.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// The couple's newest challenge, active ones first: there is only ever one
-// of those, and it is always the newest.
+// The couple's newest challenge, active ones first — so with several going,
+// the most recently started of them.
 const latestQuery = `
 	SELECT ch.id, ch.couple_id, ch.template, ch.title, ch.status, ch.started_on,
 	       ($2 AT TIME ZONE c.timezone)::date, ch.ended_at, ch.created_by
@@ -47,6 +47,40 @@ func (r *PostgresRepository) Latest(ctx context.Context, coupleID uuid.UUID, now
 		return Challenge{}, ErrNotFound
 	}
 	return c, err
+}
+
+// Active reads each of the couple's active challenges, oldest started first.
+// At most MaxActive, so one read apiece is cheap enough.
+func (r *PostgresRepository) Active(ctx context.Context, coupleID uuid.UUID, now time.Time) ([]Challenge, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT id FROM challenges WHERE couple_id = $1 AND status = 'active' ORDER BY created_at, id
+	`, coupleID)
+	if err != nil {
+		return nil, fmt.Errorf("listing active challenges: %w", err)
+	}
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scanning an active challenge: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing active challenges: %w", err)
+	}
+
+	out := make([]Challenge, 0, len(ids))
+	for _, id := range ids {
+		c, err := r.Get(ctx, coupleID, id, now)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 func (r *PostgresRepository) Get(ctx context.Context, coupleID, id uuid.UUID, now time.Time) (Challenge, error) {
@@ -186,9 +220,10 @@ func (r *PostgresRepository) Past(ctx context.Context, coupleID, userID uuid.UUI
 	return out, nil
 }
 
-// Start writes the challenge and days together; the partial unique index on
-// active challenges enforces one at a time (racing taps produce one
-// challenge, not two).
+// Start writes the challenge and days together. The couple's row is locked
+// for the transaction so two starts at once count the same actives in turn
+// and cannot both slip past MaxActive; the partial unique index on active
+// templates is what keeps the same curated one from running twice.
 func (r *PostgresRepository) Start(ctx context.Context, coupleID, createdBy uuid.UUID, t Template, on time.Time) (uuid.UUID, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -196,6 +231,27 @@ func (r *PostgresRepository) Start(ctx context.Context, coupleID, createdBy uuid
 	}
 
 	err = r.db.InTx(ctx, func(ctx context.Context) error {
+		// NO KEY UPDATE conflicts with itself but not with the key-share lock the
+		// insert below takes on the same row.
+		var locked uuid.UUID
+		if err := r.db.Q(ctx).QueryRow(ctx, `
+			SELECT id FROM couples WHERE id = $1 FOR NO KEY UPDATE
+		`, coupleID).Scan(&locked); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("locking couple: %w", err)
+		}
+		var active int
+		if err := r.db.Q(ctx).QueryRow(ctx, `
+			SELECT count(*)::int FROM challenges WHERE couple_id = $1 AND status = 'active'
+		`, coupleID).Scan(&active); err != nil {
+			return fmt.Errorf("counting active challenges: %w", err)
+		}
+		if active >= MaxActive {
+			return ErrTooMany
+		}
+
 		// started_on uses the couple's local timezone, not the UTC instant,
 		// so a midnight-ish start lands on the right day.
 		if _, err := r.db.Q(ctx).Exec(ctx, `
@@ -231,14 +287,14 @@ func (r *PostgresRepository) Start(ctx context.Context, coupleID, createdBy uuid
 }
 
 // Record upserts one partner's entry; the partner's own row is never touched
-// (DEC-30). The active challenge is locked first so two people marking the
-// last days at once cannot both miss that the other finished it.
-func (r *PostgresRepository) Record(ctx context.Context, coupleID, userID uuid.UUID, n int, e Entry, at time.Time) error {
+// (DEC-30). The challenge is locked first so two people marking the last days
+// at once cannot both miss that the other finished it.
+func (r *PostgresRepository) Record(ctx context.Context, coupleID, userID, id uuid.UUID, n int, e Entry, at time.Time) error {
 	return r.db.InTx(ctx, func(ctx context.Context) error {
 		var challengeID uuid.UUID
 		err := r.db.Q(ctx).QueryRow(ctx, `
-			SELECT id FROM challenges WHERE couple_id = $1 AND status = 'active' FOR UPDATE
-		`, coupleID).Scan(&challengeID)
+			SELECT id FROM challenges WHERE id = $1 AND couple_id = $2 AND status = 'active' FOR UPDATE
+		`, id, coupleID).Scan(&challengeID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrOver
 		}
@@ -311,11 +367,11 @@ func (r *PostgresRepository) Record(ctx context.Context, coupleID, userID uuid.U
 	})
 }
 
-func (r *PostgresRepository) End(ctx context.Context, coupleID uuid.UUID, at time.Time) error {
+func (r *PostgresRepository) End(ctx context.Context, coupleID, id uuid.UUID, at time.Time) error {
 	tag, err := r.db.Q(ctx).Exec(ctx, `
 		UPDATE challenges SET status = 'ended', ended_at = $2, updated_at = $2
-		WHERE couple_id = $1 AND status = 'active'
-	`, coupleID, at)
+		WHERE id = $1 AND couple_id = $3 AND status = 'active'
+	`, id, at, coupleID)
 	if err != nil {
 		return fmt.Errorf("leaving challenge: %w", err)
 	}

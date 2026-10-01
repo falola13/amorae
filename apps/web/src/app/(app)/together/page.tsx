@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCouple } from "@/features/couple/hooks";
 import {
   useAppreciations,
-  useChallenge,
+  useActiveChallenges,
   useEvents,
   useGoals,
   useJournal,
@@ -12,6 +12,7 @@ import {
   useMilestones,
 } from "@/features/together/hooks";
 import { useAnswered } from "@/features/prayers/hooks";
+import { challengesLine } from "@/features/together/challenges";
 import { eventPhase } from "@/features/together/events";
 import type { Event } from "@/lib/api/types";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
@@ -37,7 +38,7 @@ export default function Together() {
   const couple = useCouple();
   const events = useEvents();
   const goals = useGoals();
-  const challenge = useChallenge();
+  const challenge = useActiveChallenges();
   const journal = useJournal();
   const memories = useMemories();
   const milestones = useMilestones();
@@ -68,11 +69,7 @@ export default function Together() {
   const activeGoals = (goals.data ?? []).filter((g) => !g.done).length;
   // The shared calendar day, not "my first unanswered one" — the two of you
   // are on the same day now.
-  const challengeLine = challenge.data
-    ? challenge.data.status === "active"
-      ? `${challenge.data.title}, day ${challenge.data.today_n} of ${challenge.data.days.length}`
-      : `${challenge.data.title}, finished`
-    : "Something short, together";
+  const challengeLine = challengesLine(challenge.data ?? []);
   const lastWritten = (journal.data ?? [])[0];
   const lastAppreciated = (appr.data ?? [])[0];
   const lastMemory = (memories.data ?? [])[0];

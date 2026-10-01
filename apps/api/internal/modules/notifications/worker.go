@@ -363,8 +363,10 @@ func ForChallenge(c ChallengeCandidate, now time.Time) (Notification, bool) {
 	return Notification{
 		UserID: c.UserID,
 		Kind:   KindChallenge,
-		// Keyed per day, like the prayer reminder, so retries send at most once.
-		Key: c.ChallengeID.String() + ":" + today.Format(time.DateOnly),
+		// Keyed per person per day, not per challenge: however many a couple
+		// has running, ForChallenges folds them into one push, so retries
+		// send at most once.
+		Key: today.Format(time.DateOnly),
 		Message: push.Message{
 			Title: c.Title,
 			Body:  fmt.Sprintf("Day %d of %d is waiting for you.", c.Day, c.Days),
@@ -372,6 +374,39 @@ func ForChallenge(c ChallengeCandidate, now time.Time) (Notification, bool) {
 			Tag:   KindChallenge,
 		},
 	}, true
+}
+
+// ForChallenges is ForChallenge across everything a couple has running: one
+// push per person per day, however many challenges are waiting. One keeps
+// its own message; two or more are a single "n challenges today" naming them,
+// in the order given (the repository gives them oldest-started first). Each
+// still stops by itself after its last day, since ForChallenge decides that.
+func ForChallenges(cs []ChallengeCandidate, now time.Time) []Notification {
+	var order []uuid.UUID
+	waiting := map[uuid.UUID][]Notification{}
+	titles := map[uuid.UUID][]string{}
+	for _, c := range cs {
+		n, ok := ForChallenge(c, now)
+		if !ok {
+			continue
+		}
+		if _, seen := waiting[c.UserID]; !seen {
+			order = append(order, c.UserID)
+		}
+		waiting[c.UserID] = append(waiting[c.UserID], n)
+		titles[c.UserID] = append(titles[c.UserID], c.Title)
+	}
+
+	out := make([]Notification, 0, len(order))
+	for _, user := range order {
+		n := waiting[user][0]
+		if len(waiting[user]) > 1 {
+			n.Message.Title = fmt.Sprintf("%d challenges today", len(waiting[user]))
+			n.Message.Body = strings.Join(titles[user], " · ")
+		}
+		out = append(out, n)
+	}
+	return out
 }
 
 // statusDraft mirrors the prayers module's value without importing it — one
@@ -652,11 +687,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	for _, c := range challenges {
-		if n, ok := ForChallenge(c, now); ok {
-			due = append(due, n)
-		}
-	}
+	due = append(due, ForChallenges(challenges, now)...)
 
 	bothMarked, err := w.repo.BothMarkedDays(ctx, now.Add(-mutualGrace))
 	if err != nil {

@@ -13,10 +13,14 @@ export const keys = {
   event: (id: string) => ["events", id] as const,
   goals: ["goals"] as const,
   goal: (id: string) => ["goals", id] as const,
-  /** Prefix of every challenge query: the current one, templates, past, and each by id. */
+  /** Prefix of every challenge query: the running ones, templates, past, and each by id. */
   challenge: ["challenge"] as const,
+  /** Every running challenge, oldest first. */
+  challengeActive: ["challenge", "active"] as const,
   challengeTemplates: ["challenge", "templates"] as const,
   challengePast: ["challenge", "past"] as const,
+  /** Prefix of every challengeById key. */
+  challengesById: ["challenge", "by"] as const,
   challengeById: (id: string) => ["challenge", "by", id] as const,
   journal: ["journal"] as const,
   appreciations: ["appreciations"] as const,

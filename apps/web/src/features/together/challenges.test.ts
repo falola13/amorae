@@ -3,16 +3,20 @@ import { describe, expect, it } from "vitest";
 import type { Challenge, ChallengeDay, ChallengeTemplate } from "@/lib/api/types";
 import {
   currentSeason,
+  challengesLine,
   customProblem,
   dayDateLabel,
   easterSunday,
   groupTemplates,
   homeChallengeDay,
+  homeChallengeRows,
   isCatchUp,
   opensLabel,
   pickSuggestions,
   resizePrompts,
+  runningKeys,
   shownDay,
+  todaysDay,
 } from "./challenges";
 
 const day = (n: number, over: Partial<ChallengeDay> = {}): ChallengeDay => ({
@@ -116,6 +120,49 @@ describe("homeChallengeDay", () => {
     expect(homeChallengeDay(challenge({ days: [day(1), day(2, { open: false })] }))).toBeNull();
     expect(homeChallengeDay(challenge({ status: "finished" }))).toBeNull();
     expect(homeChallengeDay(undefined)).toBeNull();
+  });
+});
+
+describe("homeChallengeRows", () => {
+  it("lists each running challenge whose today is open and unmarked", () => {
+    const a = challenge({ id: "a" });
+    const b = challenge({ id: "b", days: [day(1), day(2, { done: true })] });
+    const c = challenge({ id: "c", status: "finished" });
+    const d = challenge({ id: "d" });
+    expect(homeChallengeRows([a, b, c, d]).map((r) => r.c.id)).toEqual(["a", "d"]);
+    expect(homeChallengeRows([a, b, c, d])[0].day.n).toBe(2);
+  });
+  it("is empty with none, or when everything is marked", () => {
+    expect(homeChallengeRows(undefined)).toEqual([]);
+    expect(homeChallengeRows([])).toEqual([]);
+    expect(homeChallengeRows([challenge({ days: [day(1), day(2, { skipped: true })] })])).toEqual(
+      [],
+    );
+  });
+  it("never shows more than three", () => {
+    const list = ["a", "b", "c", "d"].map((id) => challenge({ id }));
+    expect(homeChallengeRows(list)).toHaveLength(3);
+  });
+});
+
+describe("running state", () => {
+  it("collects the templates that are running", () => {
+    const keys = runningKeys([
+      challenge({ template: "x" }),
+      challenge({ template: "y", status: "ended" }),
+    ]);
+    expect(keys.has("x")).toBe(true);
+    expect(keys.has("y")).toBe(false);
+    expect(runningKeys(undefined).size).toBe(0);
+  });
+  it("finds today's day, clamped to the last", () => {
+    expect(todaysDay(challenge())?.n).toBe(2);
+    expect(todaysDay(challenge({ today_n: 9 }))?.n).toBe(3);
+  });
+  it("words the hub line by how many run", () => {
+    expect(challengesLine([])).toBe("Something short, together");
+    expect(challengesLine([challenge()])).toBe("Seven, day 2 of 3");
+    expect(challengesLine([challenge(), challenge({ id: "c2" })])).toBe("2 running");
   });
 });
 

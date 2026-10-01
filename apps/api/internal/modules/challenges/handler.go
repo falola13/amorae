@@ -14,12 +14,13 @@ import (
 )
 
 type service interface {
+	Active(ctx context.Context, userID uuid.UUID) ([]Viewer, error)
 	Current(ctx context.Context, userID uuid.UUID) (Viewer, error)
 	Get(ctx context.Context, userID, id uuid.UUID) (Viewer, error)
 	Past(ctx context.Context, userID uuid.UUID) ([]Summary, error)
 	Start(ctx context.Context, userID uuid.UUID, in StartInput) (Viewer, error)
-	Mark(ctx context.Context, userID uuid.UUID, n int, done, skipped *bool, note *string) (Viewer, error)
-	Leave(ctx context.Context, userID uuid.UUID) error
+	Mark(ctx context.Context, userID, id uuid.UUID, n int, done, skipped *bool, note *string) (Viewer, error)
+	Leave(ctx context.Context, userID, id uuid.UUID) error
 	Reflect(ctx context.Context, userID, id uuid.UUID, text string) (Viewer, error)
 }
 
@@ -38,15 +39,21 @@ func NewHandler(svc service, p partners) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
-	// The literal paths (templates, current, past) win over {id} in the mux, so they are not read as an id.
+	// The literal paths (templates, active, current, past) win over {id} in the mux, so they are not read as an id.
 	r.HandleAuthed("GET /challenges/templates", http.HandlerFunc(h.templates))
+	r.HandleAuthed("GET /challenges/active", http.HandlerFunc(h.active))
+	// current, and the two /current routes below, are aliases for older
+	// clients from when a couple had one challenge: they act on the most
+	// recently started one that is going.
 	r.HandleAuthed("GET /challenges/current", http.HandlerFunc(h.current))
 	r.HandleAuthed("GET /challenges/past", http.HandlerFunc(h.past))
 	r.HandleAuthed("GET /challenges/{id}", http.HandlerFunc(h.byID))
 	r.HandleAuthed("PUT /challenges/{id}/reflection", http.HandlerFunc(h.reflect))
 	r.HandleAuthed("POST /challenges", http.HandlerFunc(h.start))
-	r.HandleAuthed("DELETE /challenges/current", http.HandlerFunc(h.leave))
-	r.HandleAuthed("PATCH /challenges/current/days/{n}", http.HandlerFunc(h.markDay))
+	r.HandleAuthed("PATCH /challenges/{id}/days/{n}", http.HandlerFunc(h.markDay))
+	r.HandleAuthed("DELETE /challenges/{id}", http.HandlerFunc(h.leave))
+	r.HandleAuthed("DELETE /challenges/current", http.HandlerFunc(h.leaveCurrent))
+	r.HandleAuthed("PATCH /challenges/current/days/{n}", http.HandlerFunc(h.markCurrentDay))
 }
 
 // The shape in apps/web/src/lib/api/types.ts. done/skipped/note are the
@@ -182,6 +189,23 @@ func (h *Handler) templates(w http.ResponseWriter, r *http.Request) {
 	httpx.Data(w, http.StatusOK, out)
 }
 
+func (h *Handler) active(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	list, err := h.svc.Active(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	out := make([]challengeDTO, 0, len(list))
+	for _, v := range list {
+		out = append(out, toDTO(h.withPartner(r, v)))
+	}
+	httpx.Data(w, http.StatusOK, out)
+}
+
 func (h *Handler) current(w http.ResponseWriter, r *http.Request) {
 	userID, ok := caller(w, r)
 	if !ok {
@@ -249,7 +273,30 @@ func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.svc.Leave(r.Context(), userID); err != nil {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		httpx.Error(w, r, ErrNoSuchChallenge)
+		return
+	}
+	h.leaveByID(w, r, userID, id)
+}
+
+// leaveCurrent is DELETE /challenges/current, for older clients.
+func (h *Handler) leaveCurrent(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.svc.Current(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	h.leaveByID(w, r, userID, v.ID)
+}
+
+func (h *Handler) leaveByID(w http.ResponseWriter, r *http.Request, userID, id uuid.UUID) {
+	if err := h.svc.Leave(r.Context(), userID, id); err != nil {
 		httpx.Error(w, r, err)
 		return
 	}
@@ -261,6 +308,29 @@ func (h *Handler) markDay(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		httpx.Error(w, r, ErrNoSuchChallenge)
+		return
+	}
+	h.mark(w, r, userID, id)
+}
+
+// markCurrentDay is PATCH /challenges/current/days/{n}, for older clients.
+func (h *Handler) markCurrentDay(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.svc.Current(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	h.mark(w, r, userID, v.ID)
+}
+
+func (h *Handler) mark(w http.ResponseWriter, r *http.Request, userID, id uuid.UUID) {
 	n, err := strconv.Atoi(r.PathValue("n"))
 	if err != nil || n < 1 {
 		httpx.Error(w, r, ErrUnknownDay)
@@ -271,7 +341,7 @@ func (h *Handler) markDay(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, r, err)
 		return
 	}
-	v, err := h.svc.Mark(r.Context(), userID, n, req.Done, req.Skipped, req.Note)
+	v, err := h.svc.Mark(r.Context(), userID, id, n, req.Done, req.Skipped, req.Note)
 	h.respond(w, r, v, err, http.StatusOK)
 }
 
@@ -299,11 +369,16 @@ func (h *Handler) respond(w http.ResponseWriter, r *http.Request, v Viewer, err 
 		httpx.Error(w, r, err)
 		return
 	}
-	// PartnerOf only affects labeling; an error here just means no partner marks shown, not a failure.
+	httpx.Data(w, status, toDTO(h.withPartner(r, v)))
+}
+
+// withPartner labels the viewer's partner. PartnerOf only affects labeling; an
+// error here just means no partner marks shown, not a failure.
+func (h *Handler) withPartner(r *http.Request, v Viewer) Viewer {
 	if partner, perr := h.partners.PartnerOf(r.Context(), v.Me); perr == nil {
 		v.Partner = partner
 	}
-	httpx.Data(w, status, toDTO(v))
+	return v
 }
 
 func caller(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

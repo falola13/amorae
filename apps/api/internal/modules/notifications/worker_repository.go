@@ -310,6 +310,8 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 // Only an active challenge is nudged about, and only for the day that has
 // opened today (a mark, not a note on its own, is what settles it); once the
 // calendar has run past the last day there is no longer a "today" to nudge.
+// A couple can have several going: oldest-started first, which is the order
+// ForChallenges names them in.
 func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCandidate, error) {
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		SELECT u.id, ch.id, ch.title, c.timezone,
@@ -331,6 +333,7 @@ func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCan
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
 		  AND ch.status = 'active'
+		ORDER BY ch.created_at, ch.id
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("finding challenges to nudge about: %w", err)

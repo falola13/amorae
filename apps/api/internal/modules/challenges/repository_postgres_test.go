@@ -79,7 +79,12 @@ var (
 
 func mustMark(t *testing.T, svc *challenges.Service, who uuid.UUID, n int, done *bool, skipped *bool, note *string) challenges.Viewer {
 	t.Helper()
-	v, err := svc.Mark(context.Background(), who, n, done, skipped, note)
+	// The one most recently started that is going, as the older routes see it.
+	cur, err := svc.Current(context.Background(), who)
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	v, err := svc.Mark(context.Background(), who, cur.ID, n, done, skipped, note)
 	if err != nil {
 		t.Fatalf("Mark day %d: %v", n, err)
 	}
@@ -102,7 +107,7 @@ func custom() challenges.StartInput {
 	}}
 }
 
-func TestStart_RecordsWhoStartedItAndOnlyOneIsActive(t *testing.T) {
+func TestStart_RecordsWhoStartedIt(t *testing.T) {
 	ctx := context.Background()
 	noon := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 	svc, _, _, a, _ := newService(t, "UTC", noon)
@@ -115,12 +120,9 @@ func TestStart_RecordsWhoStartedItAndOnlyOneIsActive(t *testing.T) {
 		t.Errorf("v = %+v", v.Challenge)
 	}
 
-	// A second one, of either kind, while one is going.
-	if _, err := svc.Start(ctx, a, custom()); code(t, err) != "challenge_already_running" {
-		t.Errorf("a second start = %v, want challenge_already_running", err)
-	}
-	if _, err := svc.Start(ctx, a, challenges.StartInput{Template: "ten-conversations"}); code(t, err) != "challenge_already_running" {
-		t.Errorf("a second start = %v, want challenge_already_running", err)
+	// Several can run at once (see several_test.go), but not the same one twice.
+	if _, err := svc.Start(ctx, a, challenges.StartInput{Template: "seven-days-of-noticing"}); code(t, err) != "challenge_already_running" {
+		t.Errorf("the same one again = %v, want challenge_already_running", err)
 	}
 }
 
@@ -160,17 +162,17 @@ func TestPacing_DaysOpenOnTheCouplesCalendar(t *testing.T) {
 	}
 
 	// Day 2 is not here yet, for a mark or a note alone.
-	if _, err := svc.Mark(ctx, a, 2, &yes, nil, nil); code(t, err) != "day_not_open" {
+	if _, err := svc.Mark(ctx, a, v.ID, 2, &yes, nil, nil); code(t, err) != "day_not_open" {
 		t.Errorf("marking day 2 early = %v, want day_not_open", err)
 	}
 	note := "Early."
-	if _, err := svc.Mark(ctx, a, 2, nil, nil, &note); code(t, err) != "day_not_open" {
+	if _, err := svc.Mark(ctx, a, v.ID, 2, nil, nil, &note); code(t, err) != "day_not_open" {
 		t.Errorf("a note on day 2 early = %v, want day_not_open", err)
 	}
 
 	// Their midnight is 10:00 UTC (UTC+14): 09:59 UTC is still the 11th there.
 	clk.t = time.Date(2026, 9, 11, 9, 59, 0, 0, time.UTC)
-	if _, err := svc.Mark(ctx, a, 2, &yes, nil, nil); code(t, err) != "day_not_open" {
+	if _, err := svc.Mark(ctx, a, v.ID, 2, &yes, nil, nil); code(t, err) != "day_not_open" {
 		t.Errorf("a minute before their midnight = %v, want day_not_open", err)
 	}
 	clk.t = time.Date(2026, 9, 11, 10, 0, 0, 0, time.UTC)
@@ -191,7 +193,8 @@ func TestFinishing_OnTheLastMarkByBoth(t *testing.T) {
 	ctx := context.Background()
 	svc, clk, _, a, b := newService(t, "UTC", time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC))
 
-	if _, err := svc.Start(ctx, a, custom()); err != nil {
+	started, err := svc.Start(ctx, a, custom())
+	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	clk.advance(48 * time.Hour) // all three days are open
@@ -218,7 +221,7 @@ func TestFinishing_OnTheLastMarkByBoth(t *testing.T) {
 	if _, err := svc.Current(ctx, a); !errors.Is(err, challenges.ErrNotFound) {
 		t.Errorf("Current after finishing = %v, want ErrNotFound", err)
 	}
-	if _, err := svc.Mark(ctx, a, 1, &no, nil, nil); code(t, err) != "challenge_over" {
+	if _, err := svc.Mark(ctx, a, started.ID, 1, &no, nil, nil); code(t, err) != "challenge_over" {
 		t.Errorf("marking a finished challenge = %v, want challenge_over", err)
 	}
 
@@ -265,16 +268,16 @@ func TestLeaving_KeepsItAsEnded(t *testing.T) {
 	mustMark(t, svc, a, 1, &yes, nil, &note)
 
 	clk.advance(time.Hour)
-	if err := svc.Leave(ctx, b); err != nil {
+	if err := svc.Leave(ctx, b, v.ID); err != nil {
 		t.Fatalf("Leave: %v", err)
 	}
-	if err := svc.Leave(ctx, b); !errors.Is(err, challenges.ErrNotFound) {
+	if err := svc.Leave(ctx, b, v.ID); !errors.Is(err, challenges.ErrNotFound) {
 		t.Errorf("leaving with nothing going = %v, want ErrNotFound", err)
 	}
 	if _, err := svc.Current(ctx, a); !errors.Is(err, challenges.ErrNotFound) {
 		t.Errorf("Current after leaving = %v, want ErrNotFound", err)
 	}
-	if _, err := svc.Mark(ctx, a, 1, &yes, nil, nil); code(t, err) != "challenge_over" {
+	if _, err := svc.Mark(ctx, a, v.ID, 1, &yes, nil, nil); code(t, err) != "challenge_over" {
 		t.Errorf("marking a left challenge = %v, want challenge_over", err)
 	}
 
@@ -341,7 +344,7 @@ func TestNotes_OnTheirOwnOrWithAMark(t *testing.T) {
 		long[i] = 'x'
 	}
 	tooLong := string(long)
-	_, err := svc.Mark(ctx, a, 1, nil, nil, &tooLong)
+	_, err := svc.Mark(ctx, a, v.ID, 1, nil, nil, &tooLong)
 	if ae, _ := apperr.As(err); ae == nil || ae.Fields["note"] == "" {
 		t.Errorf("err = %v, want a field error on note", err)
 	}
@@ -363,7 +366,7 @@ func TestReflections_OnlyAfterItIsOver(t *testing.T) {
 	}
 
 	clk.advance(time.Hour)
-	if err := svc.Leave(ctx, a); err != nil {
+	if err := svc.Leave(ctx, a, v.ID); err != nil {
 		t.Fatalf("Leave: %v", err)
 	}
 
@@ -404,7 +407,7 @@ func TestPast_NewestFirstWithBothCounts(t *testing.T) {
 	}
 	mustMark(t, svc, a, 1, &yes, nil, nil)
 	clk.advance(time.Hour)
-	if err := svc.Leave(ctx, a); err != nil {
+	if err := svc.Leave(ctx, a, first.ID); err != nil {
 		t.Fatalf("Leave: %v", err)
 	}
 

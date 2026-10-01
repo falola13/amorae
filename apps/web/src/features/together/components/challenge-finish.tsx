@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Main } from "@/components/layout/screen";
 import { BareTextarea, Button, Micro, Para, Title, cx } from "@/components/ui/kit";
 import {
+  useActiveChallenges,
   useChallengeReflection,
   useChallengeTemplates,
   usePastChallenges,
@@ -13,7 +14,7 @@ import {
 import type { Challenge, ChallengeDay } from "@/lib/api/types";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
-import { dayDateLabel, doneCount, overLabel, pickSuggestions } from "../challenges";
+import { dayDateLabel, doneCount, overLabel, pickSuggestions, runningKeys } from "../challenges";
 import { StartChallengeSheet } from "./start-challenge-sheet";
 
 function Side({
@@ -75,6 +76,7 @@ export function ChallengeFinish({
   const reflect = useChallengeReflection();
   const templates = useChallengeTemplates();
   const past = usePastChallenges();
+  const active = useActiveChallenges();
   const [text, setText] = useState(c.reflection ?? "");
   const [starting, setStarting] = useState<string | null>(null);
   const counts = doneCount(c);
@@ -82,7 +84,7 @@ export function ChallengeFinish({
 
   const suggestions = canStartAnother
     ? pickSuggestions(
-        templates.data ?? [],
+        (templates.data ?? []).filter((t) => !runningKeys(active.data).has(t.key)),
         [...(past.data ?? []).map((p) => p.template), c.template],
         today(),
       )
