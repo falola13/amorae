@@ -13,10 +13,21 @@ import {
   customProblem,
   customPrompts,
   linesToPrompts,
+  startConfirm,
+  startProblem,
+  startedOnToSend,
   type CustomMode,
 } from "@/features/together/challenges";
+import {
+  KindChips,
+  StartsChips,
+  tomorrow,
+  type StartWhen,
+} from "@/features/together/components/start-options";
 import { useStartCustomChallenge } from "@/features/together/hooks";
 import { isApiError } from "@/lib/api/errors";
+import type { ChallengeKind } from "@/lib/api/types";
+import { today } from "@/lib/today";
 import { routes } from "@/lib/routes";
 
 const MODES: { value: CustomMode; label: string }[] = [
@@ -38,8 +49,16 @@ export default function NewChallengePage() {
   // What is typed in the days box, which can be empty or half-typed.
   const [daysText, setDaysText] = useState(String(DEFAULT_CUSTOM_DAYS));
   const [list, setList] = useState("");
+  const [kind, setKind] = useState<ChallengeKind>("together");
+  const [when, setWhen] = useState<StartWhen>("today");
+  const [date, setDate] = useState(tomorrow);
   const [leaving, setLeaving] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string; prompts?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{
+    title?: string;
+    prompts?: string;
+    date?: string;
+    form?: string;
+  }>({});
 
   const days = Number(daysText);
   const listed = linesToPrompts(list).length;
@@ -55,9 +74,20 @@ export default function NewChallengePage() {
       setErrors(problem.startsWith("Give") ? { title: problem } : { prompts: problem });
       return;
     }
+    const now = today();
+    const dateProblem = when === "pick" ? startProblem(date, now) : null;
+    if (dateProblem) {
+      setErrors({ date: dateProblem });
+      return;
+    }
     setErrors({});
+    const startedOn = when === "pick" ? startedOnToSend(date, now) : undefined;
     start.mutate(
-      { custom: { title: title.trim(), prompts } },
+      {
+        custom: { title: title.trim(), prompts },
+        ...(kind === "mine" ? { kind } : {}),
+        ...(startedOn ? { started_on: startedOn } : {}),
+      },
       {
         onSuccess: leave,
         onError: (err) => {
@@ -66,6 +96,7 @@ export default function NewChallengePage() {
             setErrors({
               title: f["custom.title"],
               prompts: f["custom.prompts"],
+              date: f["started_on"],
               form: Object.keys(f).length ? undefined : err.message,
             });
           } else {
@@ -182,6 +213,18 @@ export default function NewChallengePage() {
             </Para>
           </div>
         )}
+
+        <KindChips value={kind} onChange={setKind} />
+        <StartsChips
+          when={when}
+          onWhen={setWhen}
+          date={date}
+          onDate={setDate}
+          error={errors.date}
+        />
+        <Para size="support" className="text-stone">
+          {startConfirm(kind, when === "pick" ? startedOnToSend(date, today()) : undefined)}
+        </Para>
 
         {errors.prompts ? (
           <div role="alert" className="text-[13px] text-red">

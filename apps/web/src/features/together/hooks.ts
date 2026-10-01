@@ -45,6 +45,8 @@ export const useChallengeTemplates = () =>
   useQuery({ queryKey: keys.challengeTemplates, queryFn: api.challengeTemplates });
 export const useStartChallenge = () => useWrite(w.startChallenge);
 export const useStartCustomChallenge = () => useWrite(w.startCustomChallenge);
+export const useUpdateChallenge = () => useWrite(w.updateChallenge);
+export const useChallengePlan = () => useWrite(w.challengePlan);
 export const useLeaveChallenge = () => useWrite(w.leaveChallenge);
 export const useChallengeDay = () => useWrite(w.challengeDay);
 export const useChallengeReflection = () => useWrite(w.challengeReflection);

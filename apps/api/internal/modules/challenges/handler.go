@@ -19,6 +19,8 @@ type service interface {
 	Get(ctx context.Context, userID, id uuid.UUID) (Viewer, error)
 	Past(ctx context.Context, userID uuid.UUID) ([]Summary, error)
 	Start(ctx context.Context, userID uuid.UUID, in StartInput) (Viewer, error)
+	Edit(ctx context.Context, userID, id uuid.UUID, in EditInput) (Viewer, error)
+	ReplacePlan(ctx context.Context, userID, id uuid.UUID, prompts []string) (Viewer, error)
 	Mark(ctx context.Context, userID, id uuid.UUID, n int, done, skipped *bool, note *string) (Viewer, error)
 	Leave(ctx context.Context, userID, id uuid.UUID) error
 	Reflect(ctx context.Context, userID, id uuid.UUID, text string) (Viewer, error)
@@ -49,6 +51,8 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /challenges/past", http.HandlerFunc(h.past))
 	r.HandleAuthed("GET /challenges/{id}", http.HandlerFunc(h.byID))
 	r.HandleAuthed("PUT /challenges/{id}/reflection", http.HandlerFunc(h.reflect))
+	r.HandleAuthed("PATCH /challenges/{id}", http.HandlerFunc(h.edit))
+	r.HandleAuthed("PUT /challenges/{id}/plan", http.HandlerFunc(h.plan))
 	r.HandleAuthed("POST /challenges", http.HandlerFunc(h.start))
 	r.HandleAuthed("PATCH /challenges/{id}/days/{n}", http.HandlerFunc(h.markDay))
 	r.HandleAuthed("DELETE /challenges/{id}", http.HandlerFunc(h.leave))
@@ -77,9 +81,14 @@ type challengeDTO struct {
 	Template  string  `json:"template"`
 	Title     string  `json:"title"`
 	Status    string  `json:"status"`
+	Kind      string  `json:"kind"`
 	StartedOn string  `json:"started_on"`
 	EndedAt   *string `json:"ended_at"`
 	TodayN    int     `json:"today_n"`
+	// Days until it begins; 0 once it has.
+	StartsIn int `json:"starts_in"`
+	// Whether the caller may change it: still going, and theirs to touch.
+	CanEdit   bool    `json:"can_edit"`
 	CreatedBy *string `json:"created_by"`
 	// Only once it is over, and only when there is something written.
 	Reflection        string   `json:"reflection,omitempty"`
@@ -92,6 +101,8 @@ type summaryDTO struct {
 	Title       string  `json:"title"`
 	Template    string  `json:"template"`
 	Status      string  `json:"status"`
+	Kind        string  `json:"kind"`
+	CreatedBy   *string `json:"created_by"`
 	StartedOn   string  `json:"started_on"`
 	EndedAt     *string `json:"ended_at"`
 	Days        int     `json:"days"`
@@ -114,9 +125,12 @@ func toDTO(v Viewer) challengeDTO {
 		Template:  v.Template,
 		Title:     v.Title,
 		Status:    string(v.Status),
+		Kind:      string(v.Kind),
 		StartedOn: v.StartedOn.Format(time.DateOnly),
 		EndedAt:   instant(v.EndedAt),
 		TodayN:    v.TodayN(),
+		StartsIn:  v.StartsIn(),
+		CanEdit:   v.CanEdit(),
 		Days:      make([]dayDTO, 0, len(v.Days)),
 	}
 	if v.CreatedBy != uuid.Nil {
@@ -160,14 +174,27 @@ type customRequest struct {
 }
 
 type startRequest struct {
-	Template string         `json:"template"`
-	Custom   *customRequest `json:"custom"`
+	Template  string         `json:"template"`
+	Custom    *customRequest `json:"custom"`
+	Again     string         `json:"again"`
+	Kind      string         `json:"kind"`
+	StartedOn string         `json:"started_on"`
 }
 
 type markRequest struct {
 	Done    *bool   `json:"done"`
 	Skipped *bool   `json:"skipped"`
 	Note    *string `json:"note"`
+}
+
+type editRequest struct {
+	Title     *string `json:"title"`
+	StartedOn *string `json:"started_on"`
+	Kind      *string `json:"kind"`
+}
+
+type planRequest struct {
+	Prompts []string `json:"prompts"`
 }
 
 type reflectionRequest struct {
@@ -241,8 +268,13 @@ func (h *Handler) past(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]summaryDTO, 0, len(list))
 	for _, s := range list {
+		var createdBy *string
+		if s.CreatedBy != uuid.Nil {
+			id := s.CreatedBy.String()
+			createdBy = &id
+		}
 		out = append(out, summaryDTO{
-			ID: s.ID.String(), Title: s.Title, Template: s.Template, Status: string(s.Status),
+			ID: s.ID.String(), Title: s.Title, Template: s.Template, Status: string(s.Status), Kind: string(s.Kind), CreatedBy: createdBy,
 			StartedOn: s.StartedOn.Format(time.DateOnly), EndedAt: instant(s.EndedAt),
 			Days: s.Days, MyDone: s.MyDone, PartnerDone: s.PartnerDone,
 		})
@@ -260,12 +292,50 @@ func (h *Handler) start(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, r, err)
 		return
 	}
-	in := StartInput{Template: req.Template}
+	in := StartInput{Template: req.Template, Again: req.Again, Kind: req.Kind, StartedOn: req.StartedOn}
 	if req.Custom != nil {
 		in.Custom = &Custom{Title: req.Custom.Title, Prompts: req.Custom.Prompts}
 	}
 	v, err := h.svc.Start(r.Context(), userID, in)
 	h.respond(w, r, v, err, http.StatusCreated)
+}
+
+func (h *Handler) edit(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		httpx.Error(w, r, ErrNoSuchChallenge)
+		return
+	}
+	var req editRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	v, err := h.svc.Edit(r.Context(), userID, id, EditInput{Title: req.Title, StartedOn: req.StartedOn, Kind: req.Kind})
+	h.respond(w, r, v, err, http.StatusOK)
+}
+
+func (h *Handler) plan(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		httpx.Error(w, r, ErrNoSuchChallenge)
+		return
+	}
+	var req planRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	v, err := h.svc.ReplacePlan(r.Context(), userID, id, req.Prompts)
+	h.respond(w, r, v, err, http.StatusOK)
 }
 
 func (h *Handler) leave(w http.ResponseWriter, r *http.Request) {

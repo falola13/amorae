@@ -190,6 +190,9 @@ export interface ChallengeDayPatch {
 
 export type ChallengeStatus = "active" | "finished" | "ended";
 
+/** Who a challenge is for: both of you, or only the person who made it. */
+export type ChallengeKind = "together" | "mine";
+
 export interface Challenge {
   id: string;
   template: string;
@@ -200,6 +203,12 @@ export interface Challenge {
   /** The day number that is "today" for both of you (may run past the last day once it is over). */
   today_n: number;
   created_by: string | null;
+  /** Both of you, or just the creator. Only the creator marks, edits, ends or reflects on a "mine" one. */
+  kind: ChallengeKind;
+  /** Days until it starts; 0 once it has begun. `today_n` is 0 before the start and no day is open. */
+  starts_in: number;
+  /** Whether you may change it: the plan, the title, the start and who is taking part. */
+  can_edit: boolean;
   days: ChallengeDay[];
   /** Your "looking back" note, once it is over. */
   reflection?: string;
@@ -225,6 +234,8 @@ export interface ChallengePast {
   title: string;
   template: string;
   status: "finished" | "ended";
+  kind: ChallengeKind;
+  created_by: string | null;
   started_on: string;
   ended_at: string | null;
   days: number;
@@ -233,8 +244,21 @@ export interface ChallengePast {
 }
 
 /** What starting a challenge takes: a curated one by key, or your own. */
-export type StartChallengeInput =
-  { template: string } | { custom: { title: string; prompts: string[] } };
+export type StartChallengeInput = (
+  { template: string } | { custom: { title: string; prompts: string[] } } | { again: string }
+) & {
+  /** Default together. */
+  kind?: ChallengeKind;
+  /** YYYY-MM-DD, today to 60 days out. Default today. */
+  started_on?: string;
+};
+
+/** What editing a challenge can change: the name, the start (before it begins) and who is in it. */
+export interface ChallengePatch {
+  title?: string;
+  started_on?: string;
+  kind?: ChallengeKind;
+}
 
 export type JournalTag = "Gratitude" | "Reflection" | "Memory" | "Appreciation" | "Plans";
 
@@ -308,6 +332,8 @@ export interface NotificationPrefs {
   journal: boolean;
   goals: boolean;
   challenges: boolean;
+  /** When your partner starts a challenge. */
+  partner_challenges: boolean;
   prayer_answered: boolean;
   /** When the second of you finishes something you are both doing. */
   together: boolean;
@@ -340,6 +366,7 @@ export type NotificationKind =
   | "goal_milestones"
   | "goal_crossing"
   | "challenge"
+  | "challenge_started"
   | "prayer_answered"
   | "both_prayed"
   | "both_marked"

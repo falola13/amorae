@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import type { Challenge, ChallengeDay, ChallengeTemplate } from "@/lib/api/types";
 import {
+  applyLine,
+  atLimit,
+  cheerOn,
+  isMarkable,
+  ownerLabel,
+  planChanged,
+  planFromText,
+  planProblem,
+  progressLabel,
+  startConfirm,
+  startProblem,
+  startedOnToSend,
   currentSeason,
   challengesLine,
   customProblem,
@@ -37,6 +49,9 @@ const challenge = (over: Partial<Challenge> = {}): Challenge => ({
   ended_at: null,
   today_n: 2,
   created_by: null,
+  kind: "together",
+  starts_in: 0,
+  can_edit: true,
   days: [day(1), day(2), day(3, { open: false })],
   ...over,
 });
@@ -250,5 +265,88 @@ describe("custom challenge helpers", () => {
       "Keep each day under 200 characters.",
     );
     expect(customProblem("T", ["a", "b", "c"])).toBeNull();
+  });
+});
+
+describe("marking rights", () => {
+  const theirs = { kind: "mine" as const, can_edit: false };
+  it("a partner's own challenge is read-only", () => {
+    expect(isMarkable(theirs)).toBe(false);
+    expect(isMarkable({ kind: "mine", can_edit: true })).toBe(true);
+    expect(isMarkable({ kind: "together", can_edit: false })).toBe(true);
+  });
+  it("labels who it belongs to", () => {
+    expect(ownerLabel(theirs, "Adeola")).toBe("Adeola’s");
+    expect(ownerLabel({ kind: "mine", can_edit: true }, "Adeola")).toBe("Just you");
+    expect(ownerLabel({ kind: "together", can_edit: true }, "Adeola")).toBeNull();
+    expect(cheerOn("Adeola")).toBe("Adeola’s own — cheer them on.");
+  });
+  it("keeps a partner's own out of Home, the limit and the running keys", () => {
+    const theirsC = challenge({ id: "p", kind: "mine", can_edit: false });
+    expect(homeChallengeRows([theirsC])).toEqual([]);
+    expect(runningKeys([theirsC]).size).toBe(0);
+    expect(atLimit([theirsC, theirsC, theirsC])).toBe(false);
+    expect(
+      atLimit([challenge(), challenge({ id: "b" }), challenge({ id: "c", kind: "mine" })]),
+    ).toBe(true);
+  });
+});
+
+describe("a scheduled challenge", () => {
+  const sched = challenge({
+    starts_in: 3,
+    today_n: 0,
+    started_on: "2026-10-04",
+    days: [day(1, { open: false }), day(2, { open: false }), day(3, { open: false })],
+  });
+  it("is not on Home and has no day today", () => {
+    expect(homeChallengeDay(sched)).toBeNull();
+    expect(homeChallengeRows([sched])).toEqual([]);
+    expect(todaysDay(sched)).toBeUndefined();
+  });
+  it("says when it starts instead of a day number", () => {
+    expect(progressLabel(sched)).toBe("Starts Sunday 4 October · in 3 days");
+    expect(progressLabel(challenge())).toBe("Day 2 of 3");
+    expect(challengesLine([sched])).toBe("Seven, starts sunday 4 october");
+  });
+});
+
+describe("the plan", () => {
+  it("reads one line per day, ignoring blanks", () => {
+    expect(planFromText("a\n\n b \r\nc")).toEqual(["a", "b", "c"]);
+  });
+  it("rewrites every day, or only from a day on", () => {
+    expect(applyLine(["a", "b", "c", "d"], " x ", 1)).toEqual(["x", "x", "x", "x"]);
+    expect(applyLine(["a", "b", "c", "d"], "x", 3)).toEqual(["a", "b", "x", "x"]);
+    expect(applyLine(["a", "b"], "  ", 1)).toEqual(["a", "b"]);
+  });
+  it("notices a change in length or text", () => {
+    expect(planChanged(["a", "b", "c"], ["a", "b", "c"])).toBe(false);
+    expect(planChanged(["a", "b", "c"], ["a", "b", "x"])).toBe(true);
+    expect(planChanged(["a", "b", "c"], ["a", "b", "c", "d"])).toBe(true);
+  });
+  it("needs three to a hundred days", () => {
+    expect(planProblem(["a", "b"])).toMatch(/between 3 and 100/);
+    expect(planProblem(["a", "b", "c"])).toBeNull();
+  });
+});
+
+describe("starting", () => {
+  const now = new Date(2026, 9, 1);
+  it("accepts today to sixty days out", () => {
+    expect(startProblem("2026-10-01", now)).toBeNull();
+    expect(startProblem("2026-11-30", now)).toBeNull();
+    expect(startProblem("2026-12-01", now)).not.toBeNull();
+    expect(startProblem("2026-09-30", now)).not.toBeNull();
+    expect(startProblem("", now)).not.toBeNull();
+  });
+  it("sends a date only when it is after today", () => {
+    expect(startedOnToSend("2026-10-01", now)).toBeUndefined();
+    expect(startedOnToSend("2026-10-05", now)).toBe("2026-10-05");
+  });
+  it("confirms in the right words", () => {
+    expect(startConfirm("together", undefined)).toBe("Day 1 opens today for both of you.");
+    expect(startConfirm("mine", undefined)).toBe("Day 1 opens today — just for you.");
+    expect(startConfirm("together", "2026-10-05")).toBe("Day 1 opens Monday 5 October.");
   });
 });

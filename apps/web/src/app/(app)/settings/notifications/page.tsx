@@ -151,6 +151,7 @@ export default function NotificationSettings() {
               {row(p, "goals", "Goal updates")}
               {row(p, "goal_milestones", "Halfway, and done")}
               {row(p, "challenges", "Challenge reminders")}
+              {row(p, "partner_challenges", `When ${partner} starts a challenge`)}
               {row(p, "together", "When you both finish something")}
               {row(p, "memories", "A moment from this day last year", true)}
             </Section>

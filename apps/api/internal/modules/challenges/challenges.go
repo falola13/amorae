@@ -30,7 +30,26 @@ var (
 	ErrNotOver = apperr.Conflict("challenge_not_over", "Save that for when this one is over.")
 	// A past challenge asked for by id that is not this couple's, or not anyone's.
 	ErrNoSuchChallenge = apperr.NotFound("challenge_not_found", "We can’t find that challenge.")
+	// The start can move only while nobody has begun.
+	ErrBegun = apperr.Conflict("challenge_begun", "It’s already begun — the start can’t move now.")
+	// Together to just-me only while the other partner has not joined in.
+	ErrKindLocked = apperr.Conflict("challenge_kind_locked", "Your partner has already joined in.")
 )
+
+// ErrDayHasMarks is the refusal to drop a day somebody has marked or written
+// on; it names the day so the screen can say which.
+func ErrDayHasMarks(n int) error {
+	return apperr.Conflict("day_has_marks", fmt.Sprintf("Day %d has been marked, so it can’t be removed.", n))
+}
+
+// ErrPartnerFull is the cap hit on the other person's side: a together
+// challenge counts for both of them.
+func ErrPartnerFull(name string) error {
+	if name == "" {
+		return apperr.Conflict("too_many_challenges", "One of you already has three going.")
+	}
+	return apperr.Conflict("too_many_challenges", name+" already has three going.")
+}
 
 // Status is where a challenge is up to. A couple can have several active, up
 // to MaxActive.
@@ -42,10 +61,23 @@ const (
 	StatusEnded    Status = "ended"
 )
 
-// MaxActive is how many challenges a couple can have going at once. More than
-// this is not a practice, it is a pile; the limit is enforced when one is
-// started, not by the schema.
+// Kind is whose a challenge is. "together" is for both of them; "mine" is one
+// person's own — the other can read it, not touch it.
+type Kind string
+
+const (
+	KindTogether Kind = "together"
+	KindMine     Kind = "mine"
+)
+
+// MaxActive is how many challenges a person can have going at once, counting
+// the ones they share and their own "just me" ones (not their partner's).
+// More than this is not a practice, it is a pile; the limit is enforced when
+// one is started, not by the schema.
 const MaxActive = 3
+
+// MaxStartAhead is how far ahead, in days, a challenge may be scheduled.
+const MaxStartAhead = 60
 
 const (
 	MaxNoteRunes       = 280
@@ -72,6 +104,7 @@ type Challenge struct {
 	Template string
 	Title    string
 	Status   Status
+	Kind     Kind
 	// Dates are couple-local calendar days held at midnight UTC, so
 	// subtracting one from another counts days with no timezone in the way.
 	StartedOn time.Time
@@ -88,16 +121,51 @@ type Challenge struct {
 }
 
 // TodayN is the day the couple is on: days since it started, counting from
-// one, held between the first and the last.
+// one, held at the last. Zero before it has begun: there is no day yet.
 func (c Challenge) TodayN() int {
 	n := int(c.Today.Sub(c.StartedOn)/(24*time.Hour)) + 1
 	if n > len(c.Days) {
 		n = len(c.Days)
 	}
 	if n < 1 {
-		n = 1
+		n = 0
 	}
 	return n
+}
+
+// Begun is whether the start day has come.
+func (c Challenge) Begun() bool { return !c.StartedOn.After(c.Today) }
+
+// StartsIn is how many days until it begins; zero once it has.
+func (c Challenge) StartsIn() int {
+	if c.Begun() {
+		return 0
+	}
+	return int(c.StartedOn.Sub(c.Today) / (24 * time.Hour))
+}
+
+// MayTouch is whether this person can write to it: either partner for a
+// shared one, only whoever started it for a "just me" one.
+func (c Challenge) MayTouch(userID uuid.UUID) bool {
+	return c.Kind != KindMine || (c.CreatedBy != uuid.Nil && c.CreatedBy == userID)
+}
+
+// anyoneElseMarked is whether somebody other than this person has a mark or
+// a note on any day.
+func (c Challenge) anyoneElseMarked(userID uuid.UUID) bool {
+	for _, d := range c.Days {
+		for u := range d.Marks {
+			if u != userID {
+				return true
+			}
+		}
+		for u := range d.Notes {
+			if u != userID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // DateOf is the calendar day n opens on — the same day for both of them.
@@ -113,6 +181,8 @@ type Summary struct {
 	Template    string
 	Title       string
 	Status      Status
+	Kind        Kind
+	CreatedBy   uuid.UUID
 	StartedOn   time.Time
 	EndedAt     *time.Time
 	Days        int
@@ -475,4 +545,131 @@ func ValidateReflection(text string) (string, error) {
 		return "", apperr.Validation(map[string]string{"text": "Keep it under 1000 characters."})
 	}
 	return text, nil
+}
+
+const msgStartRange = "Pick a day from today to two months ahead."
+
+// ParseDay reads a calendar day the way a client sends it, YYYY-MM-DD, held at
+// midnight UTC like every other couple-local date here.
+func ParseDay(text string) (time.Time, error) {
+	day, err := time.Parse(time.DateOnly, strings.TrimSpace(text))
+	if err != nil {
+		return time.Time{}, apperr.Validation(map[string]string{"started_on": msgStartRange})
+	}
+	return day, nil
+}
+
+// ValidateStart is whether `on` is today or up to MaxStartAhead days after it,
+// both in the couple's own calendar.
+func ValidateStart(today, on time.Time) error {
+	if on.Before(today) || on.After(today.AddDate(0, 0, MaxStartAhead)) {
+		return apperr.Validation(map[string]string{"started_on": msgStartRange})
+	}
+	return nil
+}
+
+// ValidateKind reads a kind a client sent; empty is together.
+func ValidateKind(k string) (Kind, error) {
+	switch Kind(strings.TrimSpace(k)) {
+	case "", KindTogether:
+		return KindTogether, nil
+	case KindMine:
+		return KindMine, nil
+	}
+	return "", apperr.Validation(map[string]string{"kind": "Choose together or just me."})
+}
+
+// Edit is a change to a challenge's own details; a nil field is left alone.
+type Edit struct {
+	Title     *string
+	StartedOn *time.Time
+	Kind      *Kind
+}
+
+// ValidateEdit trims the title; the rules that depend on the challenge
+// itself are Challenge.CheckEdit's.
+func ValidateEdit(e Edit) (Edit, error) {
+	if e.Title != nil {
+		title := strings.TrimSpace(*e.Title)
+		if title == "" || utf8.RuneCountInString(title) > MaxCustomTitle {
+			return Edit{}, apperr.Validation(map[string]string{"title": "Give it a name, up to 80 characters."})
+		}
+		e.Title = &title
+	}
+	return e, nil
+}
+
+// CheckEdit decides whether this person may make this change to this
+// challenge as it stands, and returns what actually changes: a field sent back
+// as it already is is dropped, so a client that always sends everything is
+// never refused for it. Refused in order: not theirs to touch, over, then the
+// field rules.
+func (c Challenge) CheckEdit(me uuid.UUID, e Edit) (Edit, error) {
+	if !c.MayTouch(me) {
+		return Edit{}, ErrNoSuchChallenge
+	}
+	if c.Status != StatusActive {
+		return Edit{}, ErrOver
+	}
+	if e.Title != nil && *e.Title == c.Title {
+		e.Title = nil
+	}
+	if e.StartedOn != nil {
+		if e.StartedOn.Equal(c.StartedOn) {
+			e.StartedOn = nil
+		} else {
+			if c.Begun() {
+				return Edit{}, ErrBegun
+			}
+			if err := ValidateStart(c.Today, *e.StartedOn); err != nil {
+				return Edit{}, err
+			}
+		}
+	}
+	if e.Kind != nil {
+		switch {
+		case *e.Kind == c.Kind:
+			e.Kind = nil
+		case c.CreatedBy != me:
+			return Edit{}, apperr.Validation(map[string]string{"kind": "Only whoever started it can change that."})
+		case *e.Kind == KindMine && c.anyoneElseMarked(me):
+			return Edit{}, ErrKindLocked
+		}
+	}
+	return e, nil
+}
+
+// ValidatePlan trims the day texts a plan is being replaced with.
+func ValidatePlan(prompts []string) ([]string, error) {
+	out := make([]string, 0, len(prompts))
+	for _, p := range prompts {
+		out = append(out, strings.TrimSpace(p))
+	}
+	if len(out) < MinCustomDays || len(out) > MaxCustomDays {
+		return nil, apperr.Validation(map[string]string{"prompts": fmt.Sprintf("Add between %d and %d days.", MinCustomDays, MaxCustomDays)})
+	}
+	for _, p := range out {
+		if p == "" || utf8.RuneCountInString(p) > MaxCustomPrompt {
+			return nil, apperr.Validation(map[string]string{"prompts": "Each day needs some words, up to 200 characters."})
+		}
+	}
+	return out, nil
+}
+
+// CheckPlan decides whether this person may replace the days with `prompts`:
+// extending is always fine; shortening drops days from the end, and only
+// while none of those has a mark or a note from anyone.
+func (c Challenge) CheckPlan(me uuid.UUID, prompts []string) error {
+	if !c.MayTouch(me) {
+		return ErrNoSuchChallenge
+	}
+	if c.Status != StatusActive {
+		return ErrOver
+	}
+	for _, d := range c.Days {
+		if d.N > len(prompts) && (len(d.Marks) > 0 || len(d.Notes) > 0) {
+			return ErrDayHasMarks(d.N)
+		}
+	}
+	return nil
 }

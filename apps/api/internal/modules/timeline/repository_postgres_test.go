@@ -403,6 +403,55 @@ func TestTimeline_Challenges(t *testing.T) {
 	}
 }
 
+// A "just me" challenge names whose it was, finished or left; a shared one
+// still reads as the two of them.
+func TestTimeline_JustMeChallenges(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := timeline.NewPostgresRepository(db)
+
+	coupleID, a, _ := pair(t, db)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	insert := func(title, status, kind string, endedAt time.Time) {
+		t.Helper()
+		if _, err := db.Q(ctx).Exec(ctx, `
+			INSERT INTO challenges (id, couple_id, template, title, kind, started_on, status, ended_at, created_by, created_at, updated_at)
+			VALUES ($1, $2, 'custom', $3, $4, $5, $6, $7, $8, $9, $9)
+		`, uuid.New(), coupleID, title, kind, today.AddDate(0, 0, -3), status, endedAt, a, now); err != nil {
+			t.Fatalf("insert challenge: %v", err)
+		}
+	}
+	insert("Shared and done", "finished", "together", now.Add(-1*time.Hour))
+	insert("Mine and done", "finished", "mine", now.Add(-2*time.Hour))
+	insert("Mine and left", "ended", "mine", now.Add(-3*time.Hour))
+	insert("Shared and left", "ended", "together", now.Add(-4*time.Hour))
+
+	got, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterMoments), nil, 20)
+	if err != nil {
+		t.Fatalf("Timeline: %v", err)
+	}
+	subs := map[string]string{}
+	for _, it := range got {
+		subs[it.Title] = it.Sub
+	}
+	want := map[string]string{
+		"Shared and done": "Finished together",
+		"Mine and done":   "Finished — just Ada",
+		"Mine and left":   "Ended early — just Ada",
+		"Shared and left": "Ended early",
+	}
+	if len(subs) != len(want) {
+		t.Fatalf("subs = %v, want %v", subs, want)
+	}
+	for title, sub := range want {
+		if subs[title] != sub {
+			t.Errorf("%s: sub = %q, want %q", title, subs[title], sub)
+		}
+	}
+}
+
 // An event is history once it is done, or once it is over and nobody said it
 // did not happen. "Over" is the notifications rule in SQL: its end time, else
 // its start plus two hours, else eight the next morning.

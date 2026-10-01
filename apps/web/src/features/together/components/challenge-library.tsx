@@ -16,10 +16,12 @@ import type { ChallengeTemplate } from "@/lib/api/types";
 import { longDate } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
+import { useCouple } from "@/features/couple/hooks";
 import {
-  MAX_ACTIVE,
   TOO_MANY,
+  atLimit,
   currentSeason,
+  ownerLabel,
   groupTemplates,
   overLabel,
   runningKeys,
@@ -29,6 +31,9 @@ import { StartChallengeSheet } from "./start-challenge-sheet";
 /** The challenges you have finished or ended, newest first. Nothing when there are none. */
 export function PastChallenges() {
   const past = usePastChallenges();
+  const couple = useCouple();
+  const meId = couple.data?.me.id;
+  const partner = couple.data?.partner?.display_name ?? "They";
   return (
     <>
       {(past.data ?? []).length > 0 ? (
@@ -45,6 +50,9 @@ export function PastChallenges() {
                     <span className="text-[16px] font-semibold">{p.title}</span>
                     <span className="text-support text-stone">
                       {overLabel(p.status)}
+                      {p.kind === "mine"
+                        ? ` · ${ownerLabel({ kind: "mine", can_edit: p.created_by === meId }, partner)}`
+                        : ""}
                       {p.ended_at ? ` · ${longDate(p.ended_at.slice(0, 10))}` : ""}
                     </span>
                   </span>
@@ -68,7 +76,7 @@ export function ChallengeLibrary({ onBack }: { onBack?: () => void }) {
   const templates = useChallengeTemplates();
   const active = useActiveChallenges();
   const running = runningKeys(active.data);
-  const full = (active.data ?? []).length >= MAX_ACTIVE;
+  const full = atLimit(active.data);
   const [picked, setPicked] = useState<ChallengeTemplate | null>(null);
   const season = currentSeason(today());
 
