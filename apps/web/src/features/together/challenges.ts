@@ -176,13 +176,35 @@ export function pickSuggestions(
 }
 
 export const MIN_CUSTOM_DAYS = 3;
-export const MAX_CUSTOM_DAYS = 40;
+// A habit runs long — thirty days off soda, ninety of walking — so a
+// hundred, matching the API.
+export const MAX_CUSTOM_DAYS = 100;
 export const DEFAULT_CUSTOM_DAYS = 7;
+export const MAX_CUSTOM_LINE = 200;
+/** Quick picks for "same every day", the lengths habits tend to come in. */
+export const CUSTOM_DAY_PICKS = [7, 14, 21, 30, 40, 90] as const;
 
-/** Grows or shrinks the list of prompts to `n` days, keeping what is already written. */
-export function resizePrompts(prompts: readonly string[], n: number): string[] {
-  const size = Math.max(MIN_CUSTOM_DAYS, Math.min(MAX_CUSTOM_DAYS, Math.round(n) || 0));
-  return Array.from({ length: size }, (_, i) => prompts[i] ?? "");
+/** "Same every day" repeats one line; "different each day" is one line per day. */
+export type CustomMode = "same" | "each";
+
+/** The days in a pasted list: one per line, blank lines and stray spaces ignored. */
+export function linesToPrompts(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+/** What gets sent: the API wants a line per day, so "same" repeats it. */
+export function customPrompts(
+  mode: CustomMode,
+  line: string,
+  days: number,
+  list: string,
+): string[] {
+  if (mode === "each") return linesToPrompts(list);
+  const n = Number.isFinite(days) ? Math.round(days) : 0;
+  return Array.from({ length: Math.max(0, n) }, () => line.trim());
 }
 
 /** The first thing wrong with a custom challenge, before it is sent. */
@@ -191,5 +213,7 @@ export function customProblem(title: string, prompts: readonly string[]): string
   if (prompts.length < MIN_CUSTOM_DAYS || prompts.length > MAX_CUSTOM_DAYS)
     return `Choose between ${MIN_CUSTOM_DAYS} and ${MAX_CUSTOM_DAYS} days.`;
   if (prompts.some((p) => !p.trim())) return "Each day needs a line.";
+  if (prompts.some((p) => p.length > MAX_CUSTOM_LINE))
+    return `Keep each day under ${MAX_CUSTOM_LINE} characters.`;
   return null;
 }

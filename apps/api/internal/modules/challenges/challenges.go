@@ -4,6 +4,7 @@
 package challenges
 
 import (
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -52,7 +53,9 @@ const (
 	MaxCustomTitle     = 80
 	MaxCustomPrompt    = 200
 	MinCustomDays      = 3
-	MaxCustomDays      = 40
+	// A hundred, not forty: a habit (thirty days off soda, ninety of
+	// walking) is one line repeated, and the client sends it that way.
+	MaxCustomDays = 100
 )
 
 // Mark is what one partner has said about one day.
@@ -399,7 +402,7 @@ func ValidateCustom(c Custom) (Template, error) {
 	}
 	switch {
 	case len(prompts) < MinCustomDays || len(prompts) > MaxCustomDays:
-		fields["custom.prompts"] = "Add between 3 and 40 days."
+		fields["custom.prompts"] = fmt.Sprintf("Add between %d and %d days.", MinCustomDays, MaxCustomDays)
 	default:
 		for _, p := range prompts {
 			if p == "" || utf8.RuneCountInString(p) > MaxCustomPrompt {
