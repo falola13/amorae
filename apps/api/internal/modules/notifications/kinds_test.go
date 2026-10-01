@@ -51,7 +51,7 @@ func TestAllKindsIsComplete(t *testing.T) {
 	}
 	// Grows whenever a kind is added; the count is the reminder to add it to
 	// AllKinds as well.
-	if len(AllKinds) != 17 {
+	if len(AllKinds) != 18 {
 		t.Errorf("AllKinds has %d kinds; if that is right, update this and say why", len(AllKinds))
 	}
 }

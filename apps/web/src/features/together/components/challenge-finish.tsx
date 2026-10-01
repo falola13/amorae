@@ -10,11 +10,22 @@ import {
   useChallengeReflection,
   useChallengeTemplates,
   usePastChallenges,
+  useStartChallenge,
 } from "@/features/together/hooks";
 import type { Challenge, ChallengeDay } from "@/lib/api/types";
 import { routes } from "@/lib/routes";
 import { today } from "@/lib/today";
-import { dayDateLabel, doneCount, overLabel, pickSuggestions, runningKeys } from "../challenges";
+import {
+  TOO_MANY,
+  cheerOn,
+  dayDateLabel,
+  doneCount,
+  isMarkable,
+  overLabel,
+  ownerLabel,
+  pickSuggestions,
+  runningKeys,
+} from "../challenges";
 import { StartChallengeSheet } from "./start-challenge-sheet";
 
 function Side({
@@ -74,6 +85,9 @@ export function ChallengeFinish({
 }) {
   const router = useRouter();
   const reflect = useChallengeReflection();
+  const again = useStartChallenge();
+  const markable = isMarkable(c);
+  const owner = ownerLabel(c, partner);
   const templates = useChallengeTemplates();
   const past = usePastChallenges();
   const active = useActiveChallenges();
@@ -94,14 +108,41 @@ export function ChallengeFinish({
   return (
     <Main>
       <div className="pt-2">
-        <Micro>{overLabel(c.status)}</Micro>
+        <Micro>
+          {overLabel(c.status)}
+          {owner ? ` · ${owner}` : ""}
+        </Micro>
       </div>
       <Title className="mt-2">{c.title}</Title>
       <Para className="mt-1.5">
-        {c.status === "ended"
-          ? `It ended early. You marked ${counts.mine} of ${c.days.length}, ${partner} ${counts.partner}.`
-          : `${c.days.length} days. You marked ${counts.mine}, ${partner} ${counts.partner}.`}
+        {!markable
+          ? `${c.status === "ended" ? "It ended early. " : ""}${partner} marked ${counts.partner} of ${c.days.length}. ${cheerOn(partner)}`
+          : c.status === "ended"
+            ? `It ended early. You marked ${counts.mine} of ${c.days.length}, ${partner} ${counts.partner}.`
+            : `${c.days.length} days. You marked ${counts.mine}, ${partner} ${counts.partner}.`}
       </Para>
+      <div className="mt-3 flex flex-col gap-1.5">
+        <div>
+          <Button
+            variant="secondary"
+            icon="plus"
+            loading={again.isPending}
+            disabled={!canStartAnother}
+            onClick={() =>
+              again.mutate(
+                { again: c.id },
+                {
+                  onSuccess: (v) => router.replace(routes.challenge(v.id)),
+                  onQueued: () => router.replace(routes.challenges),
+                },
+              )
+            }
+          >
+            Do it again
+          </Button>
+        </div>
+        {!canStartAnother ? <Micro>{TOO_MANY}</Micro> : null}
+      </div>
 
       <ol className="m-0 mt-4 list-none border-t border-line p-0">
         {c.days.map((d) => (
@@ -110,16 +151,18 @@ export function ChallengeFinish({
       </ol>
 
       <section className="mt-6 flex flex-col gap-2">
-        <BareTextarea
-          label="Looking back"
-          rows={3}
-          maxLength={1000}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="What stayed with you?"
-          className="min-h-[84px] text-[17px] leading-[1.6]"
-        />
-        {changed ? (
+        {markable ? (
+          <BareTextarea
+            label="Looking back"
+            rows={3}
+            maxLength={1000}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="What stayed with you?"
+            className="min-h-[84px] text-[17px] leading-[1.6]"
+          />
+        ) : null}
+        {markable && changed ? (
           <div>
             <Button
               variant="secondary"

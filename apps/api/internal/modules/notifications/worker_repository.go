@@ -222,19 +222,19 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		WITH written AS (
 			SELECT a.id, a.couple_id, a.from_id AS author_id, a.created_at, $2::text AS kind,
-			       NULL::text AS subject
+			       NULL::text AS subject, NULL::date AS starts_on, false AS mine
 			FROM appreciations a
 			WHERE a.created_at >= $1
 			UNION ALL
 			SELECT j.id, j.couple_id, j.author_id, j.created_at, $3::text AS kind,
-			       NULL::text AS subject
+			       NULL::text AS subject, NULL::date, false
 			FROM journal_entries j
 			WHERE j.created_at >= $1
 			UNION ALL
 			-- A goal somebody put something towards. Only while it is still
 			-- going: nobody needs telling about a goal already finished.
 			SELECT gp.id, g.couple_id, gp.user_id, gp.logged_at, $4::text AS kind,
-			       NULL::text AS subject
+			       NULL::text AS subject, NULL::date, false
 			FROM goal_progress gp
 			JOIN goals g ON g.id = gp.goal_id AND NOT g.done
 			WHERE gp.logged_at >= $1
@@ -244,7 +244,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			-- to a time — editing the note deliberately leaves it alone — so
 			-- it behaves like a creation here and cannot re-fire on an edit.
 			SELECT pp.id, pw.couple_id, pp.answered_by, pp.answered_at, $5::text AS kind,
-			       NULL::text AS subject
+			       NULL::text AS subject, NULL::date, false
 			FROM prayer_points pp
 			JOIN prayer_weeks pw ON pw.id = pp.week_id
 			WHERE pp.answered_at >= $1 AND pp.answered_by IS NOT NULL
@@ -255,9 +255,18 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			-- keeps out anything from before ownership existed, which has
 			-- nobody in particular to credit as having "added" it.
 			SELECT e.id, e.couple_id, e.created_by, e.created_at, $6::text AS kind,
-			       e.title AS subject
+			       e.title AS subject, NULL::date, false
 			FROM events e
 			WHERE e.created_at >= $1 AND e.kind = 'together' AND e.created_by IS NOT NULL
+			UNION ALL
+			-- A challenge one partner just started, together or just for them.
+			-- Same shape as an event: created_by IS NOT NULL keeps out one whose
+			-- starter is gone, who has nobody to credit. No undo window to wait
+			-- out, so it settles at once (Settles 0).
+			SELECT ch.id, ch.couple_id, ch.created_by, ch.created_at, $7::text AS kind,
+			       ch.title AS subject, ch.started_on, ch.kind = 'mine'
+			FROM challenges ch
+			WHERE ch.created_at >= $1 AND ch.created_by IS NOT NULL
 		)
 		SELECT u.id, written.author_id, author.display_name, written.id, written.kind,
 		       written.created_at,
@@ -267,6 +276,8 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		       COALESCE(p.goals, false),
 		       COALESCE(p.prayer_answered, true),
 		       COALESCE(p.partner_events, true),
+		       COALESCE(p.partner_challenges, true),
+		       c.timezone, written.starts_on, written.mine,
 		       COALESCE(g.title, written.subject, '')
 		FROM written
 		LEFT JOIN goal_progress gpr ON gpr.id = written.id AND written.kind = $4
@@ -277,7 +288,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		JOIN users author ON author.id = written.author_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE u.id <> written.author_id
-	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered, KindEventAdded)
+	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered, KindEventAdded, KindChallengeStarted)
 	if err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
 	}
@@ -286,10 +297,15 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 	var out []WrittenCandidate
 	for rows.Next() {
 		var c WrittenCandidate
+		var startsOn *time.Time
 		if err := rows.Scan(&c.UserID, &c.AuthorID, &c.AuthorName, &c.ItemID, &c.Kind,
 			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal, &c.Prefs.Goals,
-			&c.Prefs.PrayerAnswered, &c.Prefs.PartnerEvents, &c.Subject); err != nil {
+			&c.Prefs.PrayerAnswered, &c.Prefs.PartnerEvents, &c.Prefs.PartnerChallenges,
+			&c.Timezone, &startsOn, &c.Mine, &c.Subject); err != nil {
 			return nil, fmt.Errorf("scanning something written: %w", err)
+		}
+		if startsOn != nil {
+			c.StartsOn = *startsOn
 		}
 		if c.Kind == KindAppreciation {
 			c.Settles = appreciationUndoWindow
@@ -333,6 +349,10 @@ func (r *PostgresRepository) LiveChallenges(ctx context.Context) ([]ChallengeCan
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE c.dissolved_at IS NULL
 		  AND ch.status = 'active'
+		  -- One not yet begun has no day to remind about, and a "just me" one
+		  -- reminds its creator alone.
+		  AND ch.started_on <= (now() AT TIME ZONE c.timezone)::date
+		  AND (ch.kind = 'together' OR ch.created_by = u.id)
 		ORDER BY ch.created_at, ch.id
 	`)
 	if err != nil {

@@ -193,16 +193,23 @@ WITH items AS (
 	UNION ALL
 
 	-- A challenge that is over, finished together or left early. 'at' is the
-	-- moment it stopped being active.
+	-- moment it stopped being active. A "just me" one names whose it was.
 	SELECT 'challenge', ch.id,
 	       ch.ended_at,
 	       (ch.ended_at AT TIME ZONE c.timezone)::date,
 	       ch.title,
-	       CASE WHEN ch.status = 'finished' THEN 'Finished together' ELSE 'Ended early' END,
+	       CASE
+	           WHEN ch.kind = 'mine' AND u.display_name IS NOT NULL THEN
+	               CASE WHEN ch.status = 'finished' THEN 'Finished — just ' ELSE 'Ended early — just ' END
+	               || u.display_name
+	           WHEN ch.status = 'finished' THEN 'Finished together'
+	           ELSE 'Ended early'
+	       END,
 	       ('/together/challenges/' || ch.id::text),
 	       NULL::text, NULL::uuid, NULL::timestamptz
 	FROM challenges ch
 	JOIN couples c ON c.id = ch.couple_id
+	LEFT JOIN users u ON u.id = ch.created_by
 	WHERE ch.couple_id = $1 AND ch.status IN ('finished', 'ended') AND ch.ended_at IS NOT NULL
 )
 -- Stable ordering: "at" alone can tie (an event with no start time, two

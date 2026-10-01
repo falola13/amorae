@@ -43,6 +43,9 @@ type Preferences struct {
 	// Whether a "together" event the other partner adds is announced. Only
 	// ever about events somebody else made; a "mine" event is never announced.
 	PartnerEvents bool
+	// Whether the other partner starting a challenge is announced. Their own
+	// switch, separate from Challenges (the daily nudge), which is opt-in.
+	PartnerChallenges bool
 	// What the create-event screen offers as already chosen. "1 hour
 	// before" out of the box, matching what the screen always offered
 	// before this was a preference; "" is a real choice — no default —
@@ -78,6 +81,7 @@ func Defaults() Preferences {
 		GoalMilestones:       true,
 		EventFollowups:       true,
 		PartnerEvents:        true,
+		PartnerChallenges:    true,
 		Nudges:               true,
 		DefaultEventReminder: "1 hour before",
 		QuietFrom:            "22:00",
@@ -117,6 +121,7 @@ type Patch struct {
 	DailyCap             *int
 	EventFollowups       *bool
 	PartnerEvents        *bool
+	PartnerChallenges    *bool
 	DefaultEventReminder *string
 	Nudges               *bool
 }
@@ -158,6 +163,7 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.GoalMilestones, patch.GoalMilestones)
 	setBool(&p.EventFollowups, patch.EventFollowups)
 	setBool(&p.PartnerEvents, patch.PartnerEvents)
+	setBool(&p.PartnerChallenges, patch.PartnerChallenges)
 	setBool(&p.Nudges, patch.Nudges)
 
 	if patch.QuietFrom != nil || patch.QuietTo != nil {
@@ -379,6 +385,8 @@ const (
 	KindGoalCrossing    = "goal_crossing"
 	// One partner's "together" event, told to the other. Never for "mine".
 	KindEventAdded = "event_added"
+	// One partner starting a challenge, told to the other.
+	KindChallengeStarted = "challenge_started"
 )
 
 // AllKinds is every kind there is. A kind missing from here is a kind no
@@ -388,7 +396,7 @@ var AllKinds = []string{
 	KindNewWeek, KindWeekPublished, KindPrayerReminder, KindEventReminder,
 	KindImportantDate, KindAppreciation, KindJournal, KindGoal, KindChallenge,
 	KindPrayerAnswered, KindBothPrayed, KindBothMarked, KindMemoryOnThisDay,
-	KindEventOver, KindGoalCrossing, KindEventAdded, KindNudge,
+	KindEventOver, KindGoalCrossing, KindEventAdded, KindNudge, KindChallengeStarted,
 }
 
 // OccursOn reports whether a date recurs on the given day (same month and

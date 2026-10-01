@@ -59,6 +59,7 @@ type prefsDTO struct {
 	MaxDailyCap          int    `json:"max_daily_cap"`
 	EventFollowups       bool   `json:"event_followups"`
 	PartnerEvents        bool   `json:"partner_events"`
+	PartnerChallenges    bool   `json:"partner_challenges"`
 	DefaultEventReminder string `json:"default_event_reminder"`
 	Nudges               bool   `json:"nudges"`
 }
@@ -84,6 +85,7 @@ func toDTO(p Preferences) prefsDTO {
 		MaxDailyCap:          maxDailyCap,
 		EventFollowups:       p.EventFollowups,
 		PartnerEvents:        p.PartnerEvents,
+		PartnerChallenges:    p.PartnerChallenges,
 		DefaultEventReminder: p.DefaultEventReminder,
 		Nudges:               p.Nudges,
 	}
@@ -110,6 +112,7 @@ type patchRequest struct {
 	DailyCap             *int    `json:"daily_cap"`
 	EventFollowups       *bool   `json:"event_followups"`
 	PartnerEvents        *bool   `json:"partner_events"`
+	PartnerChallenges    *bool   `json:"partner_challenges"`
 	DefaultEventReminder *string `json:"default_event_reminder"`
 	Nudges               *bool   `json:"nudges"`
 }

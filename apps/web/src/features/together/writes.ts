@@ -2,6 +2,7 @@ import type { EventInput, GoalInput } from "@/lib/api/schemas";
 import type {
   Challenge,
   ChallengeDayPatch,
+  ChallengePatch,
   Event,
   JournalEntry,
   Memory,
@@ -183,6 +184,23 @@ export const togetherWrites = {
   startCustomChallenge: defineWrite({
     mutationKey: ["challenge", "start-custom"],
     mutationFn: (input: StartChallengeInput) => api.startChallenge(input),
+    invalidates: CHALLENGE_STATE,
+    handlesError: true,
+    onlineOnly: true,
+  }),
+  // The edit page shows the server's field errors beside the fields, so no toast on top.
+  updateChallenge: defineWrite({
+    mutationKey: ["challenge", "update"],
+    mutationFn: ({ id, patch }: { id: string; patch: ChallengePatch }) =>
+      api.updateChallenge(id, patch),
+    invalidates: CHALLENGE_STATE,
+    handlesError: true,
+    onlineOnly: true,
+  }),
+  challengePlan: defineWrite({
+    mutationKey: ["challenge", "plan"],
+    mutationFn: ({ id, prompts }: { id: string; prompts: string[] }) =>
+      api.challengePlan(id, prompts),
     invalidates: CHALLENGE_STATE,
     handlesError: true,
     onlineOnly: true,

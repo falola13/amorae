@@ -18,6 +18,7 @@ const ICON_BY_KIND: Record<NotificationKind, IconName> = {
   goal_milestones: "flag",
   goal_crossing: "flag",
   challenge: "sliders",
+  challenge_started: "flag",
   prayer_answered: "check",
   both_prayed: "users",
   both_marked: "check",

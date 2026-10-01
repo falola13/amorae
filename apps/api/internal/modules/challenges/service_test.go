@@ -17,6 +17,9 @@ type fakeRepo struct {
 	records  int
 	entries  []Entry
 	started  []Template
+	specs    []Spec
+	edits    []Edit
+	plans    [][]string
 	ended    int
 	reflects []string
 }
@@ -34,16 +37,28 @@ func (r *fakeRepo) Get(_ context.Context, _, id uuid.UUID, _ time.Time) (Challen
 	return r.current, nil
 }
 func (r *fakeRepo) Past(context.Context, uuid.UUID, uuid.UUID) ([]Summary, error) { return nil, nil }
-func (r *fakeRepo) Start(_ context.Context, _, _ uuid.UUID, t Template, _ time.Time) (uuid.UUID, error) {
-	r.started = append(r.started, t)
+func (r *fakeRepo) Today(_ context.Context, _ uuid.UUID, now time.Time) (time.Time, error) {
+	return now.Truncate(24 * time.Hour), nil
+}
+func (r *fakeRepo) Start(_ context.Context, _, _ uuid.UUID, s Spec, _ time.Time) (uuid.UUID, error) {
+	r.started = append(r.started, s.Template)
+	r.specs = append(r.specs, s)
 	return r.current.ID, nil
+}
+func (r *fakeRepo) Edit(_ context.Context, _, _, _ uuid.UUID, e Edit, _ time.Time) error {
+	r.edits = append(r.edits, e)
+	return nil
+}
+func (r *fakeRepo) ReplacePlan(_ context.Context, _, _, _ uuid.UUID, prompts []string, _ time.Time) error {
+	r.plans = append(r.plans, prompts)
+	return nil
 }
 func (r *fakeRepo) Record(_ context.Context, _, _, _ uuid.UUID, _ int, e Entry, _ time.Time) error {
 	r.records++
 	r.entries = append(r.entries, e)
 	return nil
 }
-func (r *fakeRepo) End(context.Context, uuid.UUID, uuid.UUID, time.Time) error {
+func (r *fakeRepo) End(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, time.Time) error {
 	r.ended++
 	return nil
 }
@@ -206,7 +221,7 @@ func TestTodayN(t *testing.T) {
 		{"the next morning is day two", onDay(2), 2},
 		{"the last day", onDay(7), 7},
 		{"held at the last day once the calendar runs on", onDay(20), 7},
-		{"held at the first before it starts", time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC), 1},
+		{"no day at all before it starts", time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC), 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -288,6 +288,17 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 			Path:  "/together/events/" + c.ItemID.String(),
 			Tag:   KindEventAdded,
 		}
+	case KindChallengeStarted:
+		// The other partner began one. A "just me" one is still told, as news
+		// to cheer on rather than something to do; the creator never is, and
+		// RecentlyWritten already leaves them out.
+		wanted = c.Prefs.PartnerChallenges
+		message = push.Message{
+			Title: c.AuthorName + " started " + c.Subject,
+			Body:  challengeStartedBody(c, now),
+			Path:  "/together/challenges/" + c.ItemID.String(),
+			Tag:   KindChallengeStarted,
+		}
 	case KindPrayerAnswered:
 		// No prayer content: private writing (FR-NOTF-005.AC1), unlike the
 		// event exception (AC2) — wrong here costs more than it saves.
@@ -321,6 +332,24 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 		Key:     c.ItemID.String(),
 		Message: message,
 	}, true
+}
+
+// challengeStartedBody says when the first day opens, in the couple's own
+// calendar, or that a "just me" one is not theirs to do.
+func challengeStartedBody(c WrittenCandidate, now time.Time) string {
+	if c.Mine {
+		return "Just them — cheer them on."
+	}
+	zone, err := time.LoadLocation(c.Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	local := now.In(zone)
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC)
+	if !c.StartsOn.After(today) {
+		return "Day 1 opens today."
+	}
+	return "Day 1 opens " + c.StartsOn.Weekday().String() + "."
 }
 
 // ChallengeCandidate is one person and the challenge their couple is part
@@ -463,6 +492,11 @@ type WrittenCandidate struct {
 	// Undo window before this is safe to announce; zero for a journal entry.
 	Settles time.Duration
 	Prefs   Preferences
+	// For KindChallengeStarted: the couple's zone, the day it begins (midnight
+	// UTC, a calendar day), and whether it is a "just me" one.
+	Timezone string
+	StartsOn time.Time
+	Mine     bool
 }
 
 // WorkerRepository is what the worker needs of storage.

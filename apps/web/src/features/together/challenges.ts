@@ -2,6 +2,7 @@ import type {
   Challenge,
   ChallengeCategory,
   ChallengeDay,
+  ChallengeKind,
   ChallengeStatus,
   ChallengeTemplate,
 } from "@/lib/api/types";
@@ -62,13 +63,46 @@ export const dayDateLabel = (dateIso: string): string =>
 export const isCatchUp = (d: ChallengeDay, todayN: number): boolean =>
   d.open && d.n < todayN && !d.done && !d.skipped;
 
+/** Whether you can mark, edit, end and look back on it: a together one, or your own. A partner's
+ *  "just me" challenge is theirs, and you only read it. */
+export const isMarkable = (c: Pick<Challenge, "kind" | "can_edit">): boolean =>
+  c.kind !== "mine" || c.can_edit;
+
+/** Not begun yet: no day is open and "Day x of y" does not apply. */
+export const isScheduled = (c: Pick<Challenge, "starts_in">): boolean => c.starts_in > 0;
+
+/** "Starts Friday 9 October". */
+export const startsLabel = (c: Pick<Challenge, "started_on">): string =>
+  `Starts ${weekdayDate(c.started_on)}`;
+
+/** "in 3 days", "tomorrow". */
+export const startsIn = (n: number): string => (n === 1 ? "tomorrow" : `in ${n} days`);
+
+/** "Starts Friday 9 October · in 3 days" for a scheduled one, otherwise "Day 2 of 7". */
+export const progressLabel = (c: Challenge): string =>
+  isScheduled(c)
+    ? `${startsLabel(c)} · ${startsIn(c.starts_in)}`
+    : `Day ${shownDay(c)} of ${c.days.length}`;
+
+/** "Just you" on your own, "Adeola’s" on theirs, nothing on a together one. */
+export function ownerLabel(
+  c: Pick<Challenge, "kind" | "can_edit">,
+  partner: string,
+): string | null {
+  if (c.kind !== "mine") return null;
+  return c.can_edit ? "Just you" : `${partner}’s`;
+}
+
+/** The note on a challenge that is your partner's own. */
+export const cheerOn = (partner: string): string => `${partner}’s own — cheer them on.`;
+
 /** The number to show in "Day N of M", never past the last day. */
 export const shownDay = (c: Pick<Challenge, "today_n" | "days">): number =>
   Math.max(1, Math.min(c.today_n, c.days.length));
 
 /** Today's day when it is open and you have not marked it: what the home card offers. */
 export function homeChallengeDay(c: Challenge | undefined): ChallengeDay | null {
-  if (!c || c.status !== "active") return null;
+  if (!c || c.status !== "active" || !isMarkable(c) || isScheduled(c) || c.today_n < 1) return null;
   const d = c.days.find((x) => x.n === c.today_n);
   if (!d || !d.open || d.done || d.skipped) return null;
   return d;
@@ -83,6 +117,15 @@ export interface HomeChallengeRow {
 export const MAX_ACTIVE = 3;
 export const TOO_MANY = "Three at once is plenty — finish or end one first.";
 
+/** How many of the running ones count against you: together ones, and your own "just me" ones.
+ *  Your partner's own do not. */
+export const myActiveCount = (list: readonly Challenge[] | undefined): number =>
+  (list ?? []).filter((c) => c.status === "active" && isMarkable(c)).length;
+
+/** Whether you are already at the limit. The API is the authority; this only saves a round trip. */
+export const atLimit = (list: readonly Challenge[] | undefined): boolean =>
+  myActiveCount(list) >= MAX_ACTIVE;
+
 /** One row per running challenge whose today is open and unmarked, at most three. */
 export function homeChallengeRows(list: readonly Challenge[] | undefined): HomeChallengeRow[] {
   const rows: HomeChallengeRow[] = [];
@@ -95,17 +138,21 @@ export function homeChallengeRows(list: readonly Challenge[] | undefined): HomeC
 
 /** The day a running challenge is on: today's, or the last one when it has run past. */
 export const todaysDay = (c: Challenge): ChallengeDay | undefined =>
-  c.days.find((d) => d.n === c.today_n) ?? c.days[c.days.length - 1];
+  isScheduled(c) ? undefined : (c.days.find((d) => d.n === c.today_n) ?? c.days[c.days.length - 1]);
 
 /** The template keys that are running now, so the library can mark them. */
 export const runningKeys = (list: readonly Challenge[] | undefined): Set<string> =>
-  new Set((list ?? []).filter((c) => c.status === "active").map((c) => c.template));
+  new Set(
+    (list ?? []).filter((c) => c.status === "active" && isMarkable(c)).map((c) => c.template),
+  );
 
 /** The Together hub's line for challenges. */
 export function challengesLine(list: readonly Challenge[]): string {
   if (list.length === 0) return "Something short, together";
   if (list.length === 1)
-    return `${list[0].title}, day ${shownDay(list[0])} of ${list[0].days.length}`;
+    return isScheduled(list[0])
+      ? `${list[0].title}, ${startsLabel(list[0]).toLowerCase()}`
+      : `${list[0].title}, day ${shownDay(list[0])} of ${list[0].days.length}`;
   return `${list.length} running`;
 }
 
@@ -207,13 +254,67 @@ export function customPrompts(
   return Array.from({ length: Math.max(0, n) }, () => line.trim());
 }
 
-/** The first thing wrong with a custom challenge, before it is sent. */
-export function customProblem(title: string, prompts: readonly string[]): string | null {
-  if (!title.trim()) return "Give it a name.";
+/** The first thing wrong with a plan, before it is sent. */
+export function planProblem(prompts: readonly string[]): string | null {
   if (prompts.length < MIN_CUSTOM_DAYS || prompts.length > MAX_CUSTOM_DAYS)
     return `Choose between ${MIN_CUSTOM_DAYS} and ${MAX_CUSTOM_DAYS} days.`;
   if (prompts.some((p) => !p.trim())) return "Each day needs a line.";
   if (prompts.some((p) => p.length > MAX_CUSTOM_LINE))
     return `Keep each day under ${MAX_CUSTOM_LINE} characters.`;
   return null;
+}
+
+/** The first thing wrong with a custom challenge, before it is sent. */
+export function customProblem(title: string, prompts: readonly string[]): string | null {
+  if (!title.trim()) return "Give it a name.";
+  return planProblem(prompts);
+}
+
+/** The plan as it is edited: one line per day. */
+export const planToText = (prompts: readonly string[]): string => prompts.join("\n");
+
+/** The days in an edited plan. Same rule as a pasted list: a line per day, blanks ignored. */
+export const planFromText = linesToPrompts;
+
+/** "Make every day the same": rewrites the days from `fromDay` (1-based) on with one line, keeping
+ *  the days before it. An empty line changes nothing. */
+export function applyLine(prompts: readonly string[], line: string, fromDay = 1): string[] {
+  const text = line.trim();
+  if (!text) return [...prompts];
+  const from = Math.max(0, fromDay - 1);
+  return prompts.map((p, i) => (i >= from ? text : p));
+}
+
+/** Whether two plans differ, in length or in any day's text. */
+export const planChanged = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length !== b.length || a.some((p, i) => p !== b[i]);
+
+/** How far ahead a challenge may be scheduled. */
+export const MAX_START_AHEAD = 60;
+
+/** The earliest and latest day a start can be picked, as YYYY-MM-DD. */
+export const startBounds = (now: Date): { min: string; max: string } => ({
+  min: iso(now),
+  max: iso(addDays(now, MAX_START_AHEAD)),
+});
+
+/** What is wrong with a picked start day, if anything. */
+export function startProblem(dateIso: string, now: Date): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return "Pick a day to start.";
+  const { min, max } = startBounds(now);
+  if (dateIso < min) return "Pick today or a day after.";
+  if (dateIso > max) return `Pick a day within ${MAX_START_AHEAD} days.`;
+  return null;
+}
+
+/** The "started_on" to send: nothing for today, which is what the API assumes. */
+export const startedOnToSend = (dateIso: string, now: Date): string | undefined =>
+  dateIso && dateIso > iso(now) ? dateIso : undefined;
+
+/** The line under "Start it?": when Day 1 opens, and for whom. */
+export function startConfirm(kind: ChallengeKind, startedOn: string | undefined): string {
+  if (startedOn) return `Day 1 opens ${weekdayDate(startedOn)}.`;
+  return kind === "mine"
+    ? "Day 1 opens today — just for you."
+    : "Day 1 opens today for both of you.";
 }

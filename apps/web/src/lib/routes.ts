@@ -62,6 +62,7 @@ export const routes = {
   challenges: "/together/challenges",
   challengeNew: "/together/challenges/new",
   challenge: (id: string) => `/together/challenges/${seg(id)}`,
+  challengeEdit: (id: string) => `/together/challenges/${seg(id)}/edit`,
 
   // Settings
   settings: "/settings",

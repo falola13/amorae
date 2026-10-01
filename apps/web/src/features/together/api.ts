@@ -3,6 +3,7 @@ import type {
   Appreciation,
   Challenge,
   ChallengeDayPatch,
+  ChallengePatch,
   ChallengePast,
   ChallengeTemplate,
   StartChallengeInput,
@@ -59,6 +60,11 @@ export const togetherApi = {
     http.get<Challenge>(apiPath`/challenges/${id}`).then((r) => r.data),
   startChallenge: (input: StartChallengeInput) =>
     http.post<Challenge>("/challenges", input).then((r) => r.data),
+  updateChallenge: (id: string, patch: ChallengePatch) =>
+    http.patch<Challenge>(apiPath`/challenges/${id}`, patch).then((r) => r.data),
+  /** Replaces the whole plan: one line per day, 3 to 100. */
+  challengePlan: (id: string, prompts: string[]) =>
+    http.put<Challenge>(apiPath`/challenges/${id}/plan`, { prompts }).then((r) => r.data),
   leaveChallenge: (id: string) => http.delete(apiPath`/challenges/${id}`).then(() => undefined),
   challengeDay: (id: string, n: number, patch: ChallengeDayPatch) =>
     http.patch<Challenge>(apiPath`/challenges/${id}/days/${n}`, patch).then((r) => r.data),

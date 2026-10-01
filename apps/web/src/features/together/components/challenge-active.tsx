@@ -19,7 +19,16 @@ import type { Challenge, ChallengeDay } from "@/lib/api/types";
 import { iso } from "@/lib/dates";
 import { keys } from "@/lib/query/keys";
 import { today } from "@/lib/today";
-import { dayDateLabel, isCatchUp, opensLabel, shownDay } from "../challenges";
+import {
+  cheerOn,
+  dayDateLabel,
+  isCatchUp,
+  isMarkable,
+  isScheduled,
+  opensLabel,
+  ownerLabel,
+  progressLabel,
+} from "../challenges";
 import { ChallengeNoteSheet } from "./challenge-note-sheet";
 
 const chip = "press h-9 rounded-full px-3.5 text-[14px] font-semibold";
@@ -29,6 +38,7 @@ function DayItem({
   c,
   partner,
   todayIso,
+  markable,
   onDone,
   onSkip,
   onNote,
@@ -37,6 +47,8 @@ function DayItem({
   c: Challenge;
   partner: string;
   todayIso: string;
+  /** False on a partner's own challenge: you read it, you do not mark it. */
+  markable: boolean;
   onDone: () => void;
   onSkip: () => void;
   onNote: () => void;
@@ -101,7 +113,7 @@ function DayItem({
         </p>
       ) : null}
 
-      {d.open ? (
+      {d.open && markable ? (
         <div className="flex flex-wrap gap-1 pl-9">
           {!d.done ? (
             <button type="button" onClick={onDone} className={cx(chip, "bg-plum-tint text-plum")}>
@@ -133,7 +145,10 @@ export function ChallengeActive({ c, partner }: { c: Challenge; partner: string 
   const [noting, setNoting] = useState<{ n: number; marking: boolean } | null>(null);
   const todayIso = iso(today());
   const todayDay = c.days.find((d) => d.n === c.today_n && d.open);
-  const todayOpen = todayDay && !todayDay.done && !todayDay.skipped ? todayDay : null;
+  const markable = isMarkable(c);
+  const scheduled = isScheduled(c);
+  const owner = ownerLabel(c, partner);
+  const todayOpen = markable && todayDay && !todayDay.done && !todayDay.skipped ? todayDay : null;
   const noted = noting ? c.days.find((d) => d.n === noting.n) : undefined;
 
   const skip = (n: number) => set.mutate({ id: c.id, n, patch: { skipped: true } });
@@ -167,11 +182,18 @@ export function ChallengeActive({ c, partner }: { c: Challenge; partner: string 
       <Main>
         <div className="pt-2">
           <Micro>
-            Day {shownDay(c)} of {c.days.length}
+            {progressLabel(c)}
+            {owner ? ` · ${owner}` : ""}
           </Micro>
         </div>
         <Title className="mt-2">{c.title}</Title>
-        <Para className="mt-1.5">One small thing a day. Skip any day you need to.</Para>
+        <Para className="mt-1.5">
+          {!markable
+            ? cheerOn(partner)
+            : scheduled
+              ? "Nothing to do yet. Day 1 opens when it starts."
+              : "One small thing a day. Skip any day you need to."}
+        </Para>
         <ol className="m-0 mt-4 list-none border-t border-line p-0">
           {c.days.map((d) => (
             <DayItem
@@ -180,6 +202,7 @@ export function ChallengeActive({ c, partner }: { c: Challenge; partner: string 
               c={c}
               partner={partner}
               todayIso={todayIso}
+              markable={markable}
               onDone={() => setNoting({ n: d.n, marking: true })}
               onSkip={() => skip(d.n)}
               onNote={() => setNoting({ n: d.n, marking: false })}
@@ -187,21 +210,23 @@ export function ChallengeActive({ c, partner }: { c: Challenge; partner: string 
           ))}
         </ol>
       </Main>
-      <BottomActions>
-        {todayOpen ? (
-          <>
-            <Button icon="check" onClick={() => setNoting({ n: todayOpen.n, marking: true })}>
-              I did today&rsquo;s
-            </Button>
-            <Button variant="text" onClick={() => skip(todayOpen.n)}>
-              Skip today
-            </Button>
-          </>
-        ) : null}
-        <Button variant="text" className="text-stone" onClick={() => setEnding(true)}>
-          End this challenge
-        </Button>
-      </BottomActions>
+      {markable ? (
+        <BottomActions>
+          {todayOpen ? (
+            <>
+              <Button icon="check" onClick={() => setNoting({ n: todayOpen.n, marking: true })}>
+                I did today&rsquo;s
+              </Button>
+              <Button variant="text" onClick={() => skip(todayOpen.n)}>
+                Skip today
+              </Button>
+            </>
+          ) : null}
+          <Button variant="text" className="text-stone" onClick={() => setEnding(true)}>
+            End this challenge
+          </Button>
+        </BottomActions>
+      ) : null}
 
       <ChallengeNoteSheet
         key={noting ? `${noting.n}-${noting.marking}` : "closed"}
@@ -219,7 +244,11 @@ export function ChallengeActive({ c, partner }: { c: Challenge; partner: string 
         title="End this challenge?"
         labelledBy="end-ch-h"
       >
-        <Para>It ends for both of you and stays in your story as ended early.</Para>
+        <Para>
+          {c.kind === "mine"
+            ? "It ends and stays in your story as ended early."
+            : "It ends for both of you and stays in your story as ended early."}
+        </Para>
         <div className="flex flex-col gap-1">
           <Button
             variant="secondary"

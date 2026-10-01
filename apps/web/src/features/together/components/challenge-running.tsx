@@ -7,7 +7,7 @@ import { Main } from "@/components/layout/screen";
 import { Button, Micro, Para, Title } from "@/components/ui/kit";
 import type { Challenge } from "@/lib/api/types";
 import { routes } from "@/lib/routes";
-import { MAX_ACTIVE, TOO_MANY, shownDay, todaysDay } from "../challenges";
+import { TOO_MANY, atLimit, isMarkable, ownerLabel, progressLabel, todaysDay } from "../challenges";
 import { PastChallenges } from "./challenge-library";
 
 /** One line about a mark: yours, or theirs. */
@@ -19,6 +19,8 @@ function mark(done?: boolean, skipped?: boolean, note?: string): string {
 
 function RunningCard({ c, partner }: { c: Challenge; partner: string }) {
   const d = todaysDay(c);
+  const owner = ownerLabel(c, partner);
+  const mine = isMarkable(c);
   return (
     <li className="list-none">
       <Link
@@ -29,7 +31,8 @@ function RunningCard({ c, partner }: { c: Challenge; partner: string }) {
           <span className="flex min-w-0 grow flex-col gap-0.5">
             <span className="text-[17px] font-semibold">{c.title}</span>
             <span className="text-[12px] font-semibold text-stone">
-              Day {shownDay(c)} of {c.days.length}
+              {progressLabel(c)}
+              {owner ? ` · ${owner}` : ""}
             </span>
           </span>
           <Icon name="right" size={18} className="text-stone" />
@@ -38,7 +41,7 @@ function RunningCard({ c, partner }: { c: Challenge; partner: string }) {
           <>
             <span className="text-[15px] leading-snug text-ink">{d.text}</span>
             <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] font-semibold text-stone">
-              <span>You: {mark(d.done, d.skipped, d.note)}</span>
+              {mine ? <span>You: {mark(d.done, d.skipped, d.note)}</span> : null}
               <span>
                 {partner}: {mark(d.partner_done, d.partner_skipped, d.partner_note)}
               </span>
@@ -60,7 +63,7 @@ export function ChallengeRunning({
   partner: string;
   onStartAnother: () => void;
 }) {
-  const full = list.length >= MAX_ACTIVE;
+  const full = atLimit(list);
   return (
     <Main>
       <div className="pt-2">

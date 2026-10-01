@@ -21,16 +21,25 @@ type Repository interface {
 	// Past is the couple's finished and left challenges, newest first, with
 	// the caller's count and their partner's.
 	Past(ctx context.Context, coupleID, userID uuid.UUID) ([]Summary, error)
-	// Start begins a challenge unless the couple already has MaxActive going
-	// (ErrTooMany) or the same curated one (ErrAlreadyRunning).
-	Start(ctx context.Context, coupleID, createdBy uuid.UUID, t Template, on time.Time) (uuid.UUID, error)
+	// Today is the couple's own date as of `now`.
+	Today(ctx context.Context, coupleID uuid.UUID, now time.Time) (time.Time, error)
+	// Start begins a challenge unless the starter already has MaxActive going,
+	// or the partner does and it is shared (ErrTooMany), or the same curated
+	// one is already running for them (ErrAlreadyRunning).
+	Start(ctx context.Context, coupleID, createdBy uuid.UUID, s Spec, now time.Time) (uuid.UUID, error)
+	// Edit changes the title, start day or kind of an active challenge the
+	// caller may touch, by the rules in Challenge.CheckEdit.
+	Edit(ctx context.Context, coupleID, userID, id uuid.UUID, e Edit, now time.Time) error
+	// ReplacePlan sets the days' texts by position, by the rules in
+	// Challenge.CheckPlan, finishing it if that leaves every day answered.
+	ReplacePlan(ctx context.Context, coupleID, userID, id uuid.UUID, prompts []string, at time.Time) error
 	// Record writes one person's entry for one day of an active challenge
 	// and, in the same write, finishes the challenge if that made every
 	// member's every day marked. ErrOver when it is no longer active.
 	Record(ctx context.Context, coupleID, userID, id uuid.UUID, n int, e Entry, at time.Time) error
 	// End leaves an active challenge, keeping it; ErrNotFound when it is not
 	// one that is going.
-	End(ctx context.Context, coupleID, id uuid.UUID, at time.Time) error
+	End(ctx context.Context, coupleID, userID, id uuid.UUID, at time.Time) error
 	// SetReflection saves, or with "" removes, one person's reflection on a
 	// challenge that is over.
 	SetReflection(ctx context.Context, coupleID, userID, id uuid.UUID, text string, at time.Time) error
@@ -63,6 +72,10 @@ type Viewer struct {
 	Me      uuid.UUID
 	Partner uuid.UUID
 }
+
+// CanEdit is whether this person can change it: it is still going and it is
+// theirs to touch.
+func (v Viewer) CanEdit() bool { return v.Status == StatusActive && v.MayTouch(v.Me) }
 
 // Active is everything the couple has going, oldest started first; empty
 // when there is nothing.
@@ -121,11 +134,15 @@ func (s *Service) Past(ctx context.Context, userID uuid.UUID) ([]Summary, error)
 	return s.repo.Past(ctx, coupleID, userID)
 }
 
-// StartInput is either a curated template's key or a challenge the couple
-// wrote; never both.
+// StartInput is a curated template's key, a challenge the couple wrote, or an
+// earlier challenge to do again; exactly one of the three. Kind and StartedOn
+// are optional: empty is together, and today.
 type StartInput struct {
-	Template string
-	Custom   *Custom
+	Template  string
+	Custom    *Custom
+	Again     string
+	Kind      string
+	StartedOn string
 }
 
 func (s *Service) Start(ctx context.Context, userID uuid.UUID, in StartInput) (Viewer, error) {
@@ -133,14 +150,61 @@ func (s *Service) Start(ctx context.Context, userID uuid.UUID, in StartInput) (V
 	if err != nil {
 		return Viewer{}, err
 	}
-	t, err := templateFor(in)
+	kind, err := ValidateKind(in.Kind)
 	if err != nil {
 		return Viewer{}, err
 	}
-	id, err := s.repo.Start(ctx, coupleID, userID, t, s.now())
+	var startedOn *time.Time
+	if in.StartedOn != "" {
+		on, err := ParseDay(in.StartedOn)
+		if err != nil {
+			return Viewer{}, err
+		}
+		today, err := s.repo.Today(ctx, coupleID, s.now())
+		if err != nil {
+			return Viewer{}, err
+		}
+		if err := ValidateStart(today, on); err != nil {
+			return Viewer{}, err
+		}
+		startedOn = &on
+	}
+
+	var t Template
+	if in.Again != "" {
+		if in.Template != "" || in.Custom != nil {
+			return Viewer{}, apperr.Validation(map[string]string{"again": "Choose one of ours, write your own, or do one again."})
+		}
+		again, err := uuid.Parse(in.Again)
+		if err != nil {
+			return Viewer{}, ErrNoSuchChallenge
+		}
+		before, err := s.repo.Get(ctx, coupleID, again, s.now())
+		if err != nil {
+			return Viewer{}, err
+		}
+		t = Template{Key: before.Template, Title: before.Title}
+		for _, d := range before.Days {
+			t.Prompts = append(t.Prompts, d.Prompt)
+		}
+		// Somebody else's own stays theirs; doing it again is a shared one
+		// unless the person asking is who it belonged to — and said so.
+		if in.Kind == "" && before.Kind == KindMine && before.CreatedBy == userID {
+			kind = KindMine
+		}
+	} else {
+		t, err = templateFor(in)
+		if err != nil {
+			return Viewer{}, err
+		}
+	}
+
+	id, err := s.repo.Start(ctx, coupleID, userID, Spec{Template: t, Kind: kind, StartedOn: startedOn}, s.now())
 	if err != nil {
 		return Viewer{}, err
 	}
+	// The other partner is told it was started; sooner than the next tick.
+	s.poker.Poke()
 	return s.Get(ctx, userID, id)
 }
 
@@ -172,6 +236,10 @@ func (s *Service) Mark(ctx context.Context, userID, id uuid.UUID, n int, done, s
 	if err != nil {
 		return Viewer{}, err
 	}
+	// A "just me" challenge is its creator's to write on, and nobody else's.
+	if !c.MayTouch(userID) {
+		return Viewer{}, ErrNoSuchChallenge
+	}
 	if c.Status != StatusActive {
 		return Viewer{}, ErrOver
 	}
@@ -202,7 +270,7 @@ func (s *Service) Leave(ctx context.Context, userID, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.End(ctx, coupleID, id, s.now())
+	return s.repo.End(ctx, coupleID, userID, id, s.now())
 }
 
 // Reflect saves what this person took from a challenge that is over; empty
@@ -220,10 +288,73 @@ func (s *Service) Reflect(ctx context.Context, userID, id uuid.UUID, text string
 	if err != nil {
 		return Viewer{}, err
 	}
+	if !c.MayTouch(userID) {
+		return Viewer{}, ErrNoSuchChallenge
+	}
 	if c.Status == StatusActive {
 		return Viewer{}, ErrNotOver
 	}
 	if err := s.repo.SetReflection(ctx, coupleID, userID, id, text, s.now()); err != nil {
+		return Viewer{}, err
+	}
+	return s.Get(ctx, userID, id)
+}
+
+// EditInput is what a client sent to change; a nil field is left alone.
+type EditInput struct {
+	Title     *string
+	StartedOn *string
+	Kind      *string
+}
+
+// Edit changes an active challenge's title, start day or kind. Who may, and
+// what is still allowed once it has begun or been joined, is Challenge.CheckEdit.
+func (s *Service) Edit(ctx context.Context, userID, id uuid.UUID, in EditInput) (Viewer, error) {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return Viewer{}, err
+	}
+	e := Edit{Title: in.Title}
+	if in.StartedOn != nil {
+		on, err := ParseDay(*in.StartedOn)
+		if err != nil {
+			return Viewer{}, err
+		}
+		e.StartedOn = &on
+	}
+	if in.Kind != nil {
+		if *in.Kind == "" {
+			return Viewer{}, apperr.Validation(map[string]string{"kind": "Choose together or just me."})
+		}
+		kind, err := ValidateKind(*in.Kind)
+		if err != nil {
+			return Viewer{}, err
+		}
+		e.Kind = &kind
+	}
+	e, err = ValidateEdit(e)
+	if err != nil {
+		return Viewer{}, err
+	}
+	if err := s.repo.Edit(ctx, coupleID, userID, id, e, s.now()); err != nil {
+		return Viewer{}, err
+	}
+	return s.Get(ctx, userID, id)
+}
+
+// ReplacePlan sets what each day says, by position, extending or shortening
+// the challenge. Returns it as the caller now sees it, finished if that was
+// the last thing standing between the participants and the end.
+func (s *Service) ReplacePlan(ctx context.Context, userID, id uuid.UUID, prompts []string) (Viewer, error) {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return Viewer{}, err
+	}
+	prompts, err = ValidatePlan(prompts)
+	if err != nil {
+		return Viewer{}, err
+	}
+	if err := s.repo.ReplacePlan(ctx, coupleID, userID, id, prompts, s.now()); err != nil {
 		return Viewer{}, err
 	}
 	return s.Get(ctx, userID, id)
