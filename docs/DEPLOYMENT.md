@@ -315,17 +315,51 @@ Two things that are *not* the cause, both worth eliminating before chasing it:
 
 ## Backups
 
-The point of this app is that it is a record. A free VM that dies takes it
-with it.
+The point of this app is that it is a record. In October 2026 the Neon
+project ran out of its monthly compute and was hours from refusing every
+query; the data was copied out with `pg_dump` while it still answered. Don't
+depend on that window again.
+
+**Nightly, automatically.** `.github/workflows/backup.yml` dumps the
+production database at 02:17 UTC, checks the dump reads back, encrypts it
+with a passphrase, and keeps it as a workflow artifact for 30 days. It needs
+two repository secrets (Settings → Secrets and variables → Actions):
+
+- `BACKUP_DATABASE_URL` — the **direct** connection string (no `-pooler`),
+  with `?sslmode=require`.
+- `BACKUP_PASSPHRASE` — long and random, kept in a password manager. The
+  repository is public and so are its artifacts; the encryption is the only
+  thing between them and anyone. Lose the passphrase and the backups are
+  unreadable — to you as well.
+
+GitHub emails the repository owner when a scheduled run fails. It also
+**pauses scheduled workflows on a public repository after 60 days without a
+commit** — re-enable it from the Actions tab if that happens. Run one by hand
+any time: Actions → Nightly backup → Run workflow, or
+`gh workflow run backup.yml`.
+
+**Restoring.** Download the night you want, decrypt, and load it:
+
+```
+gh run download --name amorae-2026-10-17 --dir backup
+gpg --decrypt backup/amorae-2026-10-17.dump.gpg > amorae.dump
+docker run --rm -e TARGET -v "$PWD:/out" postgres:18-alpine \
+  sh -c 'pg_restore --no-owner --no-acl --clean --if-exists -d "$TARGET" /out/amorae.dump'
+```
+
+with `TARGET` set to the database to restore into. `--clean` replaces what
+is there; to inspect instead, restore into a throwaway database (a new Neon
+branch, or the local compose `db`) first. `pg_restore --list amorae.dump`
+shows what a dump holds without restoring anything.
+
+Untested backups are not backups: restore one into a throwaway database once,
+so you know the commands work before you need them in a hurry.
+
+On a single machine (Option A or B), the same thing by hand:
 
 ```
 docker compose exec -T db pg_dump -U amorae amorae | gzip > amorae-$(date +%F).sql.gz
 ```
-
-Nightly via cron, and off the machine — Backblaze B2's free tier, or a copy
-pulled to your laptop weekly. Untested backups are not backups: restore one
-into a throwaway container once, so you know the command works before you need
-it in a hurry.
 
 ## What will eventually cost money
 
