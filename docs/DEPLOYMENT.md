@@ -347,7 +347,19 @@ docker run --rm -e TARGET -v "$PWD:/out" postgres:18-alpine \
   sh -c 'pg_restore --no-owner --no-acl --clean --if-exists -d "$TARGET" /out/amorae.dump'
 ```
 
-with `TARGET` set to the database to restore into. `--clean` replaces what
+with `TARGET` set to the database to restore into.
+
+On Windows (PowerShell), use the `gpg` that ships with Git rather than
+installing one in a container — antivirus HTTPS scanning (Avast's, here)
+breaks downloads inside containers — and give it the passphrase as a file:
+piped from PowerShell it gains a trailing carriage return and fails with
+"Bad session key". `-o`, not `>`, which would mangle the binary file.
+
+```
+$pp = Read-Host "Backup passphrase" -AsSecureString
+$f = New-TemporaryFile; [IO.File]::WriteAllText($f, [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($pp)))
+& "C:\Program Files\Git\usr\bin\gpg.exe" --batch --yes --pinentry-mode loopback --passphrase-file "$f" -o backup\amorae.dump -d backup\amorae-2026-10-17.dump.gpg; Remove-Item $f
+``` `--clean` replaces what
 is there; to inspect instead, restore into a throwaway database (a new Neon
 branch, or the local compose `db`) first. `pg_restore --list amorae.dump`
 shows what a dump holds without restoring anything.
