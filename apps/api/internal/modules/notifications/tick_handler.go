@@ -55,9 +55,20 @@ func (h *TickHandler) tick(w http.ResponseWriter, r *http.Request) {
 	// for the same connections could turn one slow tick into several — and
 	// Poke may already be running one of its own, so this goes through the
 	// same lock rather than a second one of its own.
-	sent, ran, err := h.worker.TryTick(ctx)
+	//
+	// And most ticks have nothing to do: the worker says when something could
+	// next be due, and until then answering costs no database time at all —
+	// which is what lets a serverless Postgres go to sleep between them.
+	sent, ran, reason, err := h.worker.TickIfDue(ctx)
 	if !ran {
-		writeTick(w, http.StatusOK, map[string]any{"status": "already running"})
+		if reason == reasonRunning {
+			writeTick(w, http.StatusOK, map[string]any{"status": "already running"})
+			return
+		}
+		writeTick(w, http.StatusOK, map[string]any{
+			"status": "nothing due",
+			"next":   h.worker.NextDue().UTC().Format(time.RFC3339),
+		})
 		return
 	}
 	if err != nil {

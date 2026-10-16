@@ -6,7 +6,10 @@ import (
 	"time"
 )
 
-const purgeInterval = time.Hour
+// Daily, not hourly: the retention window is thirty days, so an hour's
+// precision buys nothing — and each sweep wakes a scale-to-zero database
+// (Neon) for minutes, which hourly added up to a real share of the month.
+const purgeInterval = 24 * time.Hour
 
 type purgeRepository interface {
 	PurgeDissolvedBefore(ctx context.Context, cutoff time.Time) (int64, error)

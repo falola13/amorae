@@ -201,6 +201,32 @@ request, so nothing here has to stay awake.
   you the worker has stopped, and silence from a notification system looks
   exactly like having nothing to say.
 
+## Keeping Neon asleep
+
+Neon's free plan allows 100 compute-unit-hours a month, and compute suspends
+after about five minutes with no activity. The five-minute cron used to query
+the database on every tick, so compute never suspended: 24 hours a day at
+0.25 CU is about 180 CU-hours a month, and the allowance was gone in two weeks.
+
+Now `POST /internal/tick` only touches the database when something could be
+due. The worker remembers when its last pass said the next thing is due (an
+event reminder, a prayer reminder time, the 08:00 morning in each couple's
+zone, the end of quiet hours), and a tick before then answers
+`{"status":"nothing due","next":"..."}` without a query. A pass still runs on
+the first tick after a restart, after any successful write through the API,
+whenever the next-due time arrives, and at least every three hours as a cap on
+how late anything unforeseen can be. The cron stays at every five minutes: it
+also keeps the free API host awake, and a skipped tick costs no database time.
+The connection pool closes idle connections after a minute, so it does not hold
+compute open either.
+
+Two settings make that hold:
+
+- **Render's health check path must be `/healthz`**, not `/readyz`. `/readyz`
+  pings the database, which wakes it every time the platform checks.
+- **Fix Neon's compute at 0.25 CU** (minimum and maximum), so it cannot
+  autoscale above that and burn the allowance faster while awake.
+
 ## The domain
 
 **You do not need one.** Every option above gives an HTTPS hostname for free —

@@ -219,8 +219,14 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	// empty context and quietly does nothing. It also no-ops on reads and on
 	// requests without the header, so carrying it on every authed route costs
 	// nothing, and a new endpoint is covered without anybody remembering to.
+	//
+	// InvalidateOnWrite sits inside it: any successful change then makes the
+	// next cron tick run a worker pass rather than skip as "nothing due".
 	v1 := router.Version(httpx.V1).
-		WithAuthed(middleware.Idempotent(idempotency.NewPostgresStore(db), time.Now, log))
+		WithAuthed(
+			middleware.Idempotent(idempotency.NewPostgresStore(db), time.Now, log),
+			notifications.InvalidateOnWrite(notificationsWorker),
+		)
 	userHandler.RegisterRoutes(v1)
 	authHandler.RegisterRoutes(v1.With(middleware.RateLimit(authRequests, "auth")))
 	couplesHandler.RegisterRoutes(v1.With(middleware.RateLimit(coupleRequests, "couples")))

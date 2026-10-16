@@ -36,6 +36,11 @@ func Connect(ctx context.Context, url string, maxConns int32) (*DB, error) {
 		return nil, fmt.Errorf("parsing database url: %w", err)
 	}
 	cfg.MaxConns = maxConns
+	// Neon scales compute to zero after a few idle minutes, and an open
+	// connection counts as activity. So keep none open when nothing is
+	// happening: no floor, and an idle one is closed within a minute.
+	cfg.MinConns = 0
+	cfg.MaxConnIdleTime = time.Minute
 
 	// Behind a transaction pooler, pgx's cached prepared statements collide
 	// across clients sharing a backend (SQLSTATE 08P01). DescribeExec avoids

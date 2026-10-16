@@ -556,6 +556,16 @@ type Worker struct {
 	// (see wakeWhenSettled); wakeFor is when. Guarded by pokeMu.
 	wake    *time.Timer
 	wakeFor time.Time
+
+	// What TickIfDue decides on, so a cron tick that finds nothing due costs
+	// no database time. All in memory, so a fresh process starts with a zero
+	// nextDue and runs a pass first.
+	stateMu  sync.Mutex
+	lastPass time.Time
+	nextDue  time.Time
+	// dirty: something was written since the last pass, so what is due may
+	// have changed in ways the last pass could not have seen.
+	dirty bool
 }
 
 func NewWorker(repo WorkerRepository, sender push.Sender, now func() time.Time, log *slog.Logger) *Worker {
@@ -573,6 +583,69 @@ func (w *Worker) TryTick(ctx context.Context) (sent int, ran bool, err error) {
 	defer w.running.Unlock()
 	sent, err = w.Tick(ctx)
 	return sent, true, err
+}
+
+// safetyInterval caps how late an unforeseen notification can be: whatever
+// nextDueFrom failed to foresee, a pass still runs at least this often.
+const safetyInterval = 3 * time.Hour
+
+// Why TickIfDue did or did not run a pass.
+const (
+	reasonFirstPass = "first pass"
+	reasonChanged   = "something changed"
+	reasonDue       = "something due"
+	reasonSafety    = "safety interval"
+	reasonNothing   = "nothing due"
+	reasonRunning   = "already running"
+)
+
+// Invalidate says something was written, so the next TickIfDue runs a pass
+// whatever the clock says. Cheap and lock-light: a request path may call it.
+func (w *Worker) Invalidate() {
+	w.stateMu.Lock()
+	w.dirty = true
+	w.stateMu.Unlock()
+}
+
+// NextDue is when the last pass expected to next have something to do; zero
+// before any pass has run.
+func (w *Worker) NextDue() time.Time {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	return w.nextDue
+}
+
+// TickIfDue is TryTick for a caller that arrives on a schedule: it runs a
+// pass only when one could find something — a write since the last, a
+// notification the last pass saw coming, or the safety interval — and
+// otherwise returns without touching the database. reason says why, either
+// way; ran is false for both "nothing due" and "already running".
+func (w *Worker) TickIfDue(ctx context.Context) (sent int, ran bool, reason string, err error) {
+	reason, due := w.dueNow(w.now())
+	if !due {
+		return 0, false, reasonNothing, nil
+	}
+	sent, ran, err = w.TryTick(ctx)
+	if !ran {
+		return 0, false, reasonRunning, nil
+	}
+	return sent, true, reason, err
+}
+
+func (w *Worker) dueNow(now time.Time) (reason string, due bool) {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	switch {
+	case w.dirty:
+		return reasonChanged, true
+	case w.nextDue.IsZero():
+		return reasonFirstPass, true
+	case !now.Before(w.nextDue):
+		return reasonDue, true
+	case !now.Before(w.lastPass.Add(safetyInterval)):
+		return reasonSafety, true
+	}
+	return reasonNothing, false
 }
 
 // Poke asks for one more pass soon, off whatever request triggered it —
@@ -662,13 +735,41 @@ func (w *Worker) wakeWhenSettled(written []WrittenCandidate, now time.Time) {
 
 // Tick does one pass: find who is due, claim each send, and deliver.
 // Returns count sent; a failed individual send is logged and skipped.
+//
+// Whoever drives it, the pass also books the next one (nextDue), so the cron
+// can tell a tick with nothing to do from one with something.
 func (w *Worker) Tick(ctx context.Context) (int, error) {
 	now := w.now()
 
+	// Cleared before the pass, not after: a write landing mid-pass may not
+	// have been read, and must still make the next tick run.
+	w.stateMu.Lock()
+	w.dirty = false
+	w.stateMu.Unlock()
+
+	var looked seen
+	sent, err := w.pass(ctx, now, &looked)
+
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	if err != nil || looked.retry {
+		// A failed pass, or a send that failed and was released, is tried
+		// again at the next tick rather than at the next thing due.
+		w.dirty = true
+	}
+	if err == nil {
+		w.lastPass = now
+		w.nextDue = nextDueFrom(now, looked)
+	}
+	return sent, err
+}
+
+func (w *Worker) pass(ctx context.Context, now time.Time, looked *seen) (int, error) {
 	candidates, err := w.repo.CurrentWeekCandidates(ctx, now)
 	if err != nil {
 		return 0, err
 	}
+	looked.people = candidates
 
 	var due []Notification
 	for _, c := range candidates {
@@ -692,6 +793,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	looked.events = events
 	for _, c := range events {
 		if n, ok := ForEventReminder(c, now); ok {
 			due = append(due, n)
@@ -702,6 +804,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	looked.dates = dates
 	for _, c := range dates {
 		due = append(due, ForImportantDates(c, now)...)
 	}
@@ -721,6 +824,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	looked.challenges = challenges
 	due = append(due, ForChallenges(challenges, now)...)
 
 	bothMarked, err := w.repo.BothMarkedDays(ctx, now.Add(-mutualGrace))
@@ -757,6 +861,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	looked.ended = ended
 	for _, c := range ended {
 		if n, ok := ForEventOver(c, now); ok {
 			due = append(due, n)
@@ -767,6 +872,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	looked.memories = anniversaries
 	// Grouped per person: the notification is about the day, not about each
 	// moment in it.
 	byPerson := map[uuid.UUID][]MemoryAnniversaryCandidate{}
@@ -794,6 +900,7 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 			budget, err = w.repo.BudgetFor(ctx, n.UserID, now)
 			if err != nil {
 				w.log.Error("reading a notification budget", "user", n.UserID, "error", err)
+				looked.retry = true
 				continue
 			}
 			budgets[n.UserID] = budget
@@ -809,12 +916,16 @@ func (w *Worker) Tick(ctx context.Context) (int, error) {
 			w.log.Info("holding a notification",
 				"kind", n.Kind, "user", n.UserID, "keep", keep, "because", why,
 				"sent_today", budget.SentToday, "cap", budget.Prefs.DailyCap)
+			if at, ok := heldUntil(why, keep, budget, now); ok {
+				looked.held = append(looked.held, at)
+			}
 			continue
 		}
 
 		ok, err := w.deliver(ctx, n, now)
 		if err != nil {
 			w.log.Error("sending a notification", "kind", n.Kind, "user", n.UserID, "error", err)
+			looked.retry = true
 			continue
 		}
 		if ok {
