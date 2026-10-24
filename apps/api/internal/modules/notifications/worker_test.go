@@ -720,6 +720,20 @@ func TestForImportantDates(t *testing.T) {
 		}
 	})
 
+	t.Run("the anniversary itself opens its own page, on the day only", func(t *testing.T) {
+		ours := base
+		ours.Anniversary = true
+		if got := ForImportantDates(ours, morningOfTheDay)[0].Message.Path; got != "/together/our-day" {
+			t.Errorf("on the day, path = %q", got)
+		}
+		if got := ForImportantDates(ours, weekBefore)[0].Message.Path; got != "/together/milestones" {
+			t.Errorf("a week out, path = %q", got)
+		}
+		if got := ForImportantDates(base, morningOfTheDay)[0].Message.Path; got != "/together/milestones" {
+			t.Errorf("any other date, path = %q", got)
+		}
+	})
+
 	t.Run("the two are claimed apart", func(t *testing.T) {
 		// One key for both would mean the week's notice silenced the day.
 		week := ForImportantDates(base, weekBefore)

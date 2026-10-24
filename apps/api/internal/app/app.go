@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/falola13/amorae/apps/api/internal/config"
+	"github.com/falola13/amorae/apps/api/internal/modules/anniversary"
 	"github.com/falola13/amorae/apps/api/internal/modules/appreciation"
 	"github.com/falola13/amorae/apps/api/internal/modules/auth"
 	"github.com/falola13/amorae/apps/api/internal/modules/challenges"
@@ -153,6 +154,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	appreciationRepo := appreciation.NewPostgresRepository(db)
 	appreciationSvc := appreciation.NewService(appreciationRepo, togetherCouples, now, notificationsWorker)
 
+	// The anniversary as a day of its own: letters sealed until it, and the year before it.
+	anniversarySvc := anniversary.NewService(anniversary.NewPostgresRepository(db), togetherCouples, now)
+
 	// Leaving a couple freezes it; this deletes it once the retention window
 	// for both partners to read/export has passed (FR-PAIR-008).
 	purger := couples.NewPurger(couplesRepo, now, log)
@@ -199,6 +203,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	memoriesHandler := memories.NewHandler(memoriesSvc)
 	journalHandler := journal.NewHandler(journalSvc)
 	appreciationHandler := appreciation.NewHandler(appreciationSvc)
+	anniversaryHandler := anniversary.NewHandler(anniversarySvc)
 	timelineHandler := timeline.NewHandler(timelineSvc)
 
 	// --- HTTP ---
@@ -240,6 +245,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	memoriesHandler.RegisterRoutes(v1)
 	journalHandler.RegisterRoutes(v1)
 	appreciationHandler.RegisterRoutes(v1)
+	anniversaryHandler.RegisterRoutes(v1)
 	timelineHandler.RegisterRoutes(v1)
 
 	// Order matters: RequestID first so panics/logs get the id; ClientIP

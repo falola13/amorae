@@ -23,6 +23,8 @@
   --color-amber-tint: #f6ebd6;
   --color-red: #9b3b32;
   --color-red-tint: #f6e7e4;
+  /* Only for an occasion (the anniversary): a thread of gold, never body text. */
+  --color-gold: #94702c;
 
   /* Aliases kept for the original template components. */
   --color-bg-elevated: #fffdfa;
@@ -114,6 +116,12 @@
   /* Only shows if the app is still waiting once the opening has played: its
      arrival is the "still working" signal, so nothing competes with the mark. */
   --animate-splash-wait: splash-in 0.4s 1.2s ease-out both;
+  --animate-drift: drift 9s linear infinite;
+  --animate-unfold: unfold 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-occasion-1: splash-in 0.7s 0.5s ease-out both;
+  --animate-occasion-2: splash-in 0.7s 0.9s ease-out both;
+  --animate-occasion-3: splash-in 0.7s 1.3s ease-out both;
+  --animate-occasion-4: splash-in 0.7s 1.8s ease-out both;
 
   @keyframes breathe {
     0%,
@@ -169,6 +177,28 @@
       transform: scale(0.92);
     }
   }
+  /* The opening on the anniversary: points of light drifting up, and a
+     letter unfolding. Like the splash, "from" states only. */
+  @keyframes drift {
+    from {
+      transform: translateY(0) scale(0.9);
+      opacity: 0;
+    }
+    15% {
+      opacity: 0.9;
+    }
+    to {
+      transform: translateY(-110vh) scale(1.1);
+      opacity: 0;
+    }
+  }
+  @keyframes unfold {
+    from {
+      opacity: 0;
+      transform: perspective(900px) rotateX(-14deg) translateY(14px);
+      transform-origin: top center;
+    }
+  }
   @keyframes splash-in {
     from {
       opacity: 0;
@@ -213,7 +243,57 @@
     --color-danger-bg: #402420;
     --color-success: #8fd0a8;
     --color-success-bg: #21362a;
+    --color-gold: #e2c17e;
   }
+}
+
+/* The anniversary. For one day the whole app takes a warmer stock — blush
+   linen instead of plain, the plum turned towards wine, and a low rose light
+   at the top of every screen — then goes back the next morning. The same
+   token names again, so nothing on any screen has to know. Set on <html> by
+   features/anniversary/occasion.tsx; the dark block follows the light one so
+   it wins inside the media query. */
+:root[data-occasion="anniversary"] {
+  --color-bg: #f8efed;
+  --color-paper: #f3e5e3;
+  --color-surface: #fffaf8;
+  --color-line: #ecdad6;
+  --color-faint: #e5cdc8;
+  --color-photo: #f0dfdb;
+  --color-plum: #7b2c4f;
+  --color-plum-dark: #5f1f3e;
+  --color-plum-tint: #f7e2ea;
+  --color-accent: #7b2c4f;
+  --color-accent-hover: #5f1f3e;
+  --color-border: #ecdad6;
+  --color-bg-elevated: #fffaf8;
+  --occasion-glow: rgba(214, 112, 146, 0.2);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-occasion="anniversary"] {
+    --color-bg: #1a1113;
+    --color-paper: #22171a;
+    --color-surface: #281b1f;
+    --color-line: #3b2a2f;
+    --color-faint: #47323a;
+    --color-photo: #33242a;
+    --color-plum: #f1b6cd;
+    --color-plum-dark: #f8d3e1;
+    --color-plum-tint: #46242f;
+    --color-accent: #f1b6cd;
+    --color-accent-hover: #f8d3e1;
+    --color-border: #3b2a2f;
+    --color-bg-elevated: #281b1f;
+    --occasion-glow: rgba(214, 112, 146, 0.16);
+  }
+}
+:root[data-occasion="anniversary"] .grain {
+  background-image:
+    var(--grain), radial-gradient(120% 520px at 50% -120px, var(--occasion-glow), transparent 70%);
+  background-size:
+    120px 120px,
+    100% 100%;
+  background-repeat: repeat, no-repeat;
 }
 
 /* `inline` so Tailwind references the variable next/font defines on <html>. */
@@ -303,6 +383,29 @@ button {
    not another plain bg-surface card, but no louder than the rest of the page. */
 @utility bg-celebrate {
   background: linear-gradient(160deg, var(--color-plum-tint), var(--color-surface) 85%);
+}
+
+/* The anniversary's own surfaces: a card that glows a little, and the
+   letter paper. Both read their colours from the tokens above. */
+@utility bg-occasion {
+  background:
+    radial-gradient(140% 90% at 0% 0%, var(--color-plum-tint), transparent 60%),
+    radial-gradient(
+      120% 80% at 100% 100%,
+      color-mix(in srgb, var(--color-gold) 14%, transparent),
+      transparent 60%
+    ),
+    var(--color-surface);
+}
+@utility bg-letter {
+  background-color: var(--color-surface);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    color-mix(in srgb, var(--color-line) 70%, transparent) 31px,
+    color-mix(in srgb, var(--color-line) 70%, transparent) 32px
+  );
 }
 
 @utility press {

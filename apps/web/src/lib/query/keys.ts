@@ -26,6 +26,7 @@ export const keys = {
   appreciations: ["appreciations"] as const,
   memories: ["memories"] as const,
   milestones: ["milestones"] as const,
+  anniversary: ["anniversary"] as const,
   prefs: ["notifications", "preferences"] as const,
   sessions: ["sessions"] as const,
   inbox: ["notifications", "inbox"] as const,

@@ -10,6 +10,7 @@ import { SideNav } from "@/components/layout/side-nav";
 import { SplashView } from "@/components/layout/splash-view";
 import { TabBar } from "@/components/layout/tab-bar";
 import { ErrorState } from "@/components/ui/kit";
+import { Occasion } from "@/features/anniversary/occasion";
 import { useCouple } from "@/features/couple/hooks";
 import { isApiError } from "@/lib/api/errors";
 import { SESSION_EXPIRED_EVENT } from "@/lib/api/http";
@@ -95,6 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NetworkBanner />
           {children}
           <TabBar />
+          <Occasion />
         </Screen>
       </div>
     </div>

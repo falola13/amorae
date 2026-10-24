@@ -20,6 +20,8 @@ import {
 import { QueryState } from "@/components/ui/query-state";
 import { isAbsence } from "@/lib/api/envelope";
 import { readableMessage } from "@/lib/query/client";
+import { whenLabel, yearsWord } from "@/features/anniversary/derive";
+import { useAnniversary } from "@/features/anniversary/hooks";
 import { useCouple } from "@/features/couple/hooks";
 import { useInbox } from "@/features/notifications/hooks";
 import { setterWord, todaysPoints } from "@/features/prayers/derive";
@@ -34,7 +36,7 @@ import {
   todaysMilestones,
   upcomingMilestones,
 } from "@/features/together/milestones";
-import type { Milestone, PrayerWeek } from "@/lib/api/types";
+import type { Anniversary, Milestone, PrayerWeek } from "@/lib/api/types";
 import {
   activeGoal,
   isAlone,
@@ -70,6 +72,7 @@ export function HomeScreen() {
   const prefs = usePrefs();
   const milestones = useMilestones();
   const inbox = useInbox();
+  const anniversary = useAnniversary();
   const unread = inbox.data?.unread ?? 0;
   const now = today();
   const todayIso = iso(now);
@@ -227,7 +230,11 @@ export function HomeScreen() {
         meId={me.id}
         partner={partner}
         todayIso={todayIso}
+        anniversary={anniversary.data}
       />
+      {anniversary.data && !alone ? (
+        <AnniversaryAhead a={anniversary.data} partner={partner} />
+      ) : null}
 
       {alone ? (
         <div className="mt-6 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
@@ -380,19 +387,46 @@ function Celebrations({
   meId,
   partner,
   todayIso,
+  anniversary,
 }: {
   milestones: Milestone[];
   meId: string;
   partner: string;
   todayIso: string;
+  anniversary?: Anniversary;
 }) {
   const todays = todaysMilestones(milestones, todayIso);
-  const soon = upcomingMilestones(milestones, todayIso);
+  // The anniversary's own card (AnniversaryAhead) says it, with the letters.
+  const soon = upcomingMilestones(milestones, todayIso).filter(
+    (m) => !(anniversary && m.source === "anniversary" && aheadShown(anniversary)),
+  );
   if (todays.length === 0 && soon.length === 0) return null;
   return (
     <div className="mt-6 flex flex-col gap-3">
       {todays.map((m) => {
         const { title, sub } = celebrationCopy(m, todayIso, meId, partner);
+        if (m.source === "anniversary" && anniversary?.days_until === 0) {
+          return (
+            <Link
+              key={m.id}
+              href={routes.ourDay()}
+              className="press flex flex-col items-start rounded-card bg-occasion px-5 py-6 text-ink no-underline"
+            >
+              <Icon name="heart" size={26} strokeWidth={1.4} className="text-plum" />
+              <h2 className="m-0 mt-3 text-[30px] font-semibold leading-tight tracking-[-0.025em] text-plum-dark">
+                {yearsWord(anniversary.years)} today
+              </h2>
+              <Para className="mt-1">
+                {anniversary.theirs
+                  ? `${partner.split(" ")[0]} wrote you a letter. It’s open now.`
+                  : "Happy anniversary. Your day is waiting."}
+              </Para>
+              <span className="mt-4 inline-flex items-center gap-1 text-[15px] font-semibold text-plum">
+                Open our day <Icon name="right" size={16} />
+              </span>
+            </Link>
+          );
+        }
         return (
           <div key={m.id} className="flex flex-col items-start rounded-card bg-celebrate px-5 py-5">
             <Icon name={celebrationIcon(m)} size={26} strokeWidth={1.4} className="text-plum" />
@@ -416,6 +450,35 @@ function Celebrations({
         </Link>
       ))}
     </div>
+  );
+}
+
+/** The days before the anniversary when a letter can be written. */
+const aheadShown = (a: Anniversary) => a.days_until > 0 && a.writable;
+
+/** In the days before: the anniversary, and the letters — written, waiting, or not yet. */
+function AnniversaryAhead({ a, partner }: { a: Anniversary; partner: string }) {
+  if (!aheadShown(a)) return null;
+  const first = partner.split(" ")[0];
+  const line = a.theirs_sealed
+    ? `${first} has written you something. It opens ${whenLabel(a.days_until)}.`
+    : a.mine
+      ? `Your letter is sealed until ${whenLabel(a.days_until) === "tomorrow" ? "tomorrow" : "the day"}.`
+      : `Write ${first} a letter to open on the day.`;
+  return (
+    <Link
+      href={routes.ourDay()}
+      className="press mt-4 flex items-center gap-4 rounded-card bg-occasion px-5 py-4 text-ink no-underline"
+    >
+      <Icon name={a.theirs_sealed ? "letter" : "heart"} size={24} className="shrink-0 text-plum" />
+      <span className="flex grow flex-col">
+        <span className="text-[17px] font-semibold">
+          {yearsWord(a.years)} {whenLabel(a.days_until)}
+        </span>
+        <span className="text-support text-stone">{line}</span>
+      </span>
+      <Icon name="right" size={18} className="text-stone" />
+    </Link>
   );
 }
 

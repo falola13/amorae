@@ -439,3 +439,49 @@ export interface TimelinePage {
   /** The cursor for the next page, or null when this was the last one. */
   next: string | null;
 }
+
+/** One person's letter for one anniversary (GET /v1/anniversary). */
+export interface AnniversaryLetter {
+  id: string;
+  author_id: string;
+  /** The anniversary it is for, YYYY-MM-DD. */
+  opens_on: string;
+  text: string;
+  updated_at: string;
+}
+
+/** What the two of them did in the year an anniversary closes, [from, to). */
+export interface AnniversaryYear {
+  from: string;
+  to: string;
+  /** Each time either of them marked a prayer prayed. */
+  prayed: number;
+  answered: number;
+  prayer_weeks: number;
+  memories: number;
+  /** Plans that happened. */
+  events: number;
+  challenges: number;
+  notes: number;
+  journal: number;
+}
+
+/** The next anniversary (or today's), as the signed-in person sees it.
+ *  A 404 means there is none yet: no start date, or less than a year in. */
+export interface Anniversary {
+  on: string;
+  years: number;
+  /** 0 on the day itself. */
+  days_until: number;
+  /** Whether a letter can be written or changed now. */
+  writable: boolean;
+  writable_from: string;
+  mine: AnniversaryLetter | null;
+  /** Only once it is open; the server never sends it before the day. */
+  theirs: AnniversaryLetter | null;
+  /** Their letter exists but is still sealed. */
+  theirs_sealed: boolean;
+  /** Letters from anniversaries gone by, both of theirs, newest first. */
+  past: AnniversaryLetter[];
+  year: AnniversaryYear;
+}

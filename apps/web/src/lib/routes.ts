@@ -59,6 +59,9 @@ export const routes = {
   appreciation: "/together/appreciation",
   memories: "/together/memories",
   milestones: "/together/milestones",
+  // The anniversary's own page; `preview` shows the day itself ahead of time.
+  ourDay: (opts: { preview?: boolean } = {}) => `/together/our-day${q({ preview: opts.preview })}`,
+  ourDayLetter: "/together/our-day/letter",
   challenges: "/together/challenges",
   challengeNew: "/together/challenges/new",
   challenge: (id: string) => `/together/challenges/${seg(id)}`,

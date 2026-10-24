@@ -210,12 +210,21 @@ func ForImportantDates(c ImportantDateCandidate, now time.Time) []Notification {
 			Message: push.Message{
 				Title: c.Title,
 				Body:  howFarOff(c.Date, on, lead.days, c.YearKnown),
-				Path:  "/together/milestones",
+				Path:  importantDatePath(c, lead.days),
 				Tag:   KindImportantDate,
 			},
 		})
 	}
 	return due
+}
+
+// importantDatePath is where tapping it goes: the anniversary's own page on
+// the day itself, the list of kept dates otherwise.
+func importantDatePath(c ImportantDateCandidate, days int) string {
+	if c.Anniversary && days == 0 {
+		return "/together/our-day"
+	}
+	return "/together/milestones"
 }
 
 // howFarOff names the date, plus a "years today" count when there's
@@ -474,7 +483,9 @@ type ImportantDateCandidate struct {
 	// then milestones' 2000 placeholder, and howFarOff must not turn it
 	// into an "N years" claim nobody's age actually supports.
 	YearKnown bool
-	Prefs     Preferences
+	// The couple's own anniversary, which has a page of its own on the day.
+	Anniversary bool
+	Prefs       Preferences
 }
 
 // WrittenCandidate is one thing one partner wrote, and the other partner who

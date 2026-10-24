@@ -169,25 +169,25 @@ func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDat
 	rows, err := r.db.Q(ctx).Query(ctx, `
 		WITH dates AS (
 			SELECT ms.couple_id, ms.id, ms.title, ms.date, ms.reminder,
-			       true AS year_known, NULL::uuid AS about
+			       true AS year_known, NULL::uuid AS about, false AS anniversary
 			FROM milestones ms
 			WHERE ms.reminder
 			UNION ALL
 			SELECT c.id, md5(c.id::text || ':anniversary')::uuid, 'Our anniversary',
-			       c.relationship_start_date, true, true, NULL::uuid
+			       c.relationship_start_date, true, true, NULL::uuid, true
 			FROM couples c
 			WHERE c.relationship_start_date IS NOT NULL
 			UNION ALL
 			SELECT m.couple_id, md5(m.couple_id::text || ':birthday:' || u.id::text)::uuid,
 			       u.display_name || '’s birthday',
 			       make_date(COALESCE(u.birth_year, 2000)::int, u.birth_month, u.birth_day),
-			       true, u.birth_year IS NOT NULL, u.id
+			       true, u.birth_year IS NOT NULL, u.id, false
 			FROM couple_members m
 			JOIN users u ON u.id = m.user_id
 			WHERE m.ended_at IS NULL AND u.birth_month IS NOT NULL
 		)
 		SELECT u.id, d.id, d.title, c.timezone, d.date, d.reminder,
-		       COALESCE(p.important_dates, true), d.year_known
+		       COALESCE(p.important_dates, true), d.year_known, d.anniversary
 		FROM dates d
 		JOIN couples c ON c.id = d.couple_id
 		JOIN couple_members m ON m.couple_id = c.id AND m.ended_at IS NULL
@@ -205,7 +205,7 @@ func (r *PostgresRepository) ImportantDates(ctx context.Context) ([]ImportantDat
 	for rows.Next() {
 		var c ImportantDateCandidate
 		if err := rows.Scan(&c.UserID, &c.MilestoneID, &c.Title, &c.Timezone,
-			&c.Date, &c.Reminder, &c.Prefs.ImportantDates, &c.YearKnown); err != nil {
+			&c.Date, &c.Reminder, &c.Prefs.ImportantDates, &c.YearKnown, &c.Anniversary); err != nil {
 			return nil, fmt.Errorf("scanning date to remind about: %w", err)
 		}
 		out = append(out, c)

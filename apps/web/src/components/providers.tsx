@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import { Toaster } from "@/components/layout/toaster";
+import { anniversaryWrites } from "@/features/anniversary/writes";
 import { prayerWrites } from "@/features/prayers/writes";
 import { settingsWrites } from "@/features/settings/writes";
 import { togetherWrites } from "@/features/together/writes";
@@ -17,6 +18,7 @@ const resumableWrites: AnyWriteDef[] = [
   ...Object.values(prayerWrites),
   ...Object.values(togetherWrites),
   ...Object.values(settingsWrites),
+  ...Object.values(anniversaryWrites),
 ];
 
 // One QueryClient per browser tab. Client-only state (prayer-mode session,
