@@ -11,3 +11,4 @@ import { anniversaryWrites as w } from "./writes";
 export const useAnniversary = () => useQuery({ queryKey: keys.anniversary, queryFn: api.get });
 
 export const useWriteLetter = () => useWrite(w.writeLetter);
+export const useCheers = () => useWrite(w.cheers);

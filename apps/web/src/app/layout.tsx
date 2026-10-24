@@ -16,6 +16,26 @@ const manrope = localFont({
   display: "swap",
 });
 
+// Only for an occasion's display type (the anniversary). Self-hosted like
+// Manrope, so the day still looks like itself offline.
+const occasionSerif = localFont({
+  src: [
+    {
+      path: "../fonts/cormorant-garamond-latin-variable.woff2",
+      weight: "300 700",
+      style: "normal",
+    },
+    {
+      path: "../fonts/cormorant-garamond-latin-italic-variable.woff2",
+      weight: "300 700",
+      style: "italic",
+    },
+  ],
+  variable: "--font-occasion",
+  display: "swap",
+  preload: false,
+});
+
 export const metadata: Metadata = {
   applicationName: brand.name,
   title: { template: `%s · ${brand.name}`, default: brand.name },
@@ -64,7 +84,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={manrope.variable}>
+    <html lang="en" className={`${manrope.variable} ${occasionSerif.variable}`}>
       <body className="flex min-h-dvh flex-col bg-bg font-sans text-ink antialiased">
         <Providers>{children}</Providers>
         <ServiceWorkerRegistrar />

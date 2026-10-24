@@ -15,6 +15,26 @@ import (
 // message to write and nothing to reply to.
 const KindNudge = "nudge"
 
+// StyleCheers is a nudge sent from the anniversary page: a raised glass.
+const StyleCheers = "cheers"
+
+func nudgeMessage(senderName, style string) push.Message {
+	if style == StyleCheers {
+		return push.Message{
+			Title: "🥂 " + senderName + " raised a glass to you",
+			Body:  "Happy anniversary.",
+			Path:  "/together/our-day",
+			Tag:   KindNudge,
+		}
+	}
+	return push.Message{
+		Title: "From " + senderName,
+		Body:  "Thinking about you.",
+		Path:  "/",
+		Tag:   KindNudge,
+	}
+}
+
 // nudgesPerDay is how many one person may send. Enough to be spontaneous,
 // few enough that it cannot become a stream.
 const nudgesPerDay = 3
@@ -40,7 +60,11 @@ var (
 // thought. And refused rather than queued when it would land badly — being
 // told they are asleep is a kinder answer than a notification at 3am, or
 // than silence that looks like it worked.
-func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID) (int, error) {
+//
+// A nudge has a style: plain ("thinking about you"), or StyleCheers, a glass
+// raised on their anniversary. Same allowance, same quiet hours — a cheers
+// is still one partner reaching the other's lock screen.
+func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID, style string) (int, error) {
 	partnerID, senderName, err := s.repo.NudgeTarget(ctx, senderID)
 	if err != nil {
 		return 0, err
@@ -86,15 +110,10 @@ func (s *Service) Nudge(ctx context.Context, senderID uuid.UUID) (int, error) {
 	}
 
 	n := Notification{
-		UserID: partnerID,
-		Kind:   KindNudge,
-		Key:    fmt.Sprintf("%s:%d", now.In(zone).Format(time.DateOnly), spent+1),
-		Message: push.Message{
-			Title: "From " + senderName,
-			Body:  "Thinking about you.",
-			Path:  "/",
-			Tag:   KindNudge,
-		},
+		UserID:  partnerID,
+		Kind:    KindNudge,
+		Key:     fmt.Sprintf("%s:%d", now.In(zone).Format(time.DateOnly), spent+1),
+		Message: nudgeMessage(senderName, style),
 	}
 	// Nothing listening is not a failure to report: the thought was sent,
 	// and whether a browser was subscribed is not the sender's business.

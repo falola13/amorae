@@ -101,7 +101,9 @@ export default function LetterPage() {
             : `Sealed until ${weekdayDate(a.on)}. ${partner} will only know something is waiting.`}
         </Para>
         <div className="mt-4 rounded-card border border-line bg-letter bg-position-[0_20px] px-5 pb-6 pt-5">
-          <p className="m-0 text-[19px] font-semibold leading-[32px]">Dear {partner},</p>
+          <p className="m-0 font-serif text-[26px] font-medium italic leading-[32px] text-plum-dark">
+            Dear {partner},
+          </p>
           <BareTextarea
             label={`Your letter to ${partner}`}
             hideLabel
@@ -113,8 +115,8 @@ export default function LetterPage() {
             error={error ?? undefined}
             className="min-h-[50dvh] text-[17px] leading-[32px]"
           />
-          <p className="m-0 mt-2 text-right text-[17px] font-semibold leading-[32px] text-plum">
-            — {me}
+          <p className="m-0 mt-2 text-right font-serif text-[24px] italic leading-[32px] text-plum">
+            with love, {me}
           </p>
         </div>
         {draft.length > MAX - 400 ? (

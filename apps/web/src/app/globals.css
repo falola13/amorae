@@ -117,6 +117,12 @@
      arrival is the "still working" signal, so nothing competes with the mark. */
   --animate-splash-wait: splash-in 0.4s 1.2s ease-out both;
   --animate-drift: drift 9s linear infinite;
+  --animate-shimmer: shimmer 7s linear infinite;
+  --animate-clink-l: clink-l 1.6s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+  --animate-clink-r: clink-r 1.6s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+  --animate-pop: pop 0.5s 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-flap: flap 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  --animate-twinkle: twinkle 3.2s ease-in-out infinite;
   --animate-unfold: unfold 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-occasion-1: splash-in 0.7s 0.5s ease-out both;
   --animate-occasion-2: splash-in 0.7s 0.9s ease-out both;
@@ -190,6 +196,70 @@
     to {
       transform: translateY(-110vh) scale(1.1);
       opacity: 0;
+    }
+  }
+  /* Gold foil catching the light: the gradient slides across the letters. */
+  @keyframes shimmer {
+    from {
+      background-position: 0% 50%;
+    }
+    to {
+      background-position: 200% 50%;
+    }
+  }
+  /* Two glasses: in from either side, touch, and settle tilted together. */
+  @keyframes clink-l {
+    0% {
+      transform: translateX(-70px) rotate(-28deg);
+      opacity: 0;
+    }
+    35% {
+      transform: translateX(6px) rotate(12deg);
+      opacity: 1;
+    }
+    50% {
+      transform: translateX(-4px) rotate(4deg);
+    }
+    100% {
+      transform: translateX(0) rotate(8deg);
+    }
+  }
+  @keyframes clink-r {
+    0% {
+      transform: translateX(70px) rotate(28deg);
+      opacity: 0;
+    }
+    35% {
+      transform: translateX(-6px) rotate(-12deg);
+      opacity: 1;
+    }
+    50% {
+      transform: translateX(4px) rotate(-4deg);
+    }
+    100% {
+      transform: translateX(0) rotate(-8deg);
+    }
+  }
+  @keyframes pop {
+    from {
+      transform: scale(0.2);
+      opacity: 0;
+    }
+  }
+  @keyframes flap {
+    to {
+      transform: rotateX(180deg);
+    }
+  }
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0.25;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
     }
   }
   @keyframes unfold {
@@ -300,6 +370,8 @@
 @theme inline {
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  /* The anniversary's display face: headlines and numerals only, never body text. */
+  --font-serif: var(--font-occasion), "Cormorant Garamond", Georgia, serif;
 }
 
 :root {
@@ -397,6 +469,32 @@ button {
     ),
     var(--color-surface);
 }
+/* Gold foil type. Used on numerals and one or two words — never a sentence. */
+@utility text-foil {
+  background-image: linear-gradient(
+    100deg,
+    #8a5d1f 0%,
+    #c99a4b 18%,
+    #f6e2ae 32%,
+    #fff6dc 38%,
+    #d8ad62 50%,
+    #9a6b25 66%,
+    #e9c77f 82%,
+    #8a5d1f 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* The keepsake: the same evening as the opening, whatever the theme. */
+@utility bg-keepsake {
+  background:
+    radial-gradient(90% 55% at 50% 0%, rgba(214, 112, 146, 0.45), transparent 70%),
+    radial-gradient(70% 40% at 50% 100%, rgba(233, 199, 127, 0.18), transparent 70%),
+    linear-gradient(175deg, #3d1428 0%, #5a2246 50%, #2b0f1f 100%);
+}
+
 @utility bg-letter {
   background-color: var(--color-surface);
   background-image: repeating-linear-gradient(
@@ -422,6 +520,11 @@ button {
   background-size: 120px 120px;
 }
 
+/* Cormorant's default figures are old-style (a "3" that dips below the line);
+   numbers that are the point of the page stand on it instead. */
+@utility lining {
+  font-variant-numeric: lining-nums tabular-nums;
+}
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }

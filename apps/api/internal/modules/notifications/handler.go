@@ -16,7 +16,7 @@ type service interface {
 	Get(ctx context.Context, userID uuid.UUID) (Preferences, error)
 	Update(ctx context.Context, userID uuid.UUID, patch Patch) (Preferences, error)
 	Subscribe(ctx context.Context, userID uuid.UUID, endpoint, p256dh, auth string) error
-	Nudge(ctx context.Context, senderID uuid.UUID) (int, error)
+	Nudge(ctx context.Context, senderID uuid.UUID, style string) (int, error)
 	Inbox(ctx context.Context, userID uuid.UUID) ([]InboxItem, error)
 	MarkInboxRead(ctx context.Context, userID uuid.UUID) error
 }
@@ -194,7 +194,21 @@ func (h *Handler) nudge(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	left, err := h.svc.Nudge(r.Context(), userID)
+	// The body is optional; an older client sends {} or nothing.
+	var req struct {
+		Style string `json:"style"`
+	}
+	if r.ContentLength != 0 {
+		if err := httpx.Decode(w, r, &req); err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+	}
+	style := ""
+	if req.Style == StyleCheers {
+		style = StyleCheers
+	}
+	left, err := h.svc.Nudge(r.Context(), userID, style)
 	if err != nil {
 		httpx.Error(w, r, err)
 		return

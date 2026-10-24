@@ -410,19 +410,24 @@ function Celebrations({
             <Link
               key={m.id}
               href={routes.ourDay()}
-              className="press flex flex-col items-start rounded-card bg-occasion px-5 py-6 text-ink no-underline"
+              className="press relative flex items-center gap-5 overflow-hidden rounded-[26px] bg-keepsake px-6 py-6 text-[#fbeef2] no-underline shadow-[0_24px_50px_-30px_rgba(61,20,40,0.7)]"
             >
-              <Icon name="heart" size={26} strokeWidth={1.4} className="text-plum" />
-              <h2 className="m-0 mt-3 text-[30px] font-semibold leading-tight tracking-[-0.025em] text-plum-dark">
-                {yearsWord(anniversary.years)} today
-              </h2>
-              <Para className="mt-1">
-                {anniversary.theirs
-                  ? `${partner.split(" ")[0]} wrote you a letter. It’s open now.`
-                  : "Happy anniversary. Your day is waiting."}
-              </Para>
-              <span className="mt-4 inline-flex items-center gap-1 text-[15px] font-semibold text-plum">
-                Open our day <Icon name="right" size={16} />
+              <span className="lining font-serif text-[92px] font-semibold leading-[0.8] tracking-[-0.04em]">
+                <span className="animate-shimmer text-foil">{anniversary.years}</span>
+              </span>
+              <span className="flex grow flex-col">
+                <span className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#e9c886]">
+                  Happy anniversary
+                </span>
+                <span className="mt-1 font-serif text-[27px] font-medium italic leading-[1.1]">
+                  {anniversary.years === 1 ? "year" : "years"} together today
+                </span>
+                <span className="mt-2 text-[14px] text-[#f0cbd8]">
+                  {anniversary.theirs
+                    ? `${partner.split(" ")[0]} wrote you a letter`
+                    : "Your day is waiting"}{" "}
+                  &rarr;
+                </span>
               </span>
             </Link>
           );
