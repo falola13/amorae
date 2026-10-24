@@ -26,25 +26,52 @@ const EVERY_MS = 15 * 60 * 1000;
 export function watchBuild(): () => void {
   const mine = process.env.NEXT_PUBLIC_BUILD_ID;
   if (!mine) return () => {};
-  const check = async () => {
+  // `fresh`: the app was just opened or brought back to the front, so
+  // nothing is mid-way and reloading onto the new version costs nobody
+  // anything. Later checks, while it is in use, only raise the banner.
+  const check = async (fresh: boolean) => {
     try {
       const res = await fetch("/api/version", { cache: "no-store" });
       if (!res.ok) return;
       const { build } = (await res.json()) as { build: string | null };
-      if (build && build !== mine) useUpdate.getState().markReady();
+      if (!build || build === mine) return;
+      if (fresh && reloadOnce(build)) return;
+      useUpdate.getState().markReady();
     } catch {
       // Offline or mid-deploy: the next look will do.
     }
   };
   const onVisible = () => {
-    if (document.visibilityState === "visible") void check();
+    if (document.visibilityState === "visible") void check(true);
   };
+  void check(true);
   document.addEventListener("visibilitychange", onVisible);
-  const timer = window.setInterval(check, EVERY_MS);
+  const timer = window.setInterval(() => void check(false), EVERY_MS);
   return () => {
     document.removeEventListener("visibilitychange", onVisible);
     window.clearInterval(timer);
   };
+}
+
+// Screens where someone may be writing; reloading would throw it away.
+const WRITING = /\/(new|edit|set|letter|journal|appreciation|mode)(\/|$|\?)/;
+
+/**
+ * Reloads onto `build`, at most once per build per tab — if the server and
+ * this page somehow keep disagreeing, the banner takes over rather than a
+ * loop. Never on a screen where something may be half written.
+ */
+function reloadOnce(build: string): boolean {
+  if (WRITING.test(window.location.pathname)) return false;
+  const key = `amorae.reloaded-for.${build}`;
+  try {
+    if (window.sessionStorage.getItem(key)) return false;
+    window.sessionStorage.setItem(key, "1");
+  } catch {
+    return false;
+  }
+  window.location.reload();
+  return true;
 }
 
 /** Listens for a new worker taking over, and asks for one whenever the app comes back to the front. */

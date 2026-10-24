@@ -15,7 +15,6 @@ import {
   Section,
   Segments,
   Skeleton,
-  Title,
 } from "@/components/ui/kit";
 import { QueryState } from "@/components/ui/query-state";
 import { isAbsence } from "@/lib/api/envelope";
@@ -25,8 +24,9 @@ import { useAnniversary } from "@/features/anniversary/hooks";
 import { useCouple } from "@/features/couple/hooks";
 import { useInbox } from "@/features/notifications/hooks";
 import { setterWord, todaysPoints } from "@/features/prayers/derive";
-import { useHistory, useWeek } from "@/features/prayers/hooks";
+import { useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
+import { AnniversaryHome } from "./anniversary-home";
 import { HomeChallengeCard } from "./challenge-card";
 import { eventPhase, nowLabel } from "@/features/together/events";
 import { useEvents, useGoals, useMilestones, useNudge } from "@/features/together/hooks";
@@ -40,7 +40,6 @@ import type { Anniversary, Milestone, PrayerWeek } from "@/lib/api/types";
 import {
   activeGoal,
   isAlone,
-  lastWeekSummary,
   nextUpcomingEvent,
   plannedCount,
   reminderLabel,
@@ -68,7 +67,6 @@ export function HomeScreen() {
   // data ?? [] below would make a failed fetch look identical to an empty week, so track it separately.
   const eventsBroke = events.isError && !isAbsence(events.error);
   const goalsBroke = goals.isError && !isAbsence(goals.error);
-  const history = useHistory();
   const prefs = usePrefs();
   const milestones = useMilestones();
   const inbox = useInbox();
@@ -98,92 +96,27 @@ export function HomeScreen() {
   const todays = todayEvent(upcoming, todayIso, now);
   const nextEvent = nextUpcomingEvent(upcoming, todayIso, now);
   const goal = activeGoal(goals.data ?? []);
-  const lastWeek = lastWeekSummary(history.data, me.id);
   const reminder = reminderLabel(prefs.data);
 
-  if (w && w.status === "draft") {
-    const mine = w.setter_id === me.id;
-    return (
-      <Main>
-        <div className="pt-1.5">
-          <Micro>{range(w.week_start, w.week_end)}</Micro>
-        </div>
-        <Title size="display" className="mt-2">
-          {mine ? "It’s your week." : "This week’s prayers"}
-        </Title>
-        <Para size="lg" className="mt-2.5">
-          {mine
-            ? `What would you like the two of you to pray about? ${partner} will see your prayers once you share them.`
-            : `It’s ${partner}’s turn this week — you can still write it.`}
-        </Para>
-        <div className="mt-7">
-          <LinkButton href={routes.prayersSet}>
-            {mine ? "Set this week’s prayers" : "Write or edit this week"}
-          </LinkButton>
-        </div>
-        <div className="mt-7 flex flex-col border-t border-line">
-          {lastWeek ? (
-            <InfoRow
-              icon="clock"
-              label="Last week"
-              value={`you prayed ${lastWeek.prayed} of ${lastWeek.total}`}
-              action="View"
-              href={routes.history}
-            />
-          ) : null}
-          <InfoRow
-            icon="bell"
-            label="Reminder"
-            value={reminder}
-            action="Change"
-            href={routes.settingsNotifications}
-          />
-        </div>
-      </Main>
-    );
-  }
+  const weekPrompt =
+    w && w.status !== "published" ? <WeekPrompt week={w} meId={me.id} partner={partner} /> : null;
 
-  if (w && w.status === "waiting") {
+  // The anniversary takes Home over for the day — not a new colour on the
+  // usual screen, a different one (anniversary-home.tsx).
+  const theDay = anniversary.data?.days_until === 0 && !alone;
+  if (theDay && anniversary.data) {
     return (
-      <Main>
-        <div className="pt-1.5">
-          <Micro>{range(w.week_start, w.week_end)}</Micro>
-        </div>
-        <Title size="display" className="mt-2">
-          Your partner is setting this week&rsquo;s prayers.
-        </Title>
-        <Para size="lg" className="mt-2.5">
-          We&rsquo;ll let you know the moment {partner} shares them. Until then, the time is yours.
-        </Para>
-        <div className="mt-6">
-          <LinkButton href={routes.prayerMode({ quiet: true })} icon="moon">
-            Enter quiet prayer
-          </LinkButton>
-        </div>
-        <div className="mt-6 flex flex-col border-t border-line">
-          {lastWeek ? (
-            <Row
-              icon="book"
-              title="Last week’s prayers"
-              sub={`${lastWeek.total} prayers ${lastWeek.iSetIt ? "you set" : "partner set"}`}
-              href={routes.history}
-            />
-          ) : null}
-          <Row
-            icon="clock"
-            title="Your prayer history"
-            sub="Every week you’ve shared"
-            href={routes.history}
-          />
-          <Row
-            icon="bell"
-            title="Prayer reminder"
-            sub={prefs.data?.prayer_reminder ? `Every day at ${reminder}` : "Off"}
-            href={routes.settingsNotifications}
-            last
-          />
-        </div>
-      </Main>
+      <AnniversaryHome
+        a={anniversary.data}
+        couple={coupleData}
+        todayIso={todayIso}
+        todays={upcoming.filter((e) => e.date === todayIso)}
+        nextEvent={nextEvent && nextEvent.date !== todayIso ? nextEvent : null}
+        goal={goal}
+        week={w}
+        weekPrompt={weekPrompt}
+        unread={unread}
+      />
     );
   }
 
@@ -235,6 +168,8 @@ export function HomeScreen() {
       {anniversary.data && !alone ? (
         <AnniversaryAhead a={anniversary.data} partner={partner} />
       ) : null}
+
+      {weekPrompt}
 
       {alone ? (
         <div className="mt-6 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
@@ -297,6 +232,17 @@ export function HomeScreen() {
             {alone ? null : (
               <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
                 {(wk) => {
+                  // Not shared yet: the prompt above says what to do; this row just says so.
+                  if (wk.status !== "published") {
+                    return (
+                      <Row
+                        icon="book"
+                        title="Weekly prayer"
+                        sub={wk.status === "draft" ? "Not shared yet" : `${partner} is setting it`}
+                        href={wk.status === "draft" ? routes.prayersSet : routes.prayers}
+                      />
+                    );
+                  }
                   const total = todaysPoints(wk).length;
                   const done = wk.my_completed.length;
                   return (
@@ -361,7 +307,7 @@ export function HomeScreen() {
         )}
       </div>
 
-      {w ? (
+      {w && w.status === "published" ? (
         <PrayerFooter
           week={w}
           partner={partner}
@@ -567,31 +513,56 @@ function PrayerFooter({
   );
 }
 
-function InfoRow({
-  icon,
-  label,
-  value,
-  action,
-  href,
+/**
+ * The week's prayers aren't shared yet. Once this was the whole of Home,
+ * which hid everything else for days at a time; now it is the first card,
+ * with the rest of the week underneath it.
+ */
+function WeekPrompt({
+  week: w,
+  meId,
+  partner,
 }: {
-  icon: "clock" | "bell";
-  label: string;
-  value: string;
-  action: string;
-  href: string;
+  week: PrayerWeek;
+  meId: string;
+  partner: string;
 }) {
+  const first = partner.split(" ")[0];
+  const mine = w.setter_id === meId;
+  const waiting = w.status === "waiting";
   return (
-    <div className="flex min-h-[56px] items-center gap-3 border-b border-line">
-      <Icon name={icon} size={22} className="text-stone" />
-      <div className="grow text-[15px] text-stone">
-        {label} <span className="font-semibold text-ink">{value}</span>
-      </div>
-      <Link
-        href={href}
-        className="press flex h-11 items-center px-0.5 text-[15px] font-semibold text-plum no-underline"
-      >
-        {action}
-      </Link>
+    <div className="mt-5 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
+      <Micro tone="plum">{range(w.week_start, w.week_end)}</Micro>
+      <h2 className="m-0 mt-2 text-[21px] font-semibold leading-tight tracking-[-0.015em]">
+        {waiting
+          ? `${first} is setting this week’s prayers`
+          : mine
+            ? "It’s your week to set the prayers"
+            : `It’s ${first}’s turn this week`}
+      </h2>
+      <Para className="mt-1.5">
+        {waiting
+          ? "We’ll let you know the moment they’re shared."
+          : mine
+            ? `What would you like the two of you to pray about? ${first} will see them once you share.`
+            : "You can still write it if you’d like to."}
+      </Para>
+      {waiting ? (
+        <Link
+          href={routes.prayerMode({ quiet: true })}
+          className="press mt-3 inline-flex h-11 items-center gap-1.5 text-[15px] font-semibold text-plum no-underline"
+        >
+          <Icon name="moon" size={18} /> Enter quiet prayer
+        </Link>
+      ) : (
+        <LinkButton
+          href={routes.prayersSet}
+          variant={mine ? "primary" : "secondary"}
+          className="mt-4"
+        >
+          {mine ? "Set this week’s prayers" : "Write or edit this week"}
+        </LinkButton>
+      )}
     </div>
   );
 }

@@ -1,14 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
 import { Button, LinkButton, LoadProblem, Para, Skeleton, TopBar } from "@/components/ui/kit";
-import { CheersMoment, Confetti, OnTop } from "@/features/anniversary/celebrate";
-import { yearsWord } from "@/features/anniversary/derive";
-import { useAnniversary, useCheers } from "@/features/anniversary/hooks";
+import { OnTop, useRaiseGlass } from "@/features/anniversary/celebrate";
+import { ordinal, yearsWord } from "@/features/anniversary/derive";
+import { useAnniversary } from "@/features/anniversary/hooks";
 import { Opening, useOccasionTheme } from "@/features/anniversary/occasion";
 import {
   Ideas,
@@ -24,11 +24,11 @@ import {
   YearSymbol,
 } from "@/features/anniversary/sections";
 import { useCouple } from "@/features/couple/hooks";
+import { MemoryComposer } from "@/features/together/components/memory-composer";
 import { useAppreciations, useMemories } from "@/features/together/hooks";
 import { isAbsence } from "@/lib/api/envelope";
 import type { Anniversary, Couple } from "@/lib/api/types";
 import { weekdayDate } from "@/lib/dates";
-import { readableMessage } from "@/lib/query/client";
 import { routes } from "@/lib/routes";
 
 export default function OurDayPage() {
@@ -116,14 +116,14 @@ function Day({
 }) {
   const memories = useMemories();
   const notes = useAppreciations();
-  const cheers = useCheers();
   const [replay, setReplay] = useState(false);
-  const [fire, setFire] = useState(0);
-  const [toast, setToast] = useState<{ said: string | null } | null>(null);
+  const [keeping, setKeeping] = useState(false);
   const me = couple.me;
   const partner = couple.partner?.display_name ?? "your partner";
   const first = partner.split(" ")[0];
   const nameOf = (id: string) => (id === me.id ? me.display_name : partner).split(" ")[0];
+  const glass = useRaiseGlass({ years: a.years, partner: first, preview });
+  const { burst } = glass;
 
   // Arriving on the day: one handful of confetti, once per phone.
   useEffect(() => {
@@ -136,23 +136,9 @@ function Day({
       // Without storage it throws again next time, which is no harm today.
     }
     if (seen) return;
-    const t = setTimeout(() => setFire((n) => n + 1), 450);
+    const t = setTimeout(burst, 450);
     return () => clearTimeout(t);
-  }, [showDay, preview, a.on]);
-
-  const raiseGlass = () => {
-    setFire((n) => n + 1);
-    if (preview) {
-      setToast({ said: `In the preview, nothing is sent to ${first}.` });
-      return;
-    }
-    setToast({ said: null });
-    cheers.mutate(undefined, {
-      onSuccess: () => setToast({ said: `${first} will see your glass raised.` }),
-      onError: (e) => setToast({ said: readableMessage(e) }),
-    });
-  };
-  const closeToast = useCallback(() => setToast(null), []);
+  }, [showDay, preview, a.on, burst]);
 
   const mems = memories.data ?? [];
   const words = notes.data ?? [];
@@ -175,8 +161,8 @@ function Day({
         a={a}
         couple={couple}
         showDay={showDay}
-        onCheers={raiseGlass}
-        cheersBusy={cheers.isPending}
+        onCheers={glass.raise}
+        cheersBusy={glass.busy}
       />
 
       <Letters a={a} couple={couple} showDay={showDay} />
@@ -210,9 +196,9 @@ function Day({
             A threefold cord is not quickly broken. — Ecclesiastes 4:12
           </p>
           <div className="mt-6 flex w-full flex-col gap-1">
-            <LinkButton href={routes.memories} icon="image">
+            <Button icon="image" onClick={() => setKeeping(true)}>
               Keep a memory of today
-            </LinkButton>
+            </Button>
             <Button variant="text" onClick={() => setReplay(true)}>
               {preview ? "See the opening" : "Play the opening again"}
             </Button>
@@ -220,8 +206,17 @@ function Day({
         </div>
       ) : null}
 
-      <Confetti fire={fire} />
-      {toast ? <CheersMoment years={a.years} said={toast.said} onDone={closeToast} /> : null}
+      {glass.layer}
+      {keeping ? (
+        <OnTop>
+          <MemoryComposer
+            open
+            onClose={() => setKeeping(false)}
+            onPhotoFailed={() => setKeeping(false)}
+            title={`Our ${ordinal(a.years)} anniversary`}
+          />
+        </OnTop>
+      ) : null}
       {replay ? (
         <OnTop>
           <Opening on={a.on} years={a.years} onClose={() => setReplay(false)} />

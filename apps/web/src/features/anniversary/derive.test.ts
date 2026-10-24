@@ -4,6 +4,7 @@ import type { AnniversaryYear, Appreciation, Memory } from "@/lib/api/types";
 import {
   daysTogether,
   notesOfTheYear,
+  ordinal,
   photosOfTheYear,
   whenLabel,
   yearTiles,
@@ -86,5 +87,22 @@ describe("photosOfTheYear", () => {
     expect(
       photosOfTheYear([m("2026-01-01", true), m("2026-02-01", false)], year).map((x) => x.id),
     ).toEqual(["2026-01-01"]);
+  });
+});
+
+describe("ordinal", () => {
+  it("gets the awkward ones right", () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 112].map(ordinal)).toEqual([
+      "1st",
+      "2nd",
+      "3rd",
+      "4th",
+      "11th",
+      "12th",
+      "13th",
+      "21st",
+      "22nd",
+      "112th",
+    ]);
   });
 });

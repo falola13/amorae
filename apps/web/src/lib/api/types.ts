@@ -371,7 +371,8 @@ export type NotificationKind =
   | "both_prayed"
   | "both_marked"
   | "memory_on_this_day"
-  | "nudge";
+  | "nudge"
+  | "letter";
 
 /** One row of the notifications inbox (GET /v1/notifications/inbox). Newest first,
  *  at most 30 — the server keeps only that many. */

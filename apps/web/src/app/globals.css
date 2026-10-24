@@ -357,6 +357,22 @@
     --occasion-glow: rgba(214, 112, 146, 0.16);
   }
 }
+/* And the type: every screen's headings take the occasion's serif, and the
+   small capitals turn gold, so the day reads differently everywhere — not
+   only on the pages built for it. Body text stays as it is. */
+:root[data-occasion="anniversary"] h1,
+:root[data-occasion="anniversary"] h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+:root[data-occasion="anniversary"] h1 {
+  font-style: italic;
+}
+:root[data-occasion="anniversary"] .text-micro.uppercase {
+  color: var(--color-gold);
+  letter-spacing: 0.16em;
+}
 :root[data-occasion="anniversary"] .grain {
   background-image:
     var(--grain), radial-gradient(120% 520px at 50% -120px, var(--occasion-glow), transparent 70%);

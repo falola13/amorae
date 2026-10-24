@@ -36,6 +36,14 @@ func TestNextDueFrom(t *testing.T) {
 			want: time.Date(2026, 9, 23, 11, 0, 0, 0, time.UTC),
 		},
 		{
+			// UTC-11: its midnight is 11:00 here, its morning long after.
+			name: "an anniversary wakes the worker at the couple's midnight",
+			seen: seen{dates: []ImportantDateCandidate{
+				{Timezone: "Etc/GMT+11", Anniversary: true, Reminder: true, Prefs: Preferences{ImportantDates: true}},
+			}},
+			want: time.Date(2026, 9, 23, 11, 0, 0, 0, time.UTC),
+		},
+		{
 			name: "a reminder already gone by is not waited for",
 			seen: seen{events: []EventCandidate{
 				{Timezone: "UTC", Date: utcDay, StartTime: "10:30", Reminder: "an hour before", Prefs: remind}, // 09:30

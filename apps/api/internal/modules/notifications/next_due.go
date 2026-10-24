@@ -68,6 +68,10 @@ func nextDueFrom(now time.Time, s seen) time.Time {
 	}
 	for _, c := range s.dates {
 		note(c.Timezone)
+		// An anniversary is also announced at midnight (anniversaryMidnight).
+		if c.Anniversary && c.Reminder && c.Prefs.ImportantDates {
+			consider(nextClock(now, zones[c.Timezone], 0))
+		}
 	}
 	for _, c := range s.challenges {
 		note(c.Timezone)

@@ -56,7 +56,7 @@ func TestService_LettersAreSealedUntilTheDay(t *testing.T) {
 
 	// Noon in Lagos the day before, then the morning of.
 	clock := time.Date(2026, 10, 24, 11, 0, 0, 0, time.UTC)
-	svc := anniversary.NewService(anniversary.NewPostgresRepository(db), fixedCouple{coupleID}, func() time.Time { return clock })
+	svc := anniversary.NewService(anniversary.NewPostgresRepository(db), fixedCouple{coupleID}, func() time.Time { return clock }, nil)
 
 	if _, err := svc.Write(ctx, ada, "Three years, and still you."); err != nil {
 		t.Fatalf("Ada writing: %v", err)

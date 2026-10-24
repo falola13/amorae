@@ -155,7 +155,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	appreciationSvc := appreciation.NewService(appreciationRepo, togetherCouples, now, notificationsWorker)
 
 	// The anniversary as a day of its own: letters sealed until it, and the year before it.
-	anniversarySvc := anniversary.NewService(anniversary.NewPostgresRepository(db), togetherCouples, now)
+	anniversarySvc := anniversary.NewService(anniversary.NewPostgresRepository(db), togetherCouples, now, notificationsWorker)
 
 	// Leaving a couple freezes it; this deletes it once the retention window
 	// for both partners to read/export has passed (FR-PAIR-008).

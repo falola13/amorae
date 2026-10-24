@@ -259,6 +259,14 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			FROM events e
 			WHERE e.created_at >= $1 AND e.kind = 'together' AND e.created_by IS NOT NULL
 			UNION ALL
+			-- An anniversary letter, the first time it is kept. created_at
+			-- does not move when it is rewritten, so editing it cannot
+			-- announce it twice. starts_on carries the day it opens.
+			SELECT l.id, l.couple_id, l.author_id, l.created_at, $8::text AS kind,
+			       NULL::text AS subject, l.opens_on, false
+			FROM anniversary_letters l
+			WHERE l.created_at >= $1
+			UNION ALL
 			-- A challenge one partner just started, together or just for them.
 			-- Same shape as an event: created_by IS NOT NULL keeps out one whose
 			-- starter is gone, who has nobody to credit. No undo window to wait
@@ -288,7 +296,8 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		JOIN users author ON author.id = written.author_id
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE u.id <> written.author_id
-	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered, KindEventAdded, KindChallengeStarted)
+	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered, KindEventAdded, KindChallengeStarted,
+		KindLetter)
 	if err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
 	}

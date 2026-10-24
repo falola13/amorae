@@ -376,7 +376,7 @@ export function Letters({
   const partner = couple.partner?.display_name.split(" ")[0] ?? "your partner";
   const when = a.days_until === 1 ? "tomorrow" : weekdayDate(a.on);
   return (
-    <section className="mt-14">
+    <section id="letters" className="scroll-mt-4 mt-14">
       <Heading sub={showDay ? undefined : `Sealed until ${when}`}>Letters</Heading>
       <div className="flex flex-col gap-4">
         {a.theirs ? (
@@ -595,7 +595,7 @@ export function Questions({ on }: { on: string }) {
   const [i, setI] = useState(0);
   const next = () => setI((n) => (n + 1) % order.length);
   return (
-    <section className="mt-16">
+    <section id="questions" className="scroll-mt-4 mt-16">
       <Heading sub="Over dinner, or the drive home">Questions for tonight</Heading>
       <div className="relative mx-2 h-[230px]">
         <div
@@ -631,7 +631,7 @@ export function Ideas({ on }: { on: string }) {
   const [added, setAdded] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   return (
-    <section className="mt-16">
+    <section id="ideas" className="scroll-mt-4 mt-16">
       <Heading sub="Tap one to add it to your plans">Ideas for the day</Heading>
       <div className="flex flex-col overflow-hidden rounded-[22px] border border-line bg-surface">
         {IDEAS.map((idea, i) => {
@@ -705,7 +705,7 @@ export function Prayer({ a, couple }: { a: Anniversary; couple: Couple }) {
     }
   });
   return (
-    <section className="mt-16">
+    <section id="prayer" className="scroll-mt-4 mt-16">
       <Heading sub="Pray it together, out loud">
         A prayer for year {ORDINAL[a.years + 1] ?? a.years + 1}
       </Heading>

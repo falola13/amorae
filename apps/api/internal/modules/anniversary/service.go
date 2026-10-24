@@ -18,14 +18,19 @@ type Couples interface {
 	CoupleFor(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
 
+// Poker asks the notifications worker for a pass now, so the other partner
+// hears a letter is waiting without waiting for the next cron tick.
+type Poker interface{ Poke() }
+
 type Service struct {
 	repo    Repository
 	couples Couples
 	now     func() time.Time
+	poker   Poker
 }
 
-func NewService(repo Repository, couples Couples, now func() time.Time) *Service {
-	return &Service{repo: repo, couples: couples, now: now}
+func NewService(repo Repository, couples Couples, now func() time.Time, poker Poker) *Service {
+	return &Service{repo: repo, couples: couples, now: now, poker: poker}
 }
 
 // View is the anniversary as one person sees it.
@@ -92,12 +97,21 @@ func (s *Service) Write(ctx context.Context, userID uuid.UUID, text string) (Let
 	if !occasion.Writable() {
 		return Letter{}, ErrTooEarly
 	}
-	return s.repo.Keep(ctx, Letter{
+	l, err := s.repo.Keep(ctx, Letter{
 		CoupleID: coupleID,
 		AuthorID: userID,
 		OpensOn:  occasion.On,
 		Text:     clean,
 	}, s.now())
+	if err != nil {
+		return Letter{}, err
+	}
+	// Only the first keeping is announced (notifications reads created_at),
+	// so poking on a rewrite costs a pass and sends nothing.
+	if s.poker != nil {
+		s.poker.Poke()
+	}
+	return l, nil
 }
 
 func (s *Service) occasion(ctx context.Context, userID uuid.UUID) (uuid.UUID, Occasion, time.Time, error) {

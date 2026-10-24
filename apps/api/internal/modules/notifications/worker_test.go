@@ -1215,3 +1215,81 @@ func TestWorkerTick_EventWithSeveralReminders(t *testing.T) {
 		t.Error("two reminders on one event share a key, so only one of them could be sent")
 	}
 }
+
+func TestForWritten_Letter(t *testing.T) {
+	// 20:00 in Lagos on the 24th; the letter opens on the 25th.
+	written := time.Date(2026, 10, 24, 19, 0, 0, 0, time.UTC)
+	letter := WrittenCandidate{
+		UserID: uuid.New(), AuthorID: uuid.New(), AuthorName: "Olufemi",
+		ItemID: uuid.New(), Kind: KindLetter, WrittenAt: written,
+		Timezone: "Africa/Lagos", StartsOn: time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC),
+		Prefs: Preferences{Appreciation: true},
+	}
+
+	t.Run("that one waits, and when it opens — not what it says", func(t *testing.T) {
+		n, ok := ForWritten(letter, written.Add(time.Minute))
+		if !ok {
+			t.Fatal("nobody was told a letter was waiting")
+		}
+		if n.Message.Title != "💌 Olufemi wrote you a letter" || n.Message.Path != "/together/our-day" {
+			t.Errorf("message = %+v", n.Message)
+		}
+		if n.Message.Body != "Sealed until tomorrow. Open it on the day." {
+			t.Errorf("body = %q", n.Message.Body)
+		}
+	})
+
+	t.Run("written on the day, it is open now", func(t *testing.T) {
+		onTheDay := letter
+		onTheDay.WrittenAt = time.Date(2026, 10, 25, 9, 0, 0, 0, time.UTC)
+		n, ok := ForWritten(onTheDay, onTheDay.WrittenAt.Add(time.Minute))
+		if !ok || n.Message.Body != "It’s open now." {
+			t.Errorf("ok %v, body %q", ok, n.Message.Body)
+		}
+	})
+
+	t.Run("notes switched off, nothing", func(t *testing.T) {
+		off := letter
+		off.Prefs.Appreciation = false
+		if _, ok := ForWritten(off, written.Add(time.Minute)); ok {
+			t.Error("told despite notes being off")
+		}
+	})
+}
+
+func TestForImportantDates_AnniversaryMidnight(t *testing.T) {
+	if _, err := time.LoadLocation("Africa/Lagos"); err != nil {
+		t.Skip("no timezone database here")
+	}
+	c := ImportantDateCandidate{
+		UserID: uuid.New(), MilestoneID: uuid.New(), Title: "Our anniversary",
+		Timezone: "Africa/Lagos", Date: time.Date(2023, 10, 25, 0, 0, 0, 0, time.UTC),
+		Reminder: true, YearKnown: true, Anniversary: true,
+		Prefs: Preferences{ImportantDates: true},
+	}
+	// 00:05 in Lagos.
+	justAfterMidnight := time.Date(2026, 10, 24, 23, 5, 0, 0, time.UTC)
+
+	due := ForImportantDates(c, justAfterMidnight)
+	if len(due) != 1 {
+		t.Fatalf("got %d at midnight, want the one", len(due))
+	}
+	if due[0].Message.Body != "3 years today. Your letters are open." || due[0].Message.Path != "/together/our-day" {
+		t.Errorf("message = %+v", due[0].Message)
+	}
+
+	t.Run("any other date still waits for the morning", func(t *testing.T) {
+		other := c
+		other.Anniversary = false
+		if got := ForImportantDates(other, justAfterMidnight); len(got) != 0 {
+			t.Errorf("got %d in the small hours", len(got))
+		}
+	})
+
+	t.Run("and the morning's is a separate send", func(t *testing.T) {
+		morning := ForImportantDates(c, time.Date(2026, 10, 25, 7, 0, 0, 0, time.UTC))
+		if len(morning) != 1 || morning[0].Key == due[0].Key {
+			t.Errorf("morning = %+v", morning)
+		}
+	})
+}

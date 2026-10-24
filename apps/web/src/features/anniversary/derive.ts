@@ -6,6 +6,13 @@ const WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight
 /** "Three years", "One year", "12 years". */
 export const yearsWord = (n: number) => `${WORDS[n] ?? n} ${n === 1 ? "year" : "years"}`;
 
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th, 21st. */
+export const ordinal = (n: number) => {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
+};
+
 /** The anniversary is today. */
 export const isTheDay = (a: Anniversary | undefined) => a?.days_until === 0;
 

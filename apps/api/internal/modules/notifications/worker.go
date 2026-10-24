@@ -193,7 +193,13 @@ func ForImportantDates(c ImportantDateCandidate, now time.Time) []Notification {
 	local := now.In(zone)
 	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, zone)
 	if local.Before(today.Add(reminderMorning * time.Hour)) {
-		return nil // still the small hours; nobody needs this yet
+		// The small hours: nobody needs a reminder yet — except that their
+		// anniversary has just begun, which is the one thing worth knowing
+		// at midnight. Quiet hours still hold it until they are awake.
+		if c.Anniversary && OccursOn(c.Date, today) {
+			return []Notification{anniversaryMidnight(c, today)}
+		}
+		return nil
 	}
 
 	var due []Notification
@@ -216,6 +222,26 @@ func ForImportantDates(c ImportantDateCandidate, now time.Time) []Notification {
 		})
 	}
 	return due
+}
+
+// anniversaryMidnight is the note that the day has begun and the letters
+// written for it are open. Keyed apart from the morning's, so both can go.
+func anniversaryMidnight(c ImportantDateCandidate, today time.Time) Notification {
+	body := "Your letters are open."
+	if years := today.Year() - c.Date.Year(); years > 0 {
+		body = plural(years, "year") + " today. Your letters are open."
+	}
+	return Notification{
+		UserID: c.UserID,
+		Kind:   KindImportantDate,
+		Key:    fmt.Sprintf("%s:%s:midnight", c.MilestoneID, today.Format(time.DateOnly)),
+		Message: push.Message{
+			Title: "🥂 Happy anniversary",
+			Body:  body,
+			Path:  "/together/our-day",
+			Tag:   KindImportantDate,
+		},
+	}
 }
 
 // importantDatePath is where tapping it goes: the anniversary's own page on
@@ -308,6 +334,16 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 			Path:  "/together/challenges/" + c.ItemID.String(),
 			Tag:   KindChallengeStarted,
 		}
+	case KindLetter:
+		// That a letter waits, and when it opens — never a word of it. Rides
+		// on the notes switch: it is the same kind of news.
+		wanted = c.Prefs.Appreciation
+		message = push.Message{
+			Title: "💌 " + c.AuthorName + " wrote you a letter",
+			Body:  letterBody(c, now),
+			Path:  "/together/our-day",
+			Tag:   KindLetter,
+		}
 	case KindPrayerAnswered:
 		// No prayer content: private writing (FR-NOTF-005.AC1), unlike the
 		// event exception (AC2) — wrong here costs more than it saves.
@@ -341,6 +377,24 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 		Key:     c.ItemID.String(),
 		Message: message,
 	}, true
+}
+
+// letterBody says when the letter opens, in the couple's own calendar.
+func letterBody(c WrittenCandidate, now time.Time) string {
+	zone, err := time.LoadLocation(c.Timezone)
+	if err != nil {
+		zone = time.UTC
+	}
+	local := now.In(zone)
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC)
+	switch days := int(c.StartsOn.Sub(today).Hours() / 24); {
+	case days <= 0:
+		return "It’s open now."
+	case days == 1:
+		return "Sealed until tomorrow. Open it on the day."
+	default:
+		return "Sealed until " + c.StartsOn.Format("Monday 2 January") + ". Open it on the day."
+	}
 }
 
 // challengeStartedBody says when the first day opens, in the couple's own

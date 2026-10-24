@@ -387,6 +387,9 @@ const (
 	KindEventAdded = "event_added"
 	// One partner starting a challenge, told to the other.
 	KindChallengeStarted = "challenge_started"
+	// One partner sealing an anniversary letter, told to the other — that
+	// something is waiting, never what it says.
+	KindLetter = "letter"
 )
 
 // AllKinds is every kind there is. A kind missing from here is a kind no
@@ -397,6 +400,7 @@ var AllKinds = []string{
 	KindImportantDate, KindAppreciation, KindJournal, KindGoal, KindChallenge,
 	KindPrayerAnswered, KindBothPrayed, KindBothMarked, KindMemoryOnThisDay,
 	KindEventOver, KindGoalCrossing, KindEventAdded, KindNudge, KindChallengeStarted,
+	KindLetter,
 }
 
 // OccursOn reports whether a date recurs on the given day (same month and

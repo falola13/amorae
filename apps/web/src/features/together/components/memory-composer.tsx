@@ -18,9 +18,12 @@ export function MemoryComposer({
   open,
   onClose,
   onPhotoFailed,
+  title = "",
 }: {
   open: boolean;
   onClose: () => void;
+  /** A title to start from, e.g. "Our 3rd anniversary". */
+  title?: string;
   /** The moment was kept and the picture was not. */
   onPhotoFailed: () => void;
 }) {
@@ -46,7 +49,7 @@ export function MemoryComposer({
     formState: { errors, isDirty },
   } = useForm<MemoryFormInput>({
     resolver: zodResolver(memorySchema),
-    defaultValues: { title: "", location: "", note: "" },
+    defaultValues: { title, location: "", note: "" },
   });
 
   const close = () => {

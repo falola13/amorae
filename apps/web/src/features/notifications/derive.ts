@@ -24,6 +24,7 @@ const ICON_BY_KIND: Record<NotificationKind, IconName> = {
   both_marked: "check",
   memory_on_this_day: "image",
   nudge: "together",
+  letter: "letter",
 };
 
 export const iconForKind = (kind: NotificationKind): IconName => ICON_BY_KIND[kind] ?? "bell";

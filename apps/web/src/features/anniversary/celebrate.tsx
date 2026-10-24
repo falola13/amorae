@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { readableMessage } from "@/lib/query/client";
 import { yearsWord } from "./derive";
+import { useCheers } from "./hooks";
 
 /**
  * Puts a full-screen layer on <body>. Screens animate in with a transform
@@ -274,4 +276,46 @@ export function CheersMoment({
       </button>
     </OnTop>
   );
+}
+
+/**
+ * A glass to raise, wherever the anniversary shows one: confetti, the
+ * clinking flutes, and a cheers sent to the other partner (or, in a
+ * preview, nothing sent and a line saying so). `layer` renders it.
+ */
+export function useRaiseGlass({
+  years,
+  partner,
+  preview = false,
+}: {
+  years: number;
+  partner: string;
+  preview?: boolean;
+}) {
+  const cheers = useCheers();
+  const [fire, setFire] = useState(0);
+  const [toast, setToast] = useState<{ said: string | null } | null>(null);
+  const close = useCallback(() => setToast(null), []);
+  const burst = useCallback(() => setFire((n) => n + 1), []);
+
+  const raise = () => {
+    burst();
+    if (preview) {
+      setToast({ said: `In the preview, nothing is sent to ${partner}.` });
+      return;
+    }
+    setToast({ said: null });
+    cheers.mutate(undefined, {
+      onSuccess: () => setToast({ said: `${partner} will see your glass raised.` }),
+      onError: (e) => setToast({ said: readableMessage(e) }),
+    });
+  };
+
+  const layer = (
+    <>
+      <Confetti fire={fire} />
+      {toast ? <CheersMoment years={years} said={toast.said} onDone={close} /> : null}
+    </>
+  );
+  return { raise, burst, busy: cheers.isPending, layer };
 }
