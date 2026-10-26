@@ -175,12 +175,23 @@ request, so nothing here has to stay awake.
    has. `COOKIE_SECURE=true`. And `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, which Vercel
    supplies at build time — which is exactly when it is needed.
 
-5. **The cron.** cron-job.org, free, every five minutes:
+5. **The cron.** cron-job.org, free, every five minutes from 07:00 to 22:55
+   in the couple's zone (minutes `*/5`, hours `7-22`, time zone
+   `Africa/Lagos`):
 
    ```
    POST https://your-api-host/internal/tick
    Authorization: Bearer <TICK_SECRET>
    ```
+
+   Not around the clock: every tick keeps the free Render instance awake, and
+   one instance awake all month is 720–744 hours of the workspace's 750 free
+   hours, which every service in it shares. Leaving the night alone lets the API
+   sleep about eight hours a day. What it costs: reminders that fall due
+   overnight arrive at 07:00, as does the anniversary's midnight message. Things
+   the other one does at night (a letter, a cheers, a nudge) still arrive at
+   once, since their request wakes the API and pokes the worker; and quiet hours
+   hold most kinds overnight anyway.
 
    A GitHub Actions schedule works too if the repository is public. On a
    private one the monthly Actions minutes will not cover a five-minute cron,
