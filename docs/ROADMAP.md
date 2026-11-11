@@ -47,10 +47,10 @@ Each one is either already tracked (the id in brackets) or new here.
 
 ### Correctness and safety
 
-- **Idempotency keys are missing** for queued offline writes [FR-PWA-009], so
-  the writes that create rows are `onlineOnly` until their endpoints take a key
-  [DEC-28]. Not a Step 1 blocker: every prayer write is idempotent in the
-  schema. It becomes live when Together's endpoints are built.
+- **Some offline writes still can't queue** [FR-PWA-009, DEC-28]. The
+  `Idempotency-Key` middleware exists (`platform/idempotency`), but a few
+  Together creates are still `onlineOnly`: those with no key of their own, and
+  those carrying a photo, since a File cannot survive the offline queue.
 - **No audit log** of security-sensitive actions [NFR-SEC-020].
 - **No common-password check** at registration [NFR-SEC-004].
 - **No Content-Security-Policy on pages** — only on the service worker
@@ -69,18 +69,13 @@ Each one is either already tracked (the id in brackets) or new here.
   currently breaks, and it is also what a secular mode would be built from: a space uses faith
   vocabulary only while both partners hold consent.
 
-- **Challenge days are shared, not per-partner** [Q-23]: one `done` flag per
-  day means either partner can tick it for both. Decide before the endpoint is
-  built, because it changes the schema.
-- **The prayer-week reflection is per-partner in the requirements
-  ([FR-PRAY-006]) but a single field in `types.ts`.** Settle it when the module
-  lands, and change the contract and the screen in the same commit.
-- **No email verification** [Q-05], **no photo storage** [Q-06].
+- **No email verification** [Q-05].
 
 ### Process gaps
 
-- **No web tests at all** [NFR-MAINT-003, Q-15]. Go has ~120; the web app has
-  lint, typecheck and build only.
+- **Web tests are unit-only** [NFR-MAINT-003, Q-15]. Vitest covers the pure
+  logic (dates, derive functions); there is no Testing Library for components
+  and no Playwright for end-to-end flows.
 - **CI does not check formatting or vulnerabilities**: no `prettier --check`,
   no `govulncheck`, no `npm audit`, no Dependabot [NFR-SEC-019].
 - **No error reporting or product metrics** [NFR-OBS-006, Q-14], so a private
@@ -88,7 +83,6 @@ Each one is either already tracked (the id in brackets) or new here.
 
 ### Design gaps
 
-- No dark mode, and no dark palette to build one from [Q-21].
 - Cold-start offline reading is not supported, by decision [DEC-04, Q-01].
 - Prayer Mode has no screen wake lock, so the phone sleeps mid-prayer.
 
