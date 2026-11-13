@@ -16,6 +16,18 @@ const manrope = localFont({
   display: "swap",
 });
 
+// The text serif: headings and anything the couple wrote. Both axes are
+// variable (opsz 6–72, wght 200–800); with font-optical-sizing on (globals.css)
+// the browser picks the cut for each size.
+const newsreader = localFont({
+  src: [
+    { path: "../fonts/newsreader-latin-variable.woff2", weight: "200 800", style: "normal" },
+    { path: "../fonts/newsreader-latin-italic-variable.woff2", weight: "200 800", style: "italic" },
+  ],
+  variable: "--font-newsreader",
+  display: "swap",
+});
+
 // Only for an occasion's display type (the anniversary). Self-hosted like
 // Manrope, so the day still looks like itself offline.
 const occasionSerif = localFont({
@@ -84,7 +96,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${occasionSerif.variable}`}>
+    <html lang="en" className={`${manrope.variable} ${newsreader.variable} ${occasionSerif.variable}`}>
       <body className="flex min-h-dvh flex-col bg-bg font-sans text-ink antialiased">
         <Providers>{children}</Providers>
         <ServiceWorkerRegistrar />

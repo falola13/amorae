@@ -5,39 +5,39 @@
    names and never raw colours. The older aliases (bg-elevated, fg, accent,
    danger, success) stay so existing components keep working. */
 @theme {
-  --color-bg: #f7f4ef;
-  --color-paper: #f2ede5;
-  --color-surface: #fffdfa;
-  --color-ink: #24201f;
-  --color-stone: #6b635c;
-  --color-line: #e4ddd3;
-  --color-edge: #8f857b;
-  --color-faint: #ddd4c8;
-  --color-photo: #eae3d9;
+  --color-bg: #f5f1ea;
+  --color-paper: #ece5d9;
+  --color-surface: #fcfaf5;
+  --color-ink: #261f1c;
+  --color-stone: #645a51;
+  --color-line: #dcd2c4;
+  --color-edge: #8a7f72;
+  --color-faint: #e2d9cb;
+  --color-photo: #e4dacb;
   --color-plum: #5b2a4a;
-  --color-plum-dark: #47203a;
-  --color-plum-tint: #f1e8ee;
-  --color-green: #3f6b52;
-  --color-green-tint: #e4ede6;
-  --color-amber: #7f5210;
-  --color-amber-tint: #f6ebd6;
-  --color-red: #9b3b32;
-  --color-red-tint: #f6e7e4;
+  --color-plum-dark: #44203a;
+  --color-plum-tint: #efe3e8;
+  --color-green: #3b5e44;
+  --color-green-tint: #e1e7da;
+  --color-amber: #77500f;
+  --color-amber-tint: #f2e5ca;
+  --color-red: #963829;
+  --color-red-tint: #f4e2dc;
   /* Only for an occasion (the anniversary): a thread of gold, never body text. */
-  --color-gold: #94702c;
+  --color-gold: #836226;
 
   /* Aliases kept for the original template components. */
-  --color-bg-elevated: #fffdfa;
-  --color-fg: #24201f;
-  --color-fg-muted: #6b635c;
-  --color-border: #e4ddd3;
+  --color-bg-elevated: #fcfaf5;
+  --color-fg: #261f1c;
+  --color-fg-muted: #645a51;
+  --color-border: #dcd2c4;
   --color-accent: #5b2a4a;
-  --color-accent-hover: #47203a;
-  --color-accent-fg: #fffdfa;
-  --color-danger: #9b3b32;
-  --color-danger-bg: #f6e7e4;
-  --color-success: #3f6b52;
-  --color-success-bg: #e4ede6;
+  --color-accent-hover: #44203a;
+  --color-accent-fg: #fcfaf5;
+  --color-danger: #963829;
+  --color-danger-bg: #f4e2dc;
+  --color-success: #3b5e44;
+  --color-success-bg: #e1e7da;
 
   /* Dark mode. Q-21 held this back until every text pair could be checked in
      both themes; it is checked now, by measuring the rendered contrast of
@@ -59,31 +59,35 @@
      Warm, not cold: the light palette is linen and ink, so the dark one is a
      warm near-black rather than the blue-grey most dark modes default to. */
 
-  /* Type scale */
+  /* Type scale (docs/design/direction.md). A size token can't carry a family,
+     so everything from bodylg up is paired with `font-text` where it is used:
+     the couple's words and the headings are set in Newsreader, the interface
+     in Manrope. 12px is the floor, and only for uppercase folios and tab
+     labels. */
   --text-micro: 12px;
   --text-micro--line-height: 1.4;
-  --text-micro--letter-spacing: 0.08em;
-  --text-micro--font-weight: 700;
+  --text-micro--letter-spacing: 0.06em;
+  --text-micro--font-weight: 600;
   --text-support: 14px;
   --text-support--line-height: 1.5;
   --text-body: 16px;
   --text-body--line-height: 1.55;
-  --text-bodylg: 17px;
-  --text-bodylg--line-height: 1.55;
+  --text-bodylg: 18px;
+  --text-bodylg--line-height: 1.45;
   --text-reading: 21px;
   --text-reading--line-height: 1.6;
-  --text-section: 20px;
-  --text-section--line-height: 1.3;
-  --text-section--letter-spacing: -0.015em;
-  --text-section--font-weight: 600;
-  --text-title: 28px;
-  --text-title--line-height: 1.18;
-  --text-title--letter-spacing: -0.022em;
-  --text-title--font-weight: 600;
-  --text-display: 34px;
-  --text-display--line-height: 1.18;
-  --text-display--letter-spacing: -0.025em;
-  --text-display--font-weight: 600;
+  --text-section: 22px;
+  --text-section--line-height: 1.25;
+  --text-section--letter-spacing: -0.005em;
+  --text-section--font-weight: 500;
+  --text-title: 30px;
+  --text-title--line-height: 1.15;
+  --text-title--letter-spacing: -0.015em;
+  --text-title--font-weight: 450;
+  --text-display: 40px;
+  --text-display--line-height: 1.08;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 400;
 
   /* Paper tooth. The brand is printed matter — warm stock, one plum ink — and
      a flat fill is the one thing paper never is. A single greyscale noise tile,
@@ -93,10 +97,12 @@
      on a near-black screen. */
   --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.055'/></svg>");
 
-  --radius-input: 12px;
-  --radius-btn: 14px;
-  --radius-card: 16px;
-  --radius-sheet: 24px;
+  /* The crispness of paper: corners are cut, not moulded. Photos take 2px
+     (rounded-xs). */
+  --radius-input: 8px;
+  --radius-btn: 10px;
+  --radius-card: 6px;
+  --radius-sheet: 20px;
 
   --animate-breathe: breathe 1.8s ease-in-out infinite;
   --animate-rise: rise 0.24s ease-out both;
@@ -283,37 +289,37 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --color-bg: #16130f;
-    --color-paper: #1e1a16;
-    --color-surface: #221e19;
-    --color-ink: #f3efe8;
-    --color-stone: #aca295;
-    --color-line: #322c26;
-    --color-edge: #6a6055;
-    --color-faint: #3a342d;
-    --color-photo: #2a251f;
+    --color-bg: #191512;
+    --color-paper: #211c18;
+    --color-surface: #28221d;
+    --color-ink: #efe7db;
+    --color-stone: #ada193;
+    --color-line: #38312a;
+    --color-edge: #776b5e;
+    --color-faint: #3a332c;
+    --color-photo: #2e2822;
     --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.04'/></svg>");
-    --color-plum: #e0b4cd;
-    --color-plum-dark: #efd2e2;
-    --color-plum-tint: #3c2634;
-    --color-green: #8fd0a8;
-    --color-green-tint: #21362a;
-    --color-amber: #e6b76c;
-    --color-amber-tint: #3a2e18;
-    --color-red: #ef9c92;
-    --color-red-tint: #402420;
-    --color-bg-elevated: #221e19;
-    --color-fg: #f3efe8;
-    --color-fg-muted: #aca295;
-    --color-border: #322c26;
-    --color-accent: #e0b4cd;
-    --color-accent-hover: #efd2e2;
-    --color-accent-fg: #221e19;
-    --color-danger: #ef9c92;
-    --color-danger-bg: #402420;
-    --color-success: #8fd0a8;
-    --color-success-bg: #21362a;
-    --color-gold: #e2c17e;
+    --color-plum: #b4899f;
+    --color-plum-dark: #cba6ba;
+    --color-plum-tint: #3b2634;
+    --color-green: #9dc8a4;
+    --color-green-tint: #213128;
+    --color-amber: #e3b66b;
+    --color-amber-tint: #382c17;
+    --color-red: #ee9c8e;
+    --color-red-tint: #3e231e;
+    --color-bg-elevated: #28221d;
+    --color-fg: #efe7db;
+    --color-fg-muted: #ada193;
+    --color-border: #38312a;
+    --color-accent: #b4899f;
+    --color-accent-hover: #cba6ba;
+    --color-accent-fg: #28221d;
+    --color-danger: #ee9c8e;
+    --color-danger-bg: #3e231e;
+    --color-success: #9dc8a4;
+    --color-success-bg: #213128;
+    --color-gold: #ddbe7e;
   }
 }
 
@@ -388,11 +394,23 @@
   --font-display: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
   /* The anniversary's display face: headlines and numerals only, never body text. */
   --font-serif: var(--font-occasion), "Cormorant Garamond", Georgia, serif;
+  /* The text serif: anything a person wrote, and the headings. */
+  --font-text: var(--font-newsreader), Georgia, serif;
 }
 
 :root {
+  /* Behind a sheet. A token rather than bg-ink/40 so dark mode can swap it. */
+  --scrim: color-mix(in srgb, var(--color-ink) 40%, transparent);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* Ink at 40% would be a cream veil on a dark page; the dark scrim dims with
+   the page's own stock instead, so it darkens in both themes. After the light
+   value so it wins. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --scrim: color-mix(in srgb, var(--color-bg) 72%, transparent);
+  }
 }
 
 html {
@@ -406,6 +424,9 @@ body {
   color: var(--color-ink);
   font-size: 16px;
   line-height: 1.55;
+  /* Newsreader's opsz axis: a tighter cut for 64px numerals, a sturdier one
+     at 18px, without naming either. */
+  font-optical-sizing: auto;
   min-height: 100dvh;
   overscroll-behavior-y: none;
   /* viewport-fit=cover (app/layout.tsx) lets pages run under the notch; the

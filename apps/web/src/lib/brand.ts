@@ -8,9 +8,9 @@ export const brand = {
     plum: "#5B2A4A",
     // The mark and accent on dark backgrounds, per docs/BRAND.md.
     plumDark: "#E0B4CD",
-    background: "#F7F4EF",
-    backgroundDark: "#16130F",
-    ink: "#24201F",
-    softWhite: "#FFFDFA",
+    background: "#F5F1EA",
+    backgroundDark: "#191512",
+    ink: "#261F1C",
+    softWhite: "#FCFAF5",
   },
 } as const;
