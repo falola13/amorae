@@ -141,9 +141,8 @@ export default function History() {
 
   return (
     <>
+      {/* A tab of its own, so nothing to go back to; the bar only carries the add button. */}
       <TopBar
-        back="Our space"
-        backHref={routes.together}
         right={
           <button
             type="button"

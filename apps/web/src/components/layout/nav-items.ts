@@ -18,7 +18,7 @@ export const NAV: { label: string; icon: IconName; href: string; match: (p: stri
       match: (p) => p.startsWith("/prayers"),
     },
     {
-      label: "History",
+      label: "Our story",
       icon: "clock",
       href: routes.history,
       match: (p) => p.startsWith("/history"),
