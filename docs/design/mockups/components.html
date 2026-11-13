@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amorae — Component Sheet</title>
+<!-- Mockup only. The app self-hosts both families as woff2 (see ../direction.md). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&display=swap" rel="stylesheet">
+<style>
+/* Tokens: identical to index.html and ../direction.md */
+:root, .light {
+  --color-bg: #F5F1EA; --color-paper: #ECE5D9; --color-surface: #FCFAF5; --color-ink: #261F1C;
+  --color-stone: #645A51; --color-line: #DCD2C4; --color-edge: #8A7F72; --color-faint: #E2D9CB;
+  --color-photo: #E4DACB; --color-plum: #5B2A4A; --color-plum-dark: #44203A; --color-plum-tint: #EFE3E8;
+  --color-green: #3B5E44; --color-green-tint: #E1E7DA; --color-amber: #77500F; --color-amber-tint: #F2E5CA;
+  --color-red: #963829; --color-red-tint: #F4E2DC; --color-gold: #836226;
+  --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.055'/></svg>");
+  /* Sheet scrim: darkens in both themes. (Today's bg-ink/40 turns into a cream veil in dark mode.) */
+  --scrim: color-mix(in srgb, var(--color-ink) 40%, transparent);
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-text: "Newsreader", Georgia, serif;
+  --radius-input: 8px; --radius-btn: 10px; --radius-card: 6px; --radius-sheet: 20px;
+}
+.dark {
+  --color-bg: #191512; --color-paper: #211C18; --color-surface: #28221D; --color-ink: #EFE7DB;
+  --color-stone: #ADA193; --color-line: #38312A; --color-edge: #776B5E; --color-faint: #3A332C;
+  --color-photo: #2E2822; --color-plum: #B4899F; --color-plum-dark: #CBA6BA; --color-plum-tint: #3B2634;
+  --color-green: #9DC8A4; --color-green-tint: #213128; --color-amber: #E3B66B; --color-amber-tint: #382C17;
+  --color-red: #EE9C8E; --color-red-tint: #3E231E; --color-gold: #DDBE7E;
+  --grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.04'/></svg>");
+  --scrim: color-mix(in srgb, var(--color-bg) 72%, transparent);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--color-faint); color: var(--color-ink); font-family: var(--font-sans); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; padding: 48px 16px 96px; }
+code { font-size: 14px; }
+.head { max-width: 860px; margin: 0 auto 48px; }
+.head h1 { font-family: var(--font-text); font-weight: 400; font-size: 40px; line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 12px; }
+.head p { margin: 0; color: var(--color-stone); max-width: 62ch; }
+.head a { color: var(--color-plum); font-weight: 600; }
+.block { max-width: 860px; margin: 0 auto 64px; }
+.block > h2 { font-family: var(--font-text); font-style: italic; font-weight: 500; font-size: 22px; margin: 0; }
+.block > .maps { margin: 4px 0 20px; font-size: 14px; color: var(--color-stone); max-width: 70ch; }
+.block > .maps b { color: var(--color-ink); font-weight: 600; }
+.pair { display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; }
+.cap { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-stone); margin: 0 0 12px; }
+
+.panel { width: 390px; max-width: calc(100vw - 32px); border: 1px solid var(--color-edge); border-radius: 16px; background-color: var(--color-bg); background-image: var(--grain); background-size: 120px 120px; color: var(--color-ink); padding: 24px; display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden; }
+.panel.flush { padding: 0; }
+
+.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.folio { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-stone); line-height: 1.4; }
+.label { font-size: 14px; font-weight: 600; color: var(--color-stone); }
+.support { font-size: 14px; line-height: 1.5; color: var(--color-stone); margin: 0; }
+.section-h { font-family: var(--font-text); font-style: italic; font-weight: 500; font-size: 22px; line-height: 1.25; margin: 0; }
+.title { font-family: var(--font-text); font-size: 30px; font-weight: 450; line-height: 1.15; letter-spacing: -0.015em; margin: 0; }
+
+/* Buttons — buttons.tsx VARIANT */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 54px; border-radius: var(--radius-btn); border: 0; font-family: var(--font-sans); font-size: 16px; font-weight: 600; white-space: nowrap; }
+.btn .ico { width: 20px; height: 20px; }
+.primary { background: var(--color-plum); color: var(--color-surface); }
+.secondary { background: transparent; border: 1px solid var(--color-edge); color: var(--color-ink); }
+.text { background: transparent; color: var(--color-plum); height: 44px; width: auto; padding: 0 8px; }
+.quiet { background: transparent; color: var(--color-ink); height: 48px; width: auto; padding: 0 8px; font-size: 15px; }
+.danger { background: transparent; color: var(--color-red); height: 44px; width: auto; padding: 0 8px; }
+.disabled { background: var(--color-faint); color: var(--color-stone); }
+.inline { display: flex; justify-content: space-between; align-items: center; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-plum-tint); border-top-color: var(--color-surface); }
+
+/* Fields — fields.tsx */
+.field { display: flex; flex-direction: column; gap: 8px; }
+.input { height: 52px; border-radius: var(--radius-input); border: 1px solid var(--color-edge); background: var(--color-surface); padding: 0 16px; display: flex; align-items: center; font-size: 16px; color: var(--color-ink); }
+.input.focus { border: 1.5px solid var(--color-plum); }
+.input.error { border: 1.5px solid var(--color-red); }
+.input .ph { color: var(--color-stone); }
+.err { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--color-red); }
+.err .ico { width: 16px; height: 16px; }
+.textarea { min-height: 132px; border-radius: var(--radius-input); border: 1px solid var(--color-edge); background: var(--color-surface); padding: 14px 16px; font-family: var(--font-text); font-size: 18px; line-height: 1.5; color: var(--color-ink); }
+.count { align-self: flex-end; font-size: 14px; color: var(--color-stone); font-variant-numeric: tabular-nums; }
+
+/* Rows — rows.tsx */
+.row { display: flex; align-items: center; gap: 14px; min-height: 62px; padding: 8px 0; border-bottom: 1px solid var(--color-line); }
+.row:last-child { border-bottom: 0; }
+.row .lbl { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.row .lbl b { font-size: 16px; font-weight: 600; }
+.row > .ico { color: var(--color-stone); }
+.row .chev { width: 18px; height: 18px; color: var(--color-stone); }
+.row .val { font-size: 15px; color: var(--color-stone); }
+.row.setting { min-height: 54px; }
+.row.setting .lbl b { font-weight: 500; }
+.row.red, .row.red > .ico { color: var(--color-red); }
+.switch { width: 48px; height: 28px; border-radius: 14px; position: relative; flex-shrink: 0; }
+.switch.on { background: var(--color-plum); }
+.switch.off { background: var(--color-faint); box-shadow: inset 0 0 0 1px var(--color-edge); }
+.switch i { position: absolute; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--color-surface); }
+.switch.on i { right: 3px; }
+.switch.off i { left: 3px; box-shadow: 0 0 0 1px var(--color-edge); }
+.mark { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mark.done { background: var(--color-green-tint); color: var(--color-green); }
+.mark.done .ico { width: 14px; height: 14px; stroke-width: 2.4; }
+.mark.open { border: 1.5px solid var(--color-edge); }
+
+/* Section — rows.tsx Section, typography.tsx Micro/Title */
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; }
+.chapter-rule { border-top: 1.5px solid var(--color-ink); padding-top: 12px; display: flex; align-items: baseline; justify-content: space-between; }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin: 0 -24px; padding: 0 14px; border-bottom: 1px solid var(--color-line); }
+.tabs span { height: 44px; display: inline-flex; align-items: center; padding: 0 10px; font-size: 15px; font-weight: 600; color: var(--color-stone); position: relative; }
+.tabs span.on { color: var(--color-ink); font-weight: 750; }
+.tabs span.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--color-plum); }
+.seg { display: flex; border: 1px solid var(--color-edge); border-radius: var(--radius-btn); padding: 3px; gap: 3px; }
+.seg span { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 7px; font-size: 15px; font-weight: 600; color: var(--color-ink); }
+.seg span.on { background: var(--color-ink); color: var(--color-bg); font-weight: 700; }
+.seg span.on .ico { width: 16px; height: 16px; stroke-width: 2.2; }
+
+/* Sheet — chrome.tsx Sheet */
+.sheet-stage { height: 470px; background: var(--color-bg); position: relative; }
+.sheet-stage .under { padding: 24px; }
+.scrim { position: absolute; inset: 0; background: var(--scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background-color: var(--color-bg); background-image: var(--grain); background-size: 120px 120px; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; border-top: 1px solid var(--color-line); padding: 10px 24px 34px; display: flex; flex-direction: column; gap: 16px; }
+.grip { width: 36px; height: 4px; border-radius: 2px; background: var(--color-edge); align-self: center; }
+.sheet .title { font-size: 26px; margin-top: 12px; }
+.ask-discard { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: var(--radius-input); background: var(--color-paper); padding: 4px 4px 4px 14px; font-size: 14px; font-weight: 600; }
+.ask-discard span { display: flex; }
+
+/* Feedback — states.tsx Alert/LoadProblem, chrome.tsx Banner/Toast */
+.alert { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-input); padding: 10px 14px; font-size: 14px; font-weight: 600; }
+.alert .ico { width: 18px; height: 18px; }
+.alert.err { background: var(--color-red-tint); color: var(--color-red); }
+.alert.ok { background: var(--color-green-tint); color: var(--color-green); }
+.alert.warn { background: var(--color-amber-tint); color: var(--color-amber); }
+.problem { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); padding: 6px 0 6px 0; }
+.problem .lbl { flex: 1; display: flex; flex-direction: column; }
+.problem .lbl b { font-size: 15px; font-weight: 600; }
+.problem > .ico { color: var(--color-red); width: 20px; height: 20px; }
+.toast { display: flex; align-items: center; justify-content: space-between; height: 52px; border-radius: var(--radius-btn); background: var(--color-ink); color: var(--color-surface); padding: 0 8px 0 16px; font-size: 15px; font-weight: 500; }
+.toast b { height: 44px; display: inline-flex; align-items: center; padding: 0 10px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+/* Empty — states.tsx EmptyState + Ghost */
+.ghost { width: 100%; height: 96px; }
+.ghost line { stroke: var(--color-faint); stroke-width: 1.5; }
+.ghost line.first { stroke: var(--color-edge); }
+
+/* Skeleton — states.tsx Skeleton */
+.sk { height: 12px; border-radius: 2px; background: var(--color-faint); }
+.sk.serif { height: 18px; }
+
+/* Top bar — chrome.tsx TopBar / ComposeBar */
+.topbar { display: flex; align-items: center; justify-content: space-between; height: 44px; margin: 0 -12px; }
+.topbar .back { display: inline-flex; align-items: center; gap: 2px; height: 44px; padding: 0 8px 0 4px; font-size: 16px; font-weight: 500; }
+.topbar .mid { font-size: 14px; font-weight: 600; color: var(--color-stone); }
+.topbar .act { height: 44px; display: inline-flex; align-items: center; padding: 0 12px; font-size: 16px; font-weight: 700; color: var(--color-plum); }
+.topbar .act.ink { color: var(--color-ink); font-weight: 500; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5M12 16h.01"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3.5v3M15.5 3.5v3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 5.5 2 7 2 7H4s2-1.5 2-7zM10 19.5a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9.5 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20h3M15 8l4 4-4 4M19 12H10"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 24 24"><path d="M19.5 11a7.5 7.5 0 0 0-13.7-3.5M4.5 4.5v3.5H8M4.5 13a7.5 7.5 0 0 0 13.7 3.5M19.5 19.5V16H16"/></symbol>
+</svg>
+
+<header class="head">
+  <div class="folio" style="margin-bottom:16px">Amorae · component sheet · round 3</div>
+  <h1>Component sheet</h1>
+  <p>Every shared piece of UI in the new direction, light and dark, each with the name of the component in <code>apps/web/src/components/ui/*</code> to restyle. The colours are the tokens in <a href="../direction.md">direction.md</a>; the screens are in <a href="index.html">index.html</a>.</p>
+</header>
+
+<!-- BUTTONS -->
+<section class="block">
+  <h2>Buttons</h2>
+  <p class="maps"><b>Button</b>, <b>LinkButton</b>, <b>buttonClass</b>, <b>Spinner</b> — <code>buttons.tsx</code>. Variants <code>primary</code>, <code>secondary</code>, <code>text</code>, <code>danger</code> keep their names and heights; radius goes 14→10. Add a <code>quiet</code> variant (ink, 48px) for the inline Previous / Next / Keep it buttons now hand-written in <code>prayer-session.tsx</code> and <code>chrome.tsx</code>.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="buttons">
+      <span class="btn primary">Continue praying</span>
+      <span class="btn secondary">Write your answer</span>
+      <div class="inline"><span class="btn text">Enter quiet prayer</span><span class="btn quiet"><svg class="ico"><use href="#i-left"/></svg>Previous</span></div>
+      <div class="inline"><span class="btn danger">Delete this memory</span><span class="support">danger · 44px</span></div>
+      <span class="btn primary"><span class="spin"></span>Saving</span>
+      <span class="btn disabled">Share this week</span>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="buttons"></div></div>
+  </div>
+</section>
+
+<!-- FIELDS -->
+<section class="block">
+  <h2>Text input, textarea, error</h2>
+  <p class="maps"><b>Field</b>, <b>Select</b>, <b>BareInput</b>, <b>BareTextarea</b> — <code>fields.tsx</code>. Label, hint and error go from 13px to 14px. A textarea that holds the couple&rsquo;s words (prayer, journal, appreciation) is set in Newsreader 18; a form field stays in the sans.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="fields" style="gap:20px">
+      <div class="field"><span class="label">Event name</span><div class="input"><span class="ph">e.g. Dinner at Nok</span></div><span class="support">Only the two of you see this.</span></div>
+      <div class="field"><span class="label">Where</span><div class="input focus">Victoria Island</div></div>
+      <div class="field"><span class="label">Amount saved</span><div class="input error">₦42O,000</div><span class="err"><svg class="ico"><use href="#i-alert"/></svg>That isn&rsquo;t a number we can read.</span></div>
+      <div class="field"><span class="label">Your prayer for today</span><div class="textarea">For Mum, as she recovers: strength for each day of rest, and patience with the slow parts.</div><span class="count">118 / 500</span></div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="fields" style="gap:20px"></div></div>
+  </div>
+</section>
+
+<!-- ROWS -->
+<section class="block">
+  <h2>List rows</h2>
+  <p class="maps"><b>Row</b>, <b>SettingRow</b>, <b>SwitchRow</b>, <b>Switch</b>, <b>StatusMark</b> — <code>rows.tsx</code>. Keep the leading icon for settings and tools. Drop it in content lists (feeds, the Together hub), where the words do the work. The chevron stays wherever a row opens something. The switch shows its state by the knob&rsquo;s position as well as its fill.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="rows" style="gap:0">
+      <div class="row"><span class="lbl"><b>Calendar</b><span class="support">Lunch with the Adeyemis, tomorrow</span></span><svg class="ico chev"><use href="#i-right"/></svg></div>
+      <div class="row"><svg class="ico"><use href="#i-calendar"/></svg><span class="lbl"><b>Important dates</b><span class="support">Ada&rsquo;s birthday in 9 days</span></span><svg class="ico chev"><use href="#i-right"/></svg></div>
+      <div class="row"><span class="lbl"><b>Ada&rsquo;s presentation</b></span><i class="mark done"><svg class="ico"><use href="#i-check"/></svg></i></div>
+      <div class="row setting"><svg class="ico"><use href="#i-bell"/></svg><span class="lbl"><b>Prayer reminder</b></span><span class="val">9:00 pm</span><svg class="ico chev"><use href="#i-right"/></svg></div>
+      <div class="row setting"><span class="lbl"><b>Tell me when Ada prays</b></span><span class="switch on" role="img" aria-label="On"><i></i></span></div>
+      <div class="row setting"><span class="lbl"><b>Weekly summary email</b></span><span class="switch off" role="img" aria-label="Off"><i></i></span></div>
+      <div class="row setting red"><svg class="ico"><use href="#i-logout"/></svg><span class="lbl"><b>Sign out</b></span></div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="rows" style="gap:0"></div></div>
+  </div>
+</section>
+
+<!-- SECTION HEADINGS -->
+<section class="block">
+  <h2>Section heading</h2>
+  <p class="maps"><b>Section</b> (<code>rows.tsx</code>) renders its <code>label</code> in Newsreader italic 22 instead of <b>Micro</b>. <b>Micro</b> (<code>typography.tsx</code>) remains, but only as a folio: dates, counts, &ldquo;No. 41&rdquo;. <b>Title</b> gains <code>font-text</code>. A chapter head (a month, Our story) adds a 1.5px ink rule.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="sections" style="gap:24px">
+      <div class="sec-head"><h2 class="section-h">Today&rsquo;s prayer</h2><span class="support">3 of 5 · set by Ada</span></div>
+      <div class="folio">Fri 13 November · Today&rsquo;s question · No. 41</div>
+      <div class="chapter-rule"><h2 class="title">November</h2><span class="support">2026</span></div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="sections" style="gap:24px"></div></div>
+  </div>
+</section>
+
+<!-- TABS -->
+<section class="block">
+  <h2>Underline tabs and segmented choice</h2>
+  <p class="maps">There is no shared component for either yet. <b>Tabs</b> (new): extract the filter tablist in <code>app/(app)/history/page.tsx</code>. <b>Segmented</b> (new): extract the inline <code>role="radiogroup"</code> pills in <code>together/events/new</code>, <code>goals/new</code>, <code>challenges/new</code>, <code>journal-composer.tsx</code> and <code>start-options.tsx</code>. Those pills are 36px tall today, under the 44px minimum. The selected option is filled with ink and carries a check, so it doesn&rsquo;t depend on colour.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="tabs" style="gap:24px">
+      <div class="tabs" role="tablist"><span class="on">All</span><span>Prayer</span><span>Moments</span><span>Plans</span></div>
+      <div class="field"><span class="label">Who&rsquo;s it for?</span><div class="seg" role="radiogroup"><span class="on"><svg class="ico"><use href="#i-check"/></svg>Both of us</span><span>Just me</span></div></div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="tabs" style="gap:24px"></div></div>
+  </div>
+</section>
+
+<!-- SHEET -->
+<section class="block">
+  <h2>Bottom sheet</h2>
+  <p class="maps"><b>Sheet</b> (<code>chrome.tsx</code>). Radius 24→20, a hairline on its top edge, the title in Newsreader 26, and the grip darkened to <code>edge</code> so it is visible. The scrim becomes a token that darkens in both themes. Today&rsquo;s <code>bg-ink/40</code> washes the dark theme in cream, which is a real bug to fix in the rollout. The discard prompt moves from <code>faint</code> to <code>paper</code>.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light flush" id="sheet">
+      <div class="sheet-stage">
+        <div class="under"><h2 class="title">Our story</h2></div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grip"></div>
+          <h2 class="title">Add a memory</h2>
+          <div class="field"><span class="label">What happened</span><div class="input">Sunday at Tarkwa Bay</div></div>
+          <div class="ask-discard">Discard what you typed?<span><span class="btn quiet" style="height:44px">Keep it</span><span class="btn danger">Discard</span></span></div>
+          <span class="btn primary">Save memory</span>
+        </div>
+      </div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark flush" data-clone="sheet"></div></div>
+  </div>
+</section>
+
+<!-- FEEDBACK -->
+<section class="block">
+  <h2>Alerts and toast</h2>
+  <p class="maps"><b>Alert</b>, <b>LoadProblem</b> — <code>states.tsx</code>. <b>Banner</b>, <b>Toast</b> — <code>chrome.tsx</code>. Tinted fills stay for status, with radius 8. LoadProblem loses its card and sits between two rules. The toast is ink on surface, and its action is underlined so it doesn&rsquo;t rely on weight alone.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="feedback">
+      <div class="alert err" role="alert"><svg class="ico"><use href="#i-alert"/></svg>That code has expired. Ask Ada for a new one.</div>
+      <div class="alert ok" role="status"><svg class="ico"><use href="#i-check"/></svg>This week&rsquo;s prayers are shared.</div>
+      <div class="alert warn" role="status"><svg class="ico"><use href="#i-sync"/></svg>Offline. We&rsquo;ll send it when you&rsquo;re back.</div>
+      <div class="problem" role="alert"><svg class="ico"><use href="#i-alert"/></svg><span class="lbl"><b>Plans didn&rsquo;t load</b><span class="support">Your connection dropped.</span></span><span class="btn text">Try again</span></div>
+      <div class="toast" role="status">Memory deleted<b>Undo</b></div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="feedback"></div></div>
+  </div>
+</section>
+
+<!-- EMPTY + SKELETON -->
+<section class="block">
+  <h2>Empty state and skeleton</h2>
+  <p class="maps"><b>EmptyState</b>, <b>Ghost</b>, <b>Skeleton</b> — <code>states.tsx</code>. The ghost is drawn in the shape of the missing thing, like a ruled page for a journal. The title is Newsreader. Skeleton bars lose their pill radius (2px), and the serif lines are taller so they match the text that replaces them. The <code>breathe</code> pulse stays.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="empty" style="gap:12px">
+      <svg class="ghost" viewBox="0 0 342 96" preserveAspectRatio="none" aria-hidden="true"><line class="first" x1="0" y1="8" x2="342" y2="8"/><line x1="0" y1="40" x2="342" y2="40"/><line x1="0" y1="72" x2="250" y2="72"/></svg>
+      <h2 class="title" style="font-size:26px">Nothing written yet</h2>
+      <p class="support" style="font-size:16px">The journal is for the small things you&rsquo;d otherwise forget. Ada will see what you write.</p>
+      <span class="btn secondary" style="margin-top:8px">Write the first entry</span>
+      <div style="height:1px;background:var(--color-line);margin:16px 0 8px"></div>
+      <div class="folio">Loading</div>
+      <div class="sk" style="width:30%"></div>
+      <div class="sk serif" style="width:84%"></div>
+      <div class="sk" style="width:56%"></div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="empty" style="gap:12px"></div></div>
+  </div>
+</section>
+
+<!-- TOP BAR -->
+<section class="block">
+  <h2>Top bar with back</h2>
+  <p class="maps"><b>TopBar</b>, <b>ComposeBar</b> — <code>chrome.tsx</code>. Back names where it goes. The centre label goes from 13px to 14px. Save is the one plum, bold word. Tab roots (Home, Together, Prayers, Our story, Settings) have no TopBar; a display title is their masthead.</p>
+  <div class="pair">
+    <div><div class="cap">Light</div>
+    <div class="panel light" id="topbar" style="gap:20px">
+      <div class="topbar"><span class="back"><svg class="ico"><use href="#i-left"/></svg>Our space</span><span class="mid">Event</span><span class="act">Edit</span></div>
+      <div class="topbar" style="border-top:1px solid var(--color-line);padding-top:0"><span class="act ink">Cancel</span><span class="mid">New memory</span><span class="act">Save</span></div>
+    </div></div>
+    <div><div class="cap">Dark</div><div class="panel dark" data-clone="topbar" style="gap:20px"></div></div>
+  </div>
+</section>
+
+<script>
+document.querySelectorAll('[data-clone]').forEach(function (el) {
+  var src = document.getElementById(el.getAttribute('data-clone'));
+  if (src) el.innerHTML = src.innerHTML;
+});
+</script>
+</body>
+</html>
