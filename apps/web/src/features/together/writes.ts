@@ -143,7 +143,7 @@ export const togetherWrites = {
     mutationKey: ["goals", "create"],
     mutationFn: ({ idempotencyKey, ...g }: GoalInput & { idempotencyKey?: string }) =>
       api.createGoal(g, idempotencyKey),
-    invalidates: [keys.goals],
+    invalidates: [keys.goals, keys.timelineAll],
     keyed: K,
   }),
   // Adds an amount rather than setting one, so a replay double-counts it.
@@ -153,7 +153,7 @@ export const togetherWrites = {
     mutationKey: ["goals", "update"],
     mutationFn: ({ id, patch }: { id: string; patch: { done?: boolean } }) =>
       api.updateGoal(id, patch),
-    invalidates: [keys.goals],
+    invalidates: [keys.goals, keys.timelineAll],
     idempotent: "sets the fields it names to the values it carries, however often it lands.",
   }),
   addProgress: defineWrite({
@@ -167,7 +167,7 @@ export const togetherWrites = {
       amount: number;
       idempotencyKey?: string;
     }) => api.progress(id, amount, idempotencyKey),
-    invalidates: [keys.goals],
+    invalidates: [keys.goals, keys.timelineAll],
     // The one that most needed this: it adds an amount rather than setting
     // one, so a replay used to double-count. The key is what stops that.
     keyed: K,
@@ -246,7 +246,7 @@ export const togetherWrites = {
       text: string;
       idempotencyKey?: string;
     }) => api.addJournal(tag, text, idempotencyKey),
-    invalidates: [keys.journal],
+    invalidates: [keys.journal, keys.timelineAll],
     keyed: K,
   }),
   // Author-only on the server; the partner's entries never offer it.
@@ -254,13 +254,13 @@ export const togetherWrites = {
     mutationKey: ["journal", "update"],
     mutationFn: ({ id, tag, text }: { id: string; tag: JournalEntry["tag"]; text: string }) =>
       api.updateJournal(id, tag, text),
-    invalidates: [keys.journal],
+    invalidates: [keys.journal, keys.timelineAll],
     idempotent: "the same tag and text set twice is the same entry.",
   }),
   deleteJournal: defineWrite({
     mutationKey: ["journal", "delete"],
     mutationFn: (id: string) => api.deleteJournal(id),
-    invalidates: [keys.journal],
+    invalidates: [keys.journal, keys.timelineAll],
     idempotent: "deleting something already gone leaves the same nothing behind.",
   }),
   // A create with no key of its own: replayed after a dropped response it would
@@ -301,7 +301,7 @@ export const togetherWrites = {
         return { memory: saved, photoFailed: true };
       }
     },
-    invalidates: [keys.memories],
+    invalidates: [keys.memories, keys.timelineAll],
     // A create with no key of its own, and a File cannot survive the queue
     // (FR-PWA-009).
     onlineOnly: true,
@@ -309,20 +309,20 @@ export const togetherWrites = {
   uploadPhoto: defineWrite({
     mutationKey: ["memories", "photo", "upload"],
     mutationFn: ({ id, photo }: { id: string; photo: File }) => putPhoto(id, photo),
-    invalidates: [keys.memories],
+    invalidates: [keys.memories, keys.timelineAll],
     // A File cannot survive the offline queue.
     onlineOnly: true,
   }),
   removePhoto: defineWrite({
     mutationKey: ["memories", "photo", "remove"],
     mutationFn: (id: string) => api.removePhoto(id),
-    invalidates: [keys.memories],
+    invalidates: [keys.memories, keys.timelineAll],
     idempotent: "removing a photo that is already gone leaves the same memory behind.",
   }),
   deleteMemory: defineWrite({
     mutationKey: ["memories", "delete"],
     mutationFn: (id: string) => api.deleteMemory(id),
-    invalidates: [keys.memories],
+    invalidates: [keys.memories, keys.timelineAll],
     idempotent: "deleting something already gone leaves the same nothing behind.",
   }),
   // The words and the day; the photo has its own writes above.
@@ -330,14 +330,14 @@ export const togetherWrites = {
     mutationKey: ["memories", "update"],
     mutationFn: ({ id, title, date, location, note }: MemoryText & { id: string }) =>
       api.updateMemory(id, { title, date, location, note }),
-    invalidates: [keys.memories],
+    invalidates: [keys.memories, keys.timelineAll],
     idempotent: "the same fields set twice leave the same moment.",
   }),
   addMemory: defineWrite({
     mutationKey: ["memories", "add"],
     mutationFn: ({ idempotencyKey, ...m }: Omit<Memory, "id"> & { idempotencyKey?: string }) =>
       api.addMemory(m, idempotencyKey),
-    invalidates: [keys.memories],
+    invalidates: [keys.memories, keys.timelineAll],
     keyed: K,
   }),
   // A create with no key of its own: replayed after a dropped response it would

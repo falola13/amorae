@@ -189,7 +189,8 @@ export default function History() {
             </button>
           ))}
         </div>
-        <WorkingOn />
+        {/* Only on the whole story: under "Prayer" it would be out of place. */}
+        {filter === "all" ? <WorkingOn /> : null}
         <QueryState
           queries={[timeline]}
           frame={inPage}
