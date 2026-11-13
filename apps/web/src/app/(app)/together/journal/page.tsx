@@ -37,7 +37,7 @@ export default function Journal() {
   const todayIso = iso(today());
   return (
     <>
-      <TopBar back="Our space" backHref={routes.together} />
+      <TopBar back="Our story" backHref={routes.story} />
       <Main>
         <div className="pt-2">
           <Title>Journal</Title>

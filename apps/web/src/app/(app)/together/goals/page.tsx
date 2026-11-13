@@ -52,7 +52,7 @@ export default function Goals() {
   const hasAny = (goals.data?.length ?? 0) > 0;
   return (
     <>
-      <TopBar back="Our space" backHref={routes.together} />
+      <TopBar back="Our story" backHref={routes.story} />
       <Main>
         <div className="pt-2">
           <Title>Goals</Title>

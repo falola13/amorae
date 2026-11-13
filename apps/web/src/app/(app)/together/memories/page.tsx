@@ -179,7 +179,7 @@ export default function Memories() {
   const [photoFailed, setPhotoFailed] = useState(false);
   return (
     <>
-      <TopBar back="Our space" backHref={routes.together} />
+      <TopBar back="Our story" backHref={routes.story} />
       <Main>
         <div className="pt-2">
           <Title>Memories</Title>

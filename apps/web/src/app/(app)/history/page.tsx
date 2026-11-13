@@ -3,17 +3,26 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { goalSub, sumOf } from "@/features/together/goals";
+import { useGoals } from "@/features/together/hooks";
+import { JournalComposer } from "@/features/together/components/journal-composer";
+import { MemoryComposer } from "@/features/together/components/memory-composer";
+
 import { Icon, type IconName } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
 import {
+  Alert,
+  Bar,
   Button,
   cx,
   EmptyState,
   Initial,
   LinkButton,
   Para,
+  Sheet,
   Skeleton,
   Title,
+  TopBar,
 } from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { useCouple, useMe } from "@/features/couple/hooks";
@@ -79,11 +88,44 @@ function TimelineRow({
   );
 }
 
+// Goals still in progress, so what we're working on sits above what we've done.
+function WorkingOn() {
+  const goals = useGoals();
+  const active = (goals.data ?? []).filter((g) => !g.done);
+  if (active.length === 0) return null;
+  return (
+    <section className="mt-4" aria-label="Working on">
+      <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
+        Working on
+      </span>
+      {active.map((g, i) => (
+        <Link
+          key={g.id}
+          href={routes.goal(g.id)}
+          className={cx(
+            "press flex flex-col gap-2 py-3 text-ink no-underline",
+            i < active.length - 1 && "border-b border-line",
+          )}
+        >
+          <span className="text-[16px] font-semibold">{g.title}</span>
+          <Bar pct={(sumOf(g) / g.target) * 100} label={goalSub(g)} />
+          <span className="text-support text-stone">{goalSub(g)}</span>
+        </Link>
+      ))}
+    </section>
+  );
+}
+
 export default function History() {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const timeline = useTimeline(filter);
   const couple = useCouple();
   const me = useMe();
+  const [adding, setAdding] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [journalOpen, setJournalOpen] = useState(false);
+  // Persists (no auto-dismiss) since it flags a photo that still needs re-uploading.
+  const [photoFailed, setPhotoFailed] = useState(false);
 
   const meId = me.data?.id;
   const partnerId = couple.data?.partner?.id;
@@ -98,94 +140,161 @@ export default function History() {
   };
 
   return (
-    <Main>
-      <div className="pt-1.5">
-        <Title>Our story</Title>
-      </div>
-      <Para className="mt-1.5">Everything you’ve done together, newest first.</Para>
-      <div role="tablist" aria-label="Filter" className="-mx-1 mt-3 flex flex-wrap gap-1">
-        {FILTERS.map((f) => (
+    <>
+      <TopBar
+        back="Our space"
+        backHref={routes.together}
+        right={
           <button
-            key={f.value}
             type="button"
-            role="tab"
-            aria-selected={filter === f.value}
-            onClick={() => setFilter(f.value)}
-            className={cx(
-              "press h-9 rounded-full px-3.5 text-[14px] font-semibold",
-              filter === f.value ? "bg-plum-tint text-plum" : "text-stone",
-            )}
+            aria-label="Add to our story"
+            onClick={() => setAdding(true)}
+            className="press -mr-1 flex h-11 w-11 items-center justify-center text-ink"
           >
-            {f.label}
+            <Icon name="plus" size={24} />
           </button>
-        ))}
-      </div>
-      <QueryState
-        queries={[timeline]}
-        frame={inPage}
-        loading={
-          <div className="pt-4">
-            <Skeleton lines={4} />
-          </div>
         }
-      >
-        {(data) => {
-          const items = data.pages.flatMap((p) => p.items);
-          if (items.length === 0) {
+      />
+      <Main>
+        <div className="pt-1.5">
+          <Title>Our story</Title>
+        </div>
+        {photoFailed ? (
+          <div className="mt-3 flex flex-col gap-1.5">
+            <Alert message="The moment was saved, but the photo didn’t upload." />
+            <button
+              type="button"
+              onClick={() => setPhotoFailed(false)}
+              className="press self-start px-1 text-[15px] font-semibold text-plum"
+            >
+              Got it
+            </button>
+          </div>
+        ) : null}
+        <Para className="mt-1.5">Everything you’ve done together, newest first.</Para>
+        <div role="tablist" aria-label="Filter" className="-mx-1 mt-3 flex flex-wrap gap-1">
+          {FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              role="tab"
+              aria-selected={filter === f.value}
+              onClick={() => setFilter(f.value)}
+              className={cx(
+                "press h-9 rounded-full px-3.5 text-[14px] font-semibold",
+                filter === f.value ? "bg-plum-tint text-plum" : "text-stone",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <WorkingOn />
+        <QueryState
+          queries={[timeline]}
+          frame={inPage}
+          loading={
+            <div className="pt-4">
+              <Skeleton lines={4} />
+            </div>
+          }
+        >
+          {(data) => {
+            const items = data.pages.flatMap((p) => p.items);
+            if (items.length === 0) {
+              return (
+                <div className="pt-4">
+                  <EmptyState
+                    ghost="dots"
+                    title="Nothing here yet"
+                    text="Your story fills in as you go."
+                    cta={
+                      <LinkButton href={routes.together} variant="secondary">
+                        Back to Together
+                      </LinkButton>
+                    }
+                  />
+                </div>
+              );
+            }
+            const groups = groupByMonth(items);
             return (
-              <div className="pt-4">
-                <EmptyState
-                  ghost="dots"
-                  title="Nothing here yet"
-                  text="Your story fills in as you go."
-                  cta={
-                    <LinkButton href={routes.together} variant="secondary">
-                      Back to Together
-                    </LinkButton>
-                  }
-                />
+              <div className="mt-2 flex flex-col pb-4">
+                {groups.map((g, gi) => (
+                  <div key={`${g.month}-${gi}`}>
+                    <div className="pb-1.5 pt-[18px]">
+                      <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
+                        {g.month}
+                      </span>
+                    </div>
+                    {g.items.map((item, i) => {
+                      const who = actor(item.actor_id);
+                      return (
+                        <TimelineRow
+                          key={item.id}
+                          item={item}
+                          name={who.name}
+                          photoUrl={who.photoUrl}
+                          last={gi === groups.length - 1 && i === g.items.length - 1}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+                {timeline.hasNextPage ? (
+                  <div className="pt-4">
+                    <Button
+                      variant="secondary"
+                      loading={timeline.isFetchingNextPage}
+                      onClick={() => timeline.fetchNextPage()}
+                    >
+                      Show earlier
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             );
-          }
-          const groups = groupByMonth(items);
-          return (
-            <div className="mt-2 flex flex-col pb-4">
-              {groups.map((g, gi) => (
-                <div key={`${g.month}-${gi}`}>
-                  <div className="pb-1.5 pt-[18px]">
-                    <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
-                      {g.month}
-                    </span>
-                  </div>
-                  {g.items.map((item, i) => {
-                    const who = actor(item.actor_id);
-                    return (
-                      <TimelineRow
-                        key={item.id}
-                        item={item}
-                        name={who.name}
-                        photoUrl={who.photoUrl}
-                        last={gi === groups.length - 1 && i === g.items.length - 1}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
-              {timeline.hasNextPage ? (
-                <div className="pt-4">
-                  <Button
-                    variant="secondary"
-                    loading={timeline.isFetchingNextPage}
-                    onClick={() => timeline.fetchNextPage()}
-                  >
-                    Show earlier
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          );
-        }}
-      </QueryState>
-    </Main>
+          }}
+        </QueryState>
+      </Main>
+      <Sheet
+        open={adding}
+        onClose={() => setAdding(false)}
+        title="Add to our story"
+        labelledBy="story-add-h"
+      >
+        <div className="flex flex-col gap-1">
+          <Button
+            variant="secondary"
+            icon="image"
+            onClick={() => {
+              setAdding(false);
+              setMemoryOpen(true);
+            }}
+          >
+            Add a memory
+          </Button>
+          <Button
+            variant="secondary"
+            icon="pencil"
+            onClick={() => {
+              setAdding(false);
+              setJournalOpen(true);
+            }}
+          >
+            Write in the journal
+          </Button>
+          <LinkButton href={routes.goalNew} variant="secondary" icon="target">
+            Start a goal
+          </LinkButton>
+        </div>
+      </Sheet>
+      <MemoryComposer
+        open={memoryOpen}
+        onClose={() => setMemoryOpen(false)}
+        onPhotoFailed={() => setPhotoFailed(true)}
+      />
+      <JournalComposer open={journalOpen} entry={null} onClose={() => setJournalOpen(false)} />
+    </>
   );
 }

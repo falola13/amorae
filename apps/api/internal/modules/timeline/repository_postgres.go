@@ -162,7 +162,7 @@ WITH items AS (
 	SELECT 'goal', g.id,
 	       g.updated_at,
 	       (g.updated_at AT TIME ZONE c.timezone)::date,
-	       g.title, 'Reached'::text, '/together/goals',
+	       g.title, 'Reached'::text, '/together/goals/' || g.id::text,
 	       NULL::text, NULL::uuid, NULL::timestamptz
 	FROM goals g
 	JOIN couples c ON c.id = g.couple_id

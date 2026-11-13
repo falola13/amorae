@@ -6,17 +6,15 @@ import {
   useAppreciations,
   useActiveChallenges,
   useEvents,
-  useGoals,
-  useJournal,
-  useMemories,
   useMilestones,
 } from "@/features/together/hooks";
+import { useTimeline } from "@/features/timeline/hooks";
 import { useAnswered } from "@/features/prayers/hooks";
 import { challengesLine } from "@/features/together/challenges";
 import { eventPhase } from "@/features/together/events";
 import type { Event } from "@/lib/api/types";
 import { countdown, nextOccurrence } from "@/features/together/milestones";
-import { iso, longDate, relativeDay, time12 } from "@/lib/dates";
+import { iso, relativeDay, time12 } from "@/lib/dates";
 import { isAbsence } from "@/lib/api/envelope";
 import { routes } from "@/lib/routes";
 import { Icon } from "@/components/icons";
@@ -37,10 +35,8 @@ function summary(
 export default function Together() {
   const couple = useCouple();
   const events = useEvents();
-  const goals = useGoals();
   const challenge = useActiveChallenges();
-  const journal = useJournal();
-  const memories = useMemories();
+  const story = useTimeline("all");
   const milestones = useMilestones();
   const answered = useAnswered();
   const appr = useAppreciations();
@@ -66,13 +62,11 @@ export default function Together() {
   ]
     .filter(Boolean)
     .join(" · ");
-  const activeGoals = (goals.data ?? []).filter((g) => !g.done).length;
   // The shared calendar day, not "my first unanswered one" — the two of you
   // are on the same day now.
   const challengeLine = challengesLine(challenge.data ?? []);
-  const lastWritten = (journal.data ?? [])[0];
   const lastAppreciated = (appr.data ?? [])[0];
-  const lastMemory = (memories.data ?? [])[0];
+  const latestStory = story.data?.pages[0]?.items[0];
   const soonestDate = (milestones.data ?? [])
     .filter((d) => d.reminder)
     .map((d) => ({ ...d, next: nextOccurrence(d.date, todayIso) }))
@@ -95,7 +89,7 @@ export default function Together() {
         </Link>
       </div>
       <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-x-8">
-        <Section label="Plan" className="mt-[22px]">
+        <Section label="Dates & plans" className="mt-[22px]">
           <Row
             icon="calendar"
             title="Calendar"
@@ -112,21 +106,35 @@ export default function Together() {
             title="Events"
             sub={summary(events, eventsLine || "Add something you’d love to do")}
             href={routes.events}
+          />
+          <Row
+            icon="bookmark"
+            title="Important dates"
+            sub={summary(
+              milestones,
+              soonestDate
+                ? `${soonestDate.title} ${countdown(soonestDate.next, today()).toLowerCase()}`
+                : "The dates that matter to us",
+            )}
+            href={routes.milestones}
+            last
+          />
+        </Section>
+        <Section label="Our story" className="mt-[22px]">
+          <Row
+            icon="image"
+            title="Our story"
+            sub={summary(
+              story,
+              latestStory
+                ? `Latest: ${latestStory.title}`
+                : "Memories, journal and goals, all in one place",
+            )}
+            href={routes.story}
             last
           />
         </Section>
         <Section label="Grow" className="mt-[22px]">
-          <Row
-            icon="target"
-            title="Goals"
-            sub={summary(
-              goals,
-              activeGoals
-                ? `${activeGoals} we’re working on`
-                : "What would you like to build together?",
-            )}
-            href={routes.goals}
-          />
           <Row
             icon="flag"
             title="Challenges"
@@ -135,18 +143,7 @@ export default function Together() {
             last
           />
         </Section>
-        <Section label="Connect" className="mt-[22px]">
-          <Row
-            icon="pencil"
-            title="Journal"
-            sub={summary(
-              journal,
-              lastWritten
-                ? `${lastWritten.author_id === couple.data?.me.id ? "You" : partner} wrote ${relativeDay(lastWritten.date, todayIso).toLowerCase()}`
-                : "Write something for us",
-            )}
-            href={routes.journal}
-          />
+        <Section label="Connect" className="mb-4 mt-[22px]">
           <Row
             icon="note"
             title="Appreciation"
@@ -157,29 +154,6 @@ export default function Together() {
                 : "Something I appreciate about you",
             )}
             href={routes.appreciation}
-            last
-          />
-        </Section>
-        <Section label="Remember" className="mb-4 mt-[22px]">
-          <Row
-            icon="image"
-            title="Memories"
-            sub={summary(
-              memories,
-              lastMemory ? `Last saved ${longDate(lastMemory.date)}` : "Your story starts here",
-            )}
-            href={routes.memories}
-          />
-          <Row
-            icon="bookmark"
-            title="Milestones"
-            sub={summary(
-              milestones,
-              soonestDate
-                ? `${soonestDate.title} ${countdown(soonestDate.next, today()).toLowerCase()}`
-                : "The dates that matter to us",
-            )}
-            href={routes.milestones}
           />
           <Row
             icon="check"

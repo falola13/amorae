@@ -209,7 +209,7 @@ func TestTimeline_OrderAndFields(t *testing.T) {
 	if e := byType[timeline.TypeEvent]; e.Sub != "Done" || e.ActorID != a {
 		t.Errorf("event = %+v, want sub Done and actor set", e)
 	}
-	if g := byType[timeline.TypeGoal]; g.Sub != "Reached" || g.Path != "/together/goals" {
+	if g := byType[timeline.TypeGoal]; g.Sub != "Reached" || g.Path != "/together/goals/"+g.ID.String() {
 		t.Errorf("goal = %+v", g)
 	}
 	if j := byType[timeline.TypeJournal]; j.Title != "Gratitude" || j.Sub != "For today." || j.ActorID != a {

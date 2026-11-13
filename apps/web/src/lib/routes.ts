@@ -42,6 +42,8 @@ export const routes = {
     `/prayers/mode${q({ at: opts.at, quiet: opts.quiet })}`,
   prayersAnswered: "/prayers/answered",
   history: "/history",
+  // Our story is the history feed under its newer name; the URL stays so old links work.
+  story: "/history",
   historyWeek: (id: string) => `/history/${seg(id)}`,
 
   // Together
