@@ -38,13 +38,14 @@ export function Title({
   as?: "h1" | "h2";
   size?: "title" | "display" | "lg";
 }) {
+  // Headings are set in the text serif; the sans is the interface's voice.
   const s =
     size === "display"
       ? "text-display"
       : size === "lg"
-        ? "text-[32px] leading-[1.15] font-semibold tracking-[-0.025em]"
+        ? "text-[34px] leading-[1.12] font-[450] tracking-[-0.02em]"
         : "text-title";
-  return <As className={cx("m-0", s, className)}>{children}</As>;
+  return <As className={cx("m-0 font-text", s, className)}>{children}</As>;
 }
 
 export function Para({

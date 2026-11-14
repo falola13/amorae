@@ -39,7 +39,7 @@ export function TopBar({
       ) : (
         <span />
       )}
-      {center ? <div className="text-[13px] font-semibold text-stone">{center}</div> : null}
+      {center ? <div className="text-support font-semibold text-stone">{center}</div> : null}
       {right ?? <span />}
     </div>
   );
@@ -73,7 +73,7 @@ export function ComposeBar({
           Cancel
         </button>
       )}
-      <div className="text-[13px] font-semibold text-stone">{label}</div>
+      <div className="text-support font-semibold text-stone">{label}</div>
       <button
         type="button"
         onClick={onDone}
@@ -190,7 +190,7 @@ function OpenSheet({ title, onClose, children, labelledBy, dirty = false }: Shee
         type="button"
         aria-label="Close"
         onClick={dismiss}
-        className="absolute inset-0 animate-fade bg-ink/40"
+        className="absolute inset-0 animate-fade bg-(--scrim)"
       />
       <div
         ref={dialogRef}
@@ -206,13 +206,13 @@ function OpenSheet({ title, onClose, children, labelledBy, dirty = false }: Shee
           translate: drag ? `0 ${drag}px` : undefined,
           transition: dragging ? "none" : "translate 0.2s ease-out",
         }}
-        className="absolute inset-x-0 bottom-[var(--kb,0px)] flex max-h-[calc(100dvh-var(--kb,0px)-24px)] animate-sheet flex-col gap-4 overflow-y-auto overscroll-contain rounded-t-sheet bg-bg px-6 pb-safe md:static md:max-h-[calc(100dvh-48px)] md:w-full md:max-w-[440px] md:rounded-card md:border md:border-line md:p-7"
+        className="absolute inset-x-0 bottom-[var(--kb,0px)] flex max-h-[calc(100dvh-var(--kb,0px)-24px)] animate-sheet flex-col gap-4 overflow-y-auto overscroll-contain rounded-t-sheet border-t border-line bg-bg grain px-6 pb-safe md:static md:max-h-[calc(100dvh-48px)] md:w-full md:max-w-[440px] md:rounded-card md:border md:border-line md:p-7"
       >
         <div {...grip} className="-mx-6 flex touch-none flex-col px-6 pt-2.5 md:contents">
-          <div aria-hidden="true" className="h-1 w-9 self-center rounded-full bg-faint md:hidden" />
+          <div aria-hidden="true" className="h-1 w-9 self-center rounded-full bg-edge md:hidden" />
           <h2
             id={labelledBy}
-            className="m-0 mt-6 text-[24px] font-semibold leading-tight tracking-[-0.02em] md:mt-0"
+            className="m-0 mt-6 font-text text-[26px] font-[450] leading-[1.15] tracking-[-0.015em] md:mt-0"
           >
             {title}
           </h2>
@@ -220,7 +220,7 @@ function OpenSheet({ title, onClose, children, labelledBy, dirty = false }: Shee
         {asking ? (
           <div
             role="alert"
-            className="flex items-center justify-between gap-2 rounded-input bg-faint px-3.5 py-2 text-support font-semibold"
+            className="flex items-center justify-between gap-2 rounded-input bg-paper py-1 pl-3.5 pr-1 text-support font-semibold"
           >
             Discard what you typed?
             <span className="flex shrink-0 gap-1">
@@ -267,7 +267,7 @@ export function Toast({
         <button
           type="button"
           onClick={onAction}
-          className="press h-11 px-2.5 text-[15px] font-bold text-surface"
+          className="press h-11 px-2.5 text-[15px] font-bold text-surface underline decoration-1 underline-offset-[3px]"
         >
           {action}
         </button>

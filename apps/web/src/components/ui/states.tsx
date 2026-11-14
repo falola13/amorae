@@ -10,9 +10,10 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
     <div aria-hidden="true" className="flex flex-col gap-3 pt-2">
       {Array.from({ length: lines }, (_, i) => (
+        // Every second bar stands for a line of the serif, which sets taller.
         <div
           key={i}
-          className="h-3.5 animate-breathe rounded-lg bg-faint"
+          className={cx("animate-breathe rounded-xs bg-faint", i % 2 === 1 ? "h-[18px]" : "h-3")}
           style={{ width: `${70 - i * 14}%` }}
         />
       ))}
@@ -47,7 +48,7 @@ export function Ghost({ kind = "lines" }: { kind?: "lines" | "frames" | "bars" |
       <div aria-hidden="true" className="flex flex-col gap-4 pb-3.5">
         {[200, 150, 100].map((w, i) => (
           <div key={w} className="flex items-center gap-3" style={{ opacity: 1 - i * 0.35 }}>
-            <span className="h-1.5 rounded-full bg-faint" style={{ width: w }} />
+            <span className="h-[3px] rounded-xs bg-faint" style={{ width: w }} />
             <span className="h-1.5 w-1.5 rounded-full bg-faint" />
           </div>
         ))}
@@ -66,19 +67,20 @@ export function Ghost({ kind = "lines" }: { kind?: "lines" | "frames" | "bars" |
             style={{ opacity: 1 - i * 0.35 }}
           >
             <span className="box-border h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-edge bg-bg" />
-            <span className="h-2.5 rounded-full bg-faint" style={{ width: w }} />
+            <span className="h-2.5 rounded-xs bg-faint" style={{ width: w }} />
           </div>
         ))}
       </div>
     );
   }
-  // Ruled lines, for the screens that hold something written.
+  // Ruled lines, for the screens that hold something written. The first rule is
+  // drawn darker, like the head line of a ruled page.
   return (
     <div aria-hidden="true" className="flex flex-col gap-3.5 pb-3.5">
       {[0, 1, 2, 3].map((i) => (
         <span
           key={i}
-          className="h-px bg-faint"
+          className={cx("h-[1.5px]", i === 0 ? "bg-edge" : "bg-faint")}
           style={{ width: [210, 168, 190, 104][i], opacity: 1 - i * 0.2 }}
         />
       ))}
@@ -100,8 +102,10 @@ export function EmptyState({
   return (
     <div className="flex grow flex-col justify-center gap-3.5 pb-12">
       <Ghost kind={ghost} />
-      <h2 className="m-0 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{title}</h2>
-      <Para size="lg">{text}</Para>
+      <h2 className="m-0 font-text text-[26px] font-[450] leading-[1.15] tracking-[-0.015em]">
+        {title}
+      </h2>
+      <Para>{text}</Para>
       <div className="mt-3">{cta}</div>
     </div>
   );
@@ -125,7 +129,8 @@ export function LoadProblem({
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
-      className="my-2 flex items-center gap-3 rounded-card bg-paper py-2.5 pl-4 pr-1.5"
+      // Between two rules, not in a card: a gap in the page, not another object on it.
+      className="my-2 flex items-center gap-3 border-y border-line py-1.5"
     >
       <Icon name={icon} size={20} className={tone === "error" ? "text-red" : "text-stone"} />
       <div className="flex grow flex-col py-0.5">
@@ -160,7 +165,9 @@ export function ErrorState({
   return (
     <div role="alert" className="flex grow flex-col justify-center gap-3.5 pb-10">
       <Icon name="alert" size={28} strokeWidth={1.4} className="text-red" />
-      <h2 className="m-0 text-[24px] font-semibold leading-tight tracking-[-0.02em]">{title}</h2>
+      <h2 className="m-0 font-text text-[26px] font-[450] leading-[1.15] tracking-[-0.015em]">
+        {title}
+      </h2>
       <Para>{text}</Para>
       <div className="mt-2.5 flex flex-col gap-1">
         <Button icon="sync" onClick={onRetry}>

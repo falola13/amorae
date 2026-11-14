@@ -7,17 +7,22 @@ import { cx } from "./cx";
 
 /* ---------- Buttons ---------- */
 
-export type Variant = "primary" | "secondary" | "text" | "danger";
+export type Variant = "primary" | "secondary" | "text" | "danger" | "quiet";
 
 export const VARIANT: Record<Variant, string> = {
-  primary: "h-[54px] rounded-btn bg-plum text-surface",
-  secondary: "h-[54px] rounded-btn border border-edge bg-transparent text-ink",
-  text: "h-11 rounded-btn bg-transparent text-plum",
-  danger: "h-11 rounded-btn bg-transparent text-red",
+  primary: "h-[54px] w-full rounded-btn bg-plum text-surface",
+  secondary: "h-[54px] w-full rounded-btn border border-edge bg-transparent text-ink",
+  text: "h-11 w-full rounded-btn bg-transparent text-plum",
+  danger: "h-11 w-full rounded-btn bg-transparent text-red",
+  // Ink, not plum: the step-through controls (Previous / Next / Keep it) sit
+  // beside the one plum action and must not compete with it. Sized to its
+  // words, so a pair can share a line.
+  quiet: "h-12 w-auto rounded-btn bg-transparent px-2 text-[15px] text-ink",
 };
 
+// Width lives in VARIANT, so `quiet` can be content-sized without fighting a w-full here.
 export const BASE =
-  "press inline-flex w-full items-center justify-center gap-2 text-[16px] font-semibold disabled:opacity-100 disabled:bg-faint disabled:text-stone";
+  "press inline-flex items-center justify-center gap-2 text-[16px] font-semibold disabled:opacity-100 disabled:bg-faint disabled:text-stone";
 
 export function buttonClass(variant: Variant = "primary", className?: string) {
   return cx(BASE, VARIANT[variant], className);
@@ -85,7 +90,7 @@ export function Spinner({ light }: { light?: boolean }) {
     <span
       className={cx(
         "inline-block h-[18px] w-[18px] animate-spin rounded-full border-2",
-        light ? "border-surface/35 border-t-surface" : "border-faint border-t-plum",
+        light ? "border-plum-tint border-t-surface" : "border-faint border-t-plum",
       )}
     />
   );

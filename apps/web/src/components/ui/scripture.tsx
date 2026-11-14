@@ -11,8 +11,10 @@ export function Scripture({
     <div
       className={`flex flex-col gap-1.5 border-t pt-5 ${faint ? "border-faint" : "border-line"}`}
     >
-      <div className="text-[13px] font-bold tracking-[0.04em] text-plum">{reference}</div>
-      {verse ? <div className="text-[15px] leading-[1.55] text-stone">{verse}</div> : null}
+      <div className="text-support font-bold tracking-[0.04em] text-plum">{reference}</div>
+      {verse ? (
+        <div className="font-text text-[17px] leading-[1.55] italic text-stone">{verse}</div>
+      ) : null}
     </div>
   );
 }

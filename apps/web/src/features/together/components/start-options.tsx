@@ -1,12 +1,10 @@
 "use client";
 
-import { Field, cx } from "@/components/ui/kit";
+import { Field, Segmented } from "@/components/ui/kit";
 import type { ChallengeKind } from "@/lib/api/types";
 import { iso } from "@/lib/dates";
 import { today } from "@/lib/today";
 import { startBounds } from "../challenges";
-
-const chip = "press h-9 rounded-full px-3.5 text-[14px] font-semibold";
 
 export type StartWhen = "today" | "pick";
 
@@ -27,26 +25,14 @@ export function KindChips({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="text-[13px] font-semibold text-stone">Who’s taking part</div>
-      <div role="radiogroup" aria-label="Who’s taking part" className="-mx-1 flex gap-1">
-        {KINDS.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={value === o.value}
-            disabled={disabled}
-            onClick={() => onChange(o.value)}
-            className={cx(
-              chip,
-              value === o.value ? "bg-plum-tint text-plum" : "text-stone",
-              disabled && "opacity-55",
-            )}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <div className="text-support font-semibold text-stone">Who’s taking part</div>
+      <Segmented
+        label="Who’s taking part"
+        options={KINDS}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
     </div>
   );
 }
@@ -72,21 +58,8 @@ export function StartsChips({
   ];
   return (
     <div className="flex flex-col gap-2">
-      <div className="text-[13px] font-semibold text-stone">Starts</div>
-      <div role="radiogroup" aria-label="Starts" className="-mx-1 flex gap-1">
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={when === o.value}
-            onClick={() => onWhen(o.value)}
-            className={cx(chip, when === o.value ? "bg-plum-tint text-plum" : "text-stone")}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <div className="text-support font-semibold text-stone">Starts</div>
+      <Segmented label="Starts" options={options} value={when} onChange={onWhen} />
       {when === "pick" ? (
         <Field
           label="Start date"

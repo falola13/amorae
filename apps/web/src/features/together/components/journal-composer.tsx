@@ -9,7 +9,7 @@ import { PartnerNotice } from "@/features/couple/components/partner-notice";
 import { useAddJournal, useDeleteJournal, useUpdateJournal } from "@/features/together/hooks";
 import { journalSchema } from "@/lib/api/schemas";
 import type { JournalEntry } from "@/lib/api/types";
-import { BareTextarea, Button, Para, Sheet, cx } from "@/components/ui/kit";
+import { BareTextarea, Button, Para, Segmented, Sheet } from "@/components/ui/kit";
 
 const TAGS: JournalEntry["tag"][] = ["Gratitude", "Reflection", "Memory", "Appreciation", "Plans"];
 
@@ -85,27 +85,13 @@ export function JournalComposer({
           name="tag"
           control={control}
           render={({ field }) => (
-            <div
-              role="radiogroup"
-              aria-label="Kind of entry"
-              className="-mx-1 flex flex-wrap gap-1"
-            >
-              {TAGS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  role="radio"
-                  aria-checked={field.value === t}
-                  onClick={() => field.onChange(t)}
-                  className={cx(
-                    "press h-9 rounded-full px-3.5 text-[14px] font-semibold",
-                    field.value === t ? "bg-plum-tint text-plum" : "text-stone",
-                  )}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label="Kind of entry"
+              wrap
+              options={TAGS.map((t) => ({ value: t, label: t }))}
+              value={field.value}
+              onChange={field.onChange}
+            />
           )}
         />
         <BareTextarea

@@ -25,12 +25,12 @@ export function Ornament({ caption, className }: { caption?: string; className?:
   return (
     <div className={cx("flex flex-col items-center gap-3 pb-2 pt-9", className)}>
       <div className="flex w-full max-w-[260px] items-center gap-3.5 text-faint">
-        <span className="h-px grow bg-linear-to-r from-transparent to-line" />
+        <span className="h-px grow bg-line" />
         <EndMark />
-        <span className="h-px grow bg-linear-to-l from-transparent to-line" />
+        <span className="h-px grow bg-line" />
       </div>
       {caption ? (
-        <p className="m-0 text-center text-[13px] leading-[1.5] text-stone">{caption}</p>
+        <p className="m-0 text-center text-support text-stone">{caption}</p>
       ) : null}
     </div>
   );

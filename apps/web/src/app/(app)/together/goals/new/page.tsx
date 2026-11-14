@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
-import { BareTextarea, ComposeBar } from "@/components/ui/kit";
+import { BareTextarea, ComposeBar, Segmented } from "@/components/ui/kit";
 import { PickRow } from "@/components/ui/pick-row";
 import { useCreateGoal } from "@/features/together/hooks";
 import { goalSchema, type GoalInput } from "@/lib/api/schemas";
@@ -105,20 +105,15 @@ export default function NewGoalPage() {
               <div className="flex h-[54px] items-center gap-3.5 border-b border-line text-[16px] font-medium">
                 <span className="w-[22px]" />
                 <span className="grow">Counted in</span>
-                <div role="radiogroup" aria-label="Unit" className="flex gap-1">
-                  {(["naira", "count"] as const).map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      role="radio"
-                      aria-checked={field.value === u}
-                      onClick={() => field.onChange(u)}
-                      className={`press h-9 rounded-full px-3.5 text-[14px] font-semibold ${field.value === u ? "bg-plum-tint text-plum" : "text-stone"}`}
-                    >
-                      {u === "naira" ? "Naira" : "Steps"}
-                    </button>
-                  ))}
-                </div>
+                <Segmented
+                  label="Unit"
+                  options={[
+                    { value: "naira", label: "Naira" },
+                    { value: "count", label: "Steps" },
+                  ]}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
               </div>
             )}
           />

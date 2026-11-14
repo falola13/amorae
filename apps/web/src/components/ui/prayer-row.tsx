@@ -20,13 +20,13 @@ export function PrayerRow({
       href={href}
       className="press flex min-h-[76px] items-center gap-4 border-b border-line py-3.5 text-ink no-underline"
     >
-      <span className="tabular w-[22px] self-start pt-[3px] text-[13px] font-semibold text-stone">
+      <span className="lining w-[22px] self-start pt-px font-text text-[17px] text-stone">
         {String(index + 1).padStart(2, "0")}
       </span>
       <span className="flex grow flex-col gap-0.5">
-        <span className="text-bodylg font-semibold tracking-[-0.01em]">{p.title}</span>
+        <span className="font-text text-bodylg">{p.title}</span>
         {p.text ? <span className="text-support text-stone">{p.text}</span> : null}
-        {note ? <span className="text-[12px] font-semibold text-amber">{note}</span> : null}
+        {note ? <span className="text-support font-semibold text-amber">{note}</span> : null}
       </span>
       <StatusMark done={done} />
     </Link>

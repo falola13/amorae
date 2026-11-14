@@ -24,7 +24,7 @@ export const Field = forwardRef<
   const fid = id ?? rest.name ?? label.toLowerCase().replace(/\W+/g, "-");
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={fid} className="text-[13px] font-semibold text-stone">
+      <label htmlFor={fid} className="text-support font-semibold text-stone">
         {label}
       </label>
       <div className="relative flex">
@@ -46,13 +46,13 @@ export const Field = forwardRef<
         <div
           id={`${fid}-err`}
           role="alert"
-          className="flex items-center gap-1.5 text-[13px] text-red"
+          className="flex items-center gap-1.5 text-support text-red"
         >
           <Icon name="alert" size={16} />
           {error}
         </div>
       ) : hint ? (
-        <div id={`${fid}-hint`} className="text-[13px] text-stone">
+        <div id={`${fid}-hint`} className="text-support text-stone">
           {hint}
         </div>
       ) : null}
@@ -73,7 +73,7 @@ export const Select = forwardRef<
   const fid = id ?? rest.name ?? label.toLowerCase().replace(/\W+/g, "-");
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={fid} className="text-[13px] font-semibold text-stone">
+      <label htmlFor={fid} className="text-support font-semibold text-stone">
         {label}
       </label>
       <select
@@ -98,13 +98,13 @@ export const Select = forwardRef<
         <div
           id={`${fid}-err`}
           role="alert"
-          className="flex items-center gap-1.5 text-[13px] text-red"
+          className="flex items-center gap-1.5 text-support text-red"
         >
           <Icon name="alert" size={16} />
           {error}
         </div>
       ) : hint ? (
-        <div id={`${fid}-hint`} className="text-[13px] text-stone">
+        <div id={`${fid}-hint`} className="text-support text-stone">
           {hint}
         </div>
       ) : null}
@@ -120,7 +120,7 @@ export const BareInput = forwardRef<
   const fid = id ?? rest.name ?? label.toLowerCase().replace(/\W+/g, "-");
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={fid} className={hideLabel ? "sr-only" : "text-micro uppercase text-stone"}>
+      <label htmlFor={fid} className={hideLabel ? "sr-only" : "text-support font-semibold text-stone"}>
         {label}
       </label>
       <input
@@ -138,7 +138,7 @@ export const BareInput = forwardRef<
         <div
           id={`${fid}-err`}
           role="alert"
-          className="flex items-center gap-1.5 text-[13px] text-red"
+          className="flex items-center gap-1.5 text-support text-red"
         >
           <Icon name="alert" size={16} />
           {error}
@@ -159,7 +159,7 @@ export const BareTextarea = forwardRef<
   const fid = id ?? rest.name ?? label.toLowerCase().replace(/\W+/g, "-");
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={fid} className={hideLabel ? "sr-only" : "text-micro uppercase text-stone"}>
+      <label htmlFor={fid} className={hideLabel ? "sr-only" : "text-support font-semibold text-stone"}>
         {label}
       </label>
       <textarea
@@ -168,7 +168,7 @@ export const BareTextarea = forwardRef<
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${fid}-err` : undefined}
         className={cx(
-          "w-full resize-none border-0 bg-transparent p-0 text-ink outline-offset-[6px]",
+          "w-full resize-none border-0 bg-transparent p-0 font-text text-ink outline-offset-[6px]",
           className,
         )}
         {...rest}
@@ -177,7 +177,7 @@ export const BareTextarea = forwardRef<
         <div
           id={`${fid}-err`}
           role="alert"
-          className="flex items-center gap-1.5 text-[13px] text-red"
+          className="flex items-center gap-1.5 text-support text-red"
         >
           <Icon name="alert" size={16} />
           {error}

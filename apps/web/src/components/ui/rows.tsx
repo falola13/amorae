@@ -4,7 +4,6 @@ import Link from "next/link";
 import { type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { cx } from "./cx";
-import { Micro } from "./typography";
 
 /* ---------- Rows and lists ---------- */
 
@@ -42,7 +41,7 @@ export function Row({
     </>
   );
   const cls = cx(
-    "press flex min-h-[62px] w-full items-center gap-3.5 text-left no-underline",
+    "press flex min-h-[62px] w-full items-center gap-3.5 py-2 text-left no-underline",
     !last && "border-b border-line",
     className,
   );
@@ -74,8 +73,10 @@ export function Section({
 }) {
   return (
     <section className={cx("flex flex-col", className)}>
-      <div className="flex items-baseline justify-between pb-1">
-        <Micro>{label}</Micro>
+      {/* An italic serif head, the way a book heads a section. Uppercase tracked
+          labels are folios (Micro), not titles. */}
+      <div className="flex items-baseline justify-between gap-3 pb-1">
+        <h2 className="m-0 font-text text-section italic text-ink">{label}</h2>
         {trailing}
       </div>
       {children}
@@ -118,7 +119,7 @@ export function Segments({
   total,
   done,
   color = "bg-plum",
-  height = 6,
+  height = 4,
   className,
 }: {
   total: number;
@@ -136,7 +137,7 @@ export function Segments({
       {Array.from({ length: total }, (_, i) => (
         <div
           key={i}
-          className={cx("grow basis-0 rounded-full", i < done ? color : "bg-faint")}
+          className={cx("grow basis-0 rounded-xs", i < done ? color : "bg-faint")}
           style={{ height }}
         />
       ))}
@@ -152,10 +153,10 @@ export function Bar({ pct, label }: { pct: number; label: string }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
-      className="h-1.5 overflow-hidden rounded-full bg-faint"
+      className="h-[3px] overflow-hidden rounded-xs bg-faint"
     >
       <div
-        className="h-1.5 rounded-full bg-plum transition-[width] duration-300"
+        className="h-full rounded-xs bg-plum transition-[width] duration-300"
         style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
       />
     </div>
@@ -214,18 +215,20 @@ export function Switch({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className="press flex h-11 w-[52px] shrink-0 items-center bg-transparent p-0"
+      className="press flex h-11 w-12 shrink-0 items-center bg-transparent p-0"
     >
+      {/* Off is the faint track with an edge ring (≥3:1), on is plum; the knob's
+          side says the same thing, so the state never rests on colour. */}
       <span
         className={cx(
-          "flex h-8 w-[52px] items-center rounded-full transition-colors duration-200",
-          checked ? "bg-plum" : "bg-edge",
+          "flex h-7 w-12 items-center rounded-full transition-colors duration-200",
+          checked ? "bg-plum" : "bg-faint ring-1 ring-inset ring-edge",
         )}
       >
         <span
           className={cx(
-            "h-7 w-7 rounded-full bg-surface transition-[margin] duration-200",
-            checked ? "ml-[22px]" : "ml-0.5",
+            "h-[22px] w-[22px] rounded-full bg-surface transition-[margin] duration-200",
+            checked ? "ml-[23px]" : "ml-[3px] ring-1 ring-edge",
           )}
         />
       </span>

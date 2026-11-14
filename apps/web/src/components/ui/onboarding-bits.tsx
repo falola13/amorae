@@ -20,7 +20,7 @@ export function Fact({
 }) {
   return (
     <div className="flex items-center gap-3.5 border-b border-line py-4">
-      <Icon name={icon} size={22} className="text-plum" />
+      <Icon name={icon} size={22} className="text-stone" />
       <div className="flex grow flex-col gap-0.5">
         <div className="text-[16px] font-semibold">{title}</div>
         <div className="text-support text-stone">{text}</div>

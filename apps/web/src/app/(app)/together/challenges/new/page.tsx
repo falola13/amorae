@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import { BareTextarea, Button, ComposeBar, Field, Para, Sheet, cx } from "@/components/ui/kit";
+import { BareTextarea, Button, ComposeBar, Field, Para, Segmented, Sheet } from "@/components/ui/kit";
 import {
   CUSTOM_DAY_PICKS,
   DEFAULT_CUSTOM_DAYS,
@@ -127,26 +127,16 @@ export default function NewChallengePage() {
           onChange={(e) => setTitle(e.target.value)}
         />
 
-        <div role="radiogroup" aria-label="How the days go" className="-mx-1 flex flex-wrap gap-1">
-          {MODES.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              role="radio"
-              aria-checked={mode === m.value}
-              onClick={() => {
-                setMode(m.value);
-                setErrors({});
-              }}
-              className={cx(
-                "press h-9 rounded-full px-3.5 text-[14px] font-semibold",
-                mode === m.value ? "bg-plum-tint text-plum" : "text-stone",
-              )}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="How the days go"
+          wrap
+          options={MODES}
+          value={mode}
+          onChange={(m) => {
+            setMode(m);
+            setErrors({});
+          }}
+        />
 
         {mode === "same" ? (
           <>
@@ -158,27 +148,12 @@ export default function NewChallengePage() {
               onChange={(e) => setLine(e.target.value)}
             />
             <div className="flex flex-col gap-2">
-              <div
-                role="radiogroup"
-                aria-label="Number of days"
-                className="-mx-1 flex flex-wrap gap-1"
-              >
-                {CUSTOM_DAY_PICKS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    role="radio"
-                    aria-checked={days === n}
-                    onClick={() => setDaysText(String(n))}
-                    className={cx(
-                      "press h-9 min-w-11 rounded-full px-3 text-[14px] font-semibold",
-                      days === n ? "bg-plum-tint text-plum" : "text-stone",
-                    )}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                label="Number of days"
+                options={CUSTOM_DAY_PICKS.map((n) => ({ value: n, label: n }))}
+                value={days}
+                onChange={(n) => setDaysText(String(n))}
+              />
               <Field
                 label="Number of days"
                 hint={`Or any number from ${MIN_CUSTOM_DAYS} to ${MAX_CUSTOM_DAYS}.`}

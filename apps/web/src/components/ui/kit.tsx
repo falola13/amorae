@@ -5,6 +5,7 @@ export * from "./typography";
 export * from "./fields";
 export * from "./rows";
 export * from "./chrome";
+export * from "./choice";
 export * from "./states";
 export * from "./ornament";
 export { cx } from "./cx";

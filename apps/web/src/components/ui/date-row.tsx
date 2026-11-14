@@ -31,18 +31,18 @@ export function DateRow({
       <span className="flex w-10 shrink-0 flex-col items-center">
         <span
           className={cx(
-            "tabular text-[22px] font-semibold leading-[1.1] tracking-[-0.02em]",
+            "lining font-text text-[22px] leading-[1.1]",
             past ? "text-stone" : "text-ink",
           )}
         >
           {dayNum(date)}
         </span>
-        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-stone">
+        <span className="mt-1 text-micro uppercase text-stone">
           {shortMonth(date)}
         </span>
       </span>
       <span className="flex grow flex-col gap-px">
-        <span className="text-bodylg font-semibold tracking-[-0.01em] text-ink">{title}</span>
+        <span className="font-text text-bodylg text-ink">{title}</span>
         {sub ? <span className="text-support text-stone">{sub}</span> : null}
         {action ? <span className="text-support font-semibold text-plum">{action}</span> : null}
       </span>

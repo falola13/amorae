@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
-import { BareInput, BareTextarea, ComposeBar, Para, Skeleton, cx } from "@/components/ui/kit";
+import { BareInput, BareTextarea, ComposeBar, Para, Segmented, Skeleton } from "@/components/ui/kit";
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { PickRow } from "@/components/ui/pick-row";
 import { RemindersEditor } from "@/features/together/components/reminders-editor";
@@ -179,29 +179,16 @@ function EventComposer({
             control={control}
             render={({ field }) => (
               <div className="mt-4 flex flex-col gap-1.5">
-                <div className="text-[13px] font-semibold text-stone">Who&rsquo;s it for?</div>
-                <div role="radiogroup" aria-label="Who's it for?" className="-mx-1 flex gap-1">
-                  {(
-                    [
-                      { value: "together", label: "Both of us" },
-                      { value: "mine", label: "Just me" },
-                    ] as const
-                  ).map((o) => (
-                    <button
-                      key={o.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={field.value === o.value}
-                      onClick={() => field.onChange(o.value)}
-                      className={cx(
-                        "press h-9 rounded-full px-3.5 text-[14px] font-semibold",
-                        field.value === o.value ? "bg-plum-tint text-plum" : "text-stone",
-                      )}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
+                <div className="text-support font-semibold text-stone">Who&rsquo;s it for?</div>
+                <Segmented
+                  label="Who's it for?"
+                  options={[
+                    { value: "together", label: "Both of us" },
+                    { value: "mine", label: "Just me" },
+                  ]}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
               </div>
             )}
           />
