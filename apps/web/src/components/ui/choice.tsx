@@ -33,7 +33,12 @@ export function Tabs<T extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className={cx("flex gap-1 overflow-x-auto border-b border-line", className)}
+      // Scrolls sideways when the tabs outrun the screen, without a scrollbar
+      // drawn across the rule underneath them.
+      className={cx(
+        "flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        className,
+      )}
     >
       {options.map((o) => {
         const on = o.value === value;

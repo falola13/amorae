@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { createPortal } from "react-dom";
 
 import { goalSub, sumOf } from "@/features/together/goals";
 import { useGoals, useJournal } from "@/features/together/hooks";
@@ -121,7 +122,9 @@ function JournalEntrySheet({
   const journal = useJournal();
   const entry = journal.data?.find((j) => j.id === item.id);
   const date = entry?.date ?? item.date;
-  return (
+  // Portalled to the body: opened from inside the list, the sheet would otherwise
+  // sit in the list's stacking layer, under the tab bar.
+  return createPortal(
     <Sheet open onClose={onClose} title="From the journal" labelledBy={`journal-${item.id}-h`}>
       <div className="flex items-baseline justify-between gap-3 text-support text-stone">
         <span>
@@ -141,7 +144,8 @@ function JournalEntrySheet({
       <LinkButton href={routes.journal} variant="secondary">
         Open the journal
       </LinkButton>
-    </Sheet>
+    </Sheet>,
+    document.body,
   );
 }
 
