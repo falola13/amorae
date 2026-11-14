@@ -60,6 +60,7 @@ type prefsDTO struct {
 	EventFollowups       bool   `json:"event_followups"`
 	PartnerEvents        bool   `json:"partner_events"`
 	PartnerChallenges    bool   `json:"partner_challenges"`
+	PrayerRequests       bool   `json:"prayer_requests"`
 	DefaultEventReminder string `json:"default_event_reminder"`
 	Nudges               bool   `json:"nudges"`
 }
@@ -86,6 +87,7 @@ func toDTO(p Preferences) prefsDTO {
 		EventFollowups:       p.EventFollowups,
 		PartnerEvents:        p.PartnerEvents,
 		PartnerChallenges:    p.PartnerChallenges,
+		PrayerRequests:       p.PrayerRequests,
 		DefaultEventReminder: p.DefaultEventReminder,
 		Nudges:               p.Nudges,
 	}
@@ -113,6 +115,7 @@ type patchRequest struct {
 	EventFollowups       *bool   `json:"event_followups"`
 	PartnerEvents        *bool   `json:"partner_events"`
 	PartnerChallenges    *bool   `json:"partner_challenges"`
+	PrayerRequests       *bool   `json:"prayer_requests"`
 	DefaultEventReminder *string `json:"default_event_reminder"`
 	Nudges               *bool   `json:"nudges"`
 }

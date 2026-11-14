@@ -19,7 +19,8 @@ func TestEveryKindHasBeenDecidedAbout(t *testing.T) {
 	}
 	// Worthless once its moment has gone, so it is dropped rather than held.
 	perishable := map[string]bool{
-		KindChallenge: true,
+		KindChallenge:     true,
+		KindPrayerRequest: true,
 	}
 
 	for _, kind := range AllKinds {
@@ -51,7 +52,7 @@ func TestAllKindsIsComplete(t *testing.T) {
 	}
 	// Grows whenever a kind is added; the count is the reminder to add it to
 	// AllKinds as well.
-	if len(AllKinds) != 19 {
+	if len(AllKinds) != 21 {
 		t.Errorf("AllKinds has %d kinds; if that is right, update this and say why", len(AllKinds))
 	}
 }

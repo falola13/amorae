@@ -13,7 +13,7 @@ import "time"
 // have left a rule that can never fire for somebody to later believe.
 func Perishable(kind string) bool {
 	switch kind {
-	case KindChallenge:
+	case KindChallenge, KindPrayerRequest:
 		return true
 	default:
 		return false

@@ -344,6 +344,23 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 			Path:  "/together/our-day",
 			Tag:   KindLetter,
 		}
+	case KindPrayerRequest:
+		// Never the request text: a phone lock screen is not private.
+		wanted = c.Prefs.PrayerRequests
+		message = push.Message{
+			Title: "🙏 " + c.AuthorName + " asked you to pray for them",
+			Body:  "Open Amorae to see what for.",
+			Path:  "/",
+			Tag:   KindPrayerRequest,
+		}
+	case KindPrayedForYou:
+		wanted = c.Prefs.PrayerRequests
+		message = push.Message{
+			Title: c.AuthorName + " prayed for you",
+			Body:  "For what you asked this morning.",
+			Path:  "/",
+			Tag:   KindPrayedForYou,
+		}
 	case KindPrayerAnswered:
 		// No prayer content: private writing (FR-NOTF-005.AC1), unlike the
 		// event exception (AC2) — wrong here costs more than it saves.

@@ -46,6 +46,9 @@ type Preferences struct {
 	// Whether the other partner starting a challenge is announced. Their own
 	// switch, separate from Challenges (the daily nudge), which is opt-in.
 	PartnerChallenges bool
+	// Whether the other partner asking for prayer, or praying for what you
+	// asked, is announced.
+	PrayerRequests bool
 	// What the create-event screen offers as already chosen. "1 hour
 	// before" out of the box, matching what the screen always offered
 	// before this was a preference; "" is a real choice — no default —
@@ -82,6 +85,7 @@ func Defaults() Preferences {
 		EventFollowups:       true,
 		PartnerEvents:        true,
 		PartnerChallenges:    true,
+		PrayerRequests:       true,
 		Nudges:               true,
 		DefaultEventReminder: "1 hour before",
 		QuietFrom:            "22:00",
@@ -122,6 +126,7 @@ type Patch struct {
 	EventFollowups       *bool
 	PartnerEvents        *bool
 	PartnerChallenges    *bool
+	PrayerRequests       *bool
 	DefaultEventReminder *string
 	Nudges               *bool
 }
@@ -164,6 +169,7 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.EventFollowups, patch.EventFollowups)
 	setBool(&p.PartnerEvents, patch.PartnerEvents)
 	setBool(&p.PartnerChallenges, patch.PartnerChallenges)
+	setBool(&p.PrayerRequests, patch.PrayerRequests)
 	setBool(&p.Nudges, patch.Nudges)
 
 	if patch.QuietFrom != nil || patch.QuietTo != nil {
@@ -390,6 +396,10 @@ const (
 	// One partner sealing an anniversary letter, told to the other — that
 	// something is waiting, never what it says.
 	KindLetter = "letter"
+	// Your partner asked you to pray for something today.
+	KindPrayerRequest = "prayer_request"
+	// Your partner prayed for what you asked.
+	KindPrayedForYou = "prayed_for_you"
 )
 
 // AllKinds is every kind there is. A kind missing from here is a kind no
@@ -400,7 +410,7 @@ var AllKinds = []string{
 	KindImportantDate, KindAppreciation, KindJournal, KindGoal, KindChallenge,
 	KindPrayerAnswered, KindBothPrayed, KindBothMarked, KindMemoryOnThisDay,
 	KindEventOver, KindGoalCrossing, KindEventAdded, KindNudge, KindChallengeStarted,
-	KindLetter,
+	KindLetter, KindPrayerRequest, KindPrayedForYou,
 }
 
 // OccursOn reports whether a date recurs on the given day (same month and

@@ -275,6 +275,20 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			       ch.title AS subject, ch.started_on, ch.kind = 'mine'
 			FROM challenges ch
 			WHERE ch.created_at >= $1 AND ch.created_by IS NOT NULL
+			UNION ALL
+			-- A partner asked for prayer today, the first time it is kept.
+			-- created_at doesn't move on an edit, so an edit can't announce twice.
+			SELECT pr.id, pr.couple_id, pr.author_id, pr.created_at, $9::text AS kind,
+			       NULL::text AS subject, pr.asked_on, false
+			FROM prayer_requests pr
+			WHERE pr.created_at >= $1
+			UNION ALL
+			-- A partner prayed for what was asked. The one who prayed is the
+			-- "author" here, so the outer query sends it to the one who asked.
+			SELECT pr.id, pr.couple_id, pr.prayed_by, pr.prayed_at, $10::text AS kind,
+			       NULL::text AS subject, pr.asked_on, false
+			FROM prayer_requests pr
+			WHERE pr.prayed_at >= $1 AND pr.prayed_by IS NOT NULL
 		)
 		SELECT u.id, written.author_id, author.display_name, written.id, written.kind,
 		       written.created_at,
@@ -285,6 +299,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		       COALESCE(p.prayer_answered, true),
 		       COALESCE(p.partner_events, true),
 		       COALESCE(p.partner_challenges, true),
+		       COALESCE(p.prayer_requests, true),
 		       c.timezone, written.starts_on, written.mine,
 		       COALESCE(g.title, written.subject, '')
 		FROM written
@@ -297,7 +312,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE u.id <> written.author_id
 	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered, KindEventAdded, KindChallengeStarted,
-		KindLetter)
+		KindLetter, KindPrayerRequest, KindPrayedForYou)
 	if err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
 	}
@@ -310,7 +325,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		if err := rows.Scan(&c.UserID, &c.AuthorID, &c.AuthorName, &c.ItemID, &c.Kind,
 			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal, &c.Prefs.Goals,
 			&c.Prefs.PrayerAnswered, &c.Prefs.PartnerEvents, &c.Prefs.PartnerChallenges,
-			&c.Timezone, &startsOn, &c.Mine, &c.Subject); err != nil {
+			&c.Prefs.PrayerRequests, &c.Timezone, &startsOn, &c.Mine, &c.Subject); err != nil {
 			return nil, fmt.Errorf("scanning something written: %w", err)
 		}
 		if startsOn != nil {
@@ -321,6 +336,9 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		}
 		if c.Kind == KindPrayerAnswered {
 			c.Settles = answeredUndoWindow
+		}
+		if c.Kind == KindPrayerRequest {
+			c.Settles = requestUndoWindow
 		}
 		out = append(out, c)
 	}
@@ -391,6 +409,10 @@ const appreciationUndoWindow = 30 * time.Second
 // answeredUndoWindow is the pause before the other partner is told — long
 // enough to catch a mis-tap, short enough not to sit on good news.
 const answeredUndoWindow = time.Minute
+
+// requestUndoWindow is the same pause for a prayer request, so writing one
+// and quickly withdrawing it tells nobody.
+const requestUndoWindow = time.Minute
 
 // ClaimSend records the send as underway and reports whether this caller
 // won the claim. Crash-safe: a send that then fails releases its claim, so

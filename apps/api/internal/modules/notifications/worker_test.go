@@ -1293,3 +1293,39 @@ func TestForImportantDates_AnniversaryMidnight(t *testing.T) {
 		}
 	})
 }
+
+func TestForWritten_PrayerRequests(t *testing.T) {
+	at := time.Date(2026, 11, 20, 7, 0, 0, 0, time.UTC)
+	asked := WrittenCandidate{
+		UserID: uuid.New(), AuthorID: uuid.New(), AuthorName: "Ada",
+		ItemID: uuid.New(), Kind: KindPrayerRequest, WrittenAt: at,
+		Settles: requestUndoWindow, Prefs: Preferences{PrayerRequests: true},
+	}
+
+	t.Run("not inside the undo window", func(t *testing.T) {
+		if _, ok := ForWritten(asked, at.Add(10*time.Second)); ok {
+			t.Error("sent before the undo window passed")
+		}
+	})
+	t.Run("after it, without the words", func(t *testing.T) {
+		n, ok := ForWritten(asked, at.Add(2*time.Minute))
+		if !ok || n.Message.Title != "🙏 Ada asked you to pray for them" {
+			t.Fatalf("ok %v, message %+v", ok, n.Message)
+		}
+	})
+	t.Run("switched off, nothing", func(t *testing.T) {
+		off := asked
+		off.Prefs.PrayerRequests = false
+		if _, ok := ForWritten(off, at.Add(2*time.Minute)); ok {
+			t.Error("sent although the switch is off")
+		}
+	})
+	t.Run("prayed for you", func(t *testing.T) {
+		prayed := asked
+		prayed.Kind, prayed.Settles = KindPrayedForYou, 0
+		n, ok := ForWritten(prayed, at.Add(time.Minute))
+		if !ok || n.Message.Title != "Ada prayed for you" {
+			t.Fatalf("ok %v, message %+v", ok, n.Message)
+		}
+	})
+}
