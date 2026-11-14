@@ -50,7 +50,7 @@ export function PrayerSession({
             <div
               key={x.id}
               className={cx(
-                "grow basis-0 rounded-full",
+                "grow basis-0 rounded-xs",
                 k === i ? "h-2" : "h-1",
                 w.my_completed.includes(x.id) ? "bg-plum" : "bg-edge",
               )}
@@ -63,7 +63,7 @@ export function PrayerSession({
           aria-pressed={timer.running}
           onClick={timer.toggle}
           className={cx(
-            "press flex h-11 min-w-11 items-center justify-center gap-1 px-1 text-[13px] font-semibold",
+            "press flex h-11 min-w-11 items-center justify-center gap-1.5 px-1 text-support font-semibold",
             timer.running ? "tabular text-plum" : "text-stone",
           )}
         >
@@ -77,18 +77,18 @@ export function PrayerSession({
           Prayer {i + 1} of {n}
         </div>
         <h1
-          className="m-0 -mt-1 text-[30px] font-semibold leading-[1.18] tracking-[-0.025em] md:text-display"
+          className="m-0 -mt-1 font-text text-[34px] font-[450] leading-[1.12] tracking-[-0.02em]"
           data-selectable
         >
           {p.title}
         </h1>
         {p.text ? (
-          // From `md`, body uses the larger reading size — further from the eye on tablet/laptop.
-          <p className="m-0 text-[19px] leading-[1.6] md:text-reading" data-selectable>
+          // The prayer itself, at reading size in the serif: the couple's words, not interface.
+          <p className="m-0 font-text text-reading" data-selectable>
             {p.text}
           </p>
         ) : null}
-        {p.scripture ? <Scripture reference={p.scripture} verse={p.verse} faint /> : null}
+        {p.scripture ? <Scripture reference={p.scripture} verse={p.verse} /> : null}
       </main>
 
       <div className="flex shrink-0 flex-col gap-1.5 px-6 pb-safe">

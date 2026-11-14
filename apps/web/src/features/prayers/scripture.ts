@@ -4,8 +4,7 @@ export type Scripture = { reference: string; text: string; translation: string }
 export type LookupFailure = { kind: "not-found" | "unavailable"; message: string };
 
 export type LookupResult =
-  | { ok: true; scripture: Scripture }
-  | { ok: false; failure: LookupFailure };
+  { ok: true; scripture: Scripture } | { ok: false; failure: LookupFailure };
 
 // Looks a reference up through our own route (app/api/scripture), never the
 // source directly. Never throws: a verse that will not load must not be able

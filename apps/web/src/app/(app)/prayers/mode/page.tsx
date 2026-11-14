@@ -51,9 +51,10 @@ function PrayerMode() {
       <Skeleton />
     </div>
   );
-  // No tab bar in prayer mode, so the notice needs its own back link; bg-bg lifts its card off the paper background.
+  // No tab bar in prayer mode, so the notice needs its own back link. The
+  // notice sits between rules, so it reads on the paper as it is.
   const frame = (notice: ReactNode) => (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col gap-2 grain bg-paper px-6 pt-24 [&>[role]]:bg-bg">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col gap-2 grain bg-paper px-6 pt-24">
       {notice}
       <LinkButton href={routes.prayers} variant="text">
         Back to prayers

@@ -31,8 +31,8 @@ export function QuietPrayer({
         </Link>
       </div>
       <main className="flex grow animate-page flex-col justify-center gap-5 px-8 pb-6">
-        <Icon name="moon" size={28} strokeWidth={1.4} className="text-plum" />
-        <h1 className="m-0 text-display">
+        <Icon name="moon" size={28} strokeWidth={1.4} className="text-stone" />
+        <h1 className="m-0 font-text text-display">
           {restDay ? "Nothing set for today." : "Take a quiet moment."}
         </h1>
         <p className="m-0 text-reading text-stone">
