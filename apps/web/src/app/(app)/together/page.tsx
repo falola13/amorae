@@ -9,6 +9,8 @@ import {
   useMilestones,
 } from "@/features/together/hooks";
 import { useTimeline } from "@/features/timeline/hooks";
+import { useAnniversary } from "@/features/anniversary/hooks";
+import { ordinal } from "@/features/anniversary/derive";
 import { useAnswered } from "@/features/prayers/hooks";
 import { usePastQuestions, useTodayQuestion } from "@/features/questions/hooks";
 import { challengesLine } from "@/features/together/challenges";
@@ -39,6 +41,7 @@ export default function Together() {
   const challenge = useActiveChallenges();
   const story = useTimeline("all");
   const milestones = useMilestones();
+  const anniversary = useAnniversary();
   const answered = useAnswered();
   const appr = useAppreciations();
   const pastQuestions = usePastQuestions();
@@ -125,8 +128,21 @@ export default function Together() {
                 : "The dates that matter to us",
             )}
             href={routes.milestones}
-            last
+            last={!anniversary.data}
           />
+          {/* Always here, not only near the day: it's where last year's letters are kept. */}
+          {anniversary.data ? (
+            <Row
+              title="Our anniversary"
+              sub={
+                anniversary.data.days_until === 0
+                  ? "It’s today"
+                  : `Our ${ordinal(anniversary.data.years)} in ${anniversary.data.days_until} ${anniversary.data.days_until === 1 ? "day" : "days"}${anniversary.data.past.length > 0 ? " · past letters" : ""}`
+              }
+              href={routes.ourDay()}
+              last
+            />
+          ) : null}
         </Section>
         {/* Our story is read, not used, so it opens like a chapter: an ink rule,
             the title in the serif and the latest entry, rather than one more row. */}

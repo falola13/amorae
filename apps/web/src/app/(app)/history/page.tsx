@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { goalSub, sumOf } from "@/features/together/goals";
 import { useGoals } from "@/features/together/hooks";
@@ -28,7 +29,9 @@ import { QueryState, inPage } from "@/components/ui/query-state";
 import { useCouple, useMe } from "@/features/couple/hooks";
 import { groupByMonth } from "@/features/timeline/derive";
 import { useTimeline } from "@/features/timeline/hooks";
-import { dayName, dayNum, monthName } from "@/lib/dates";
+import { dayName, dayNum, iso, monthName } from "@/lib/dates";
+import { today } from "@/lib/today";
+import { ordinal, yearsWord } from "@/features/anniversary/derive";
 import { routes } from "@/lib/routes";
 import type { TimelineFilter, TimelineItem } from "@/lib/api/types";
 
@@ -49,6 +52,7 @@ const KIND: Record<TimelineItem["type"], string> = {
   journal: "Journal",
   appreciation: "Appreciation",
   challenge: "Challenge",
+  anniversary: "Anniversary",
   question: "Question",
 };
 
@@ -59,6 +63,43 @@ function excerpt(s: string): string {
   if (s.length < EXCERPT) return s;
   const cut = s.slice(0, s.lastIndexOf(" ") > 40 ? s.lastIndexOf(" ") : s.length);
   return `${cut.replace(/[\s,.;:—-]+$/, "")}…`;
+}
+
+/** Our story's own marker for each anniversary that has come round, placed
+ *  on its day among what you did, so the day is easy to find again. Only
+ *  within what's been loaded, unless the whole story has been. */
+function withAnniversaries(
+  items: TimelineItem[],
+  startedOn: string | undefined,
+  complete: boolean,
+): TimelineItem[] {
+  if (!startedOn || items.length === 0) return items;
+  const [y, m, d] = startedOn.split("-").map(Number);
+  const todayIso = iso(today());
+  const oldest = items[items.length - 1].date;
+  const marks: TimelineItem[] = [];
+  for (let year = y + 1; ; year++) {
+    const day = `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    if (day > todayIso) break;
+    if (!complete && day < oldest) continue;
+    const n = year - y;
+    marks.push({
+      id: `anniversary-${year}`,
+      type: "anniversary",
+      at: `${day}T23:59:59Z`,
+      date: day,
+      title: `Our ${ordinal(n)} anniversary`,
+      sub: `${yearsWord(n)} together · your letters`,
+      path: routes.ourDay(),
+    });
+  }
+  if (marks.length === 0) return items;
+  // Stable sort: the day's own entries keep their order, the marker heads them.
+  return [...items, ...marks].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    if (a.type === "anniversary") return -1;
+    return b.type === "anniversary" ? 1 : 0;
+  });
 }
 
 /** An entry hung off its date in the left margin. Rules start at the text
@@ -163,8 +204,20 @@ function WorkingOn() {
   );
 }
 
-export default function History() {
-  const [filter, setFilter] = useState<TimelineFilter>("all");
+export default function HistoryPage() {
+  return (
+    <Suspense fallback={null}>
+      <History />
+    </Suspense>
+  );
+}
+
+function History() {
+  // ?filter=prayer opens straight onto past prayer weeks (the Prayers page links here).
+  const asked = useSearchParams().get("filter");
+  const [filter, setFilter] = useState<TimelineFilter>(
+    FILTERS.some((f) => f.value === asked) ? (asked as TimelineFilter) : "all",
+  );
   const timeline = useTimeline(filter);
   const couple = useCouple();
   const me = useMe();
@@ -239,7 +292,11 @@ export default function History() {
           }
         >
           {(data) => {
-            const items = data.pages.flatMap((p) => p.items);
+            const fetched = data.pages.flatMap((p) => p.items);
+            const items =
+              filter === "all" || filter === "moments"
+                ? withAnniversaries(fetched, couple.data?.started_on, !timeline.hasNextPage)
+                : fetched;
             if (items.length === 0) {
               return (
                 <div className="pt-4">

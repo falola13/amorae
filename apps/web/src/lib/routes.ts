@@ -44,6 +44,7 @@ export const routes = {
   history: "/history",
   // Our story is the history feed under its newer name; the URL stays so old links work.
   story: "/history",
+  storyPrayer: "/history?filter=prayer",
   historyWeek: (id: string) => `/history/${seg(id)}`,
 
   // Together

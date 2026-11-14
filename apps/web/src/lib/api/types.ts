@@ -469,7 +469,10 @@ export type TimelineItemType =
   | "journal"
   | "appreciation"
   | "challenge"
-  | "question";
+  | "question"
+  // Never sent by the API: Our story adds a marker for each anniversary
+  // from the couple's start date, so the day is easy to find.
+  | "anniversary";
 
 /** One row of "Our story" (GET /v1/timeline), newest first. */
 export interface TimelineItem {

@@ -91,11 +91,18 @@ export default function PrayersPage() {
         return (
           <>
             <Main>
-              <div className="pt-1.5">
+              <div className="flex items-baseline justify-between gap-3 pt-1.5">
                 <Micro>
                   {range(w.week_start, w.week_end, true)} &middot; set by{" "}
                   {setterWord(w, me.id, partner)}
                 </Micro>
+                {/* The weeks before this one live in Our story, under Prayer. */}
+                <Link
+                  href={routes.storyPrayer}
+                  className="press shrink-0 py-2 text-support font-semibold text-plum no-underline"
+                >
+                  Past weeks
+                </Link>
               </div>
               <div className="mt-2 flex items-baseline justify-between gap-3">
                 <Title>This week&rsquo;s prayers</Title>
