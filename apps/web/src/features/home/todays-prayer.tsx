@@ -38,30 +38,22 @@ export function TodaysPrayer({
   const done = week?.my_completed.length ?? 0;
 
   return (
-    <Section
-      label="Today’s prayer"
-      className="mt-8"
-      trailing={
-        week?.status === "published" ? (
-          <span className="lining text-support text-stone">
-            {total > 0 ? `${done} of ${total} · ` : ""}set by{" "}
-            {setterWord(week, couple.me.id, partner)}
-          </span>
-        ) : undefined
-      }
-    >
+    <Section label="Today’s prayer" className="mt-8">
       {theirs ? <TheirRequest request={theirs} first={first} /> : null}
 
       {week?.status === "published" ? (
         <>
-          {total > 0 ? (
-            <div className="mt-4 flex flex-col gap-2">
-              <Segments total={total} done={done} height={4} />
+          {/* Named, so the bar can't be read as the progress of their request above it. */}
+          <div className={theirs ? "mt-6 flex flex-col gap-2" : "mt-1 flex flex-col gap-2"}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-body font-semibold">The week’s prayers</span>
               <span className="lining text-support text-stone">
-                today {done} of {total} prayed
+                {total > 0 ? `${done} of ${total} today · ` : ""}set by{" "}
+                {setterWord(week, couple.me.id, partner)}
               </span>
             </div>
-          ) : null}
+            {total > 0 ? <Segments total={total} done={done} height={4} /> : null}
+          </div>
           <div className="mt-4">
             <LinkButton href={routes.prayerMode()}>
               {total === 0 || done >= total

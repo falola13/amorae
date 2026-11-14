@@ -116,11 +116,16 @@ export function MyRequest({ request, first }: { request: PrayerRequest | null; f
   }
 
   return (
-    <div className="mt-3 flex flex-col">
-      <p className="m-0 text-support text-stone" data-selectable>
-        You asked: <span className="font-text text-ink">&ldquo;{text}&rdquo;</span> &middot;{" "}
-        {prayedAt ? `${first} prayed for you ${prayedAtLabel(prayedAt)}` : "Waiting"}
+    <div className="mt-5 flex flex-col border-t border-line pt-4">
+      <span className="text-support text-stone">You asked</span>
+      <p className="m-0 mt-1 font-text text-bodylg leading-[1.45]" data-selectable>
+        &ldquo;{text}&rdquo;
       </p>
+      <span className={prayedAt ? "mt-1 text-support text-green" : "mt-1 text-support text-stone"}>
+        {prayedAt
+          ? `${first} prayed for you ${prayedAtLabel(prayedAt)}`
+          : `Waiting for ${first}`}
+      </span>
       {prayedAt ? null : (
         <div className="-ml-2 flex items-center">
           <Button variant="quiet" onClick={open}>

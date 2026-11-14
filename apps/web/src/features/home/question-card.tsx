@@ -237,13 +237,13 @@ function Both({
   return (
     <>
       <div className="mt-2 flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2 text-support text-stone">
+        <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-support text-stone">
           <StatusMark done size={20} label="Answered" />
           You both answered
         </span>
         <Button
           variant="text"
-          className="w-auto px-2"
+          className="-mr-2 w-auto px-2"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
