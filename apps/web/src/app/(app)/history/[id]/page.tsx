@@ -63,7 +63,7 @@ export default function HistoryDetail() {
               <ol className="m-0 mt-[18px] list-none border-t border-line p-0">
                 {w.points.map((p, i) => (
                   <li key={p.id} className="flex min-h-[64px] gap-4 border-b border-line py-3">
-                    <span className="tabular w-[22px] pt-[3px] text-[13px] font-semibold text-stone">
+                    <span className="tabular w-[22px] pt-[3px] text-support font-semibold text-stone">
                       {String(i + 1).padStart(2, "0")}
                     </span>
                     <span className="flex flex-col gap-px">

@@ -207,7 +207,7 @@ function EditForm({ c }: { c: Challenge }) {
           <div className="flex flex-col gap-1.5">
             <KindChips value={kind} onChange={setKind} disabled={kindLocked !== null} />
             {kindLocked ? (
-              <div role="alert" className="text-[13px] text-red">
+              <div role="alert" className="text-support text-red">
                 {kindLocked}
               </div>
             ) : null}
@@ -229,7 +229,7 @@ function EditForm({ c }: { c: Challenge }) {
             {plan.length} {plan.length === 1 ? "day" : "days"} · one line per day
           </Para>
           {errors.plan ? (
-            <div role="alert" className="text-[13px] text-red">
+            <div role="alert" className="text-support text-red">
               {errors.plan}
             </div>
           ) : null}
@@ -266,7 +266,7 @@ function EditForm({ c }: { c: Challenge }) {
         </div>
 
         {errors.form ? (
-          <div role="alert" className="text-[13px] text-red">
+          <div role="alert" className="text-support text-red">
             {errors.form}
           </div>
         ) : null}

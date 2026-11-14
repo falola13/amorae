@@ -14,7 +14,7 @@ import { usePush } from "@/lib/pwa/push";
 function Preview({ when, text }: { when: string; text: string }) {
   return (
     <div className="flex flex-col gap-0.5 border-b border-line py-3.5">
-      <div className="text-[13px] font-semibold text-stone">{when}</div>
+      <div className="text-support font-semibold text-stone">{when}</div>
       <div className="text-[16px] font-medium">{text}</div>
     </div>
   );

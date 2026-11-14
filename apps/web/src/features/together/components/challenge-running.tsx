@@ -30,7 +30,7 @@ function RunningCard({ c, partner }: { c: Challenge; partner: string }) {
         <span className="flex items-center gap-3">
           <span className="flex min-w-0 grow flex-col gap-0.5">
             <span className="text-[17px] font-semibold">{c.title}</span>
-            <span className="text-[12px] font-semibold text-stone">
+            <span className="text-support font-semibold text-stone">
               {progressLabel(c)}
               {owner ? ` · ${owner}` : ""}
             </span>
@@ -40,7 +40,7 @@ function RunningCard({ c, partner }: { c: Challenge; partner: string }) {
         {d ? (
           <>
             <span className="text-[15px] leading-snug text-ink">{d.text}</span>
-            <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] font-semibold text-stone">
+            <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-support font-semibold text-stone">
               {mine ? <span>You: {mark(d.done, d.skipped, d.note)}</span> : null}
               <span>
                 {partner}: {mark(d.partner_done, d.partner_skipped, d.partner_note)}

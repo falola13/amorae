@@ -78,7 +78,7 @@ function JoinForm() {
           <Para>Enter the code from the invitation they sent you.</Para>
         </div>
         <div className="flex flex-col gap-2.5">
-          <label htmlFor="code" className="text-[13px] font-semibold text-stone">
+          <label htmlFor="code" className="text-support font-semibold text-stone">
             Invitation code
           </label>
           <input

@@ -223,7 +223,7 @@ export default function Calendar() {
                   className="press flex grow basis-0 flex-col items-center gap-1 p-0"
                 >
                   {!month ? (
-                    <span className="text-[12px] font-semibold text-stone">
+                    <span className="text-support font-semibold text-stone">
                       {WEEKDAYS[parse(d).getDay()]}
                     </span>
                   ) : null}
@@ -269,7 +269,7 @@ export default function Calendar() {
                           key={i}
                           aria-hidden="true"
                           className={cx(
-                            "grow basis-0 text-center text-[12px] font-semibold",
+                            "grow basis-0 text-center text-support font-semibold",
                             i === 0 || i === 6 ? "text-edge" : "text-stone",
                           )}
                         >
@@ -322,7 +322,7 @@ export default function Calendar() {
                         <span className="tabular w-[68px] shrink-0 text-support text-stone">
                           {it.time}
                           {it.until ? (
-                            <span className="block text-[12px] opacity-75">to {it.until}</span>
+                            <span className="block text-support opacity-75">to {it.until}</span>
                           ) : null}
                         </span>
                         <span className="flex flex-col">

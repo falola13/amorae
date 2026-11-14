@@ -66,7 +66,7 @@ export default function InvitePartnerPage() {
           <Para>Send this to one person. It works once, and expires in 7 days.</Para>
         </div>
         <div className="flex flex-col items-center gap-1.5 rounded-card border border-line bg-surface px-4 pb-3 pt-7">
-          <div className="text-[13px] font-semibold text-stone">Your invitation code</div>
+          <div className="text-support font-semibold text-stone">Your invitation code</div>
           <div className="tabular text-[30px] font-semibold tracking-[0.14em]" data-selectable>
             {code}
           </div>

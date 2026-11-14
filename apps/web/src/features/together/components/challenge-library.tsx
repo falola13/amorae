@@ -56,7 +56,7 @@ export function PastChallenges() {
                       {p.ended_at ? ` · ${longDate(p.ended_at.slice(0, 10))}` : ""}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[13px] font-semibold text-stone">
+                  <span className="shrink-0 text-support font-semibold text-stone">
                     {p.my_done} of {p.days}
                   </span>
                   <Icon name="right" size={18} className="text-stone" />
@@ -125,7 +125,7 @@ export function ChallengeLibrary({ onBack }: { onBack?: () => void }) {
                           <span className="text-[16px] font-semibold text-ink">{t.title}</span>
                           <span className="text-support text-stone">{t.blurb}</span>
                         </span>
-                        <span className="shrink-0 text-[13px] font-semibold text-stone">
+                        <span className="shrink-0 text-support font-semibold text-stone">
                           {running.has(t.key) ? "Running" : `${t.days} days`}
                         </span>
                       </button>

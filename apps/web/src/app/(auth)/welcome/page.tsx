@@ -28,7 +28,7 @@ export default function WelcomePage() {
         <LinkButton href={routes.login()} variant="secondary">
           I already have an account
         </LinkButton>
-        <div className="flex items-center justify-center gap-1.5 pt-2.5 text-[13px] text-stone">
+        <div className="flex items-center justify-center gap-1.5 pt-2.5 text-support text-stone">
           <Icon name="lock" size={16} />
           Just the two of you. Nothing here is public.
         </div>

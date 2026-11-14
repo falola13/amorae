@@ -126,7 +126,7 @@ export function RemindersEditor({
 
 function ErrorLine({ text }: { text: string }) {
   return (
-    <div role="alert" className="mt-1 text-[13px] text-red">
+    <div role="alert" className="mt-1 text-support text-red">
       {text}
     </div>
   );

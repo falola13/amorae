@@ -210,12 +210,12 @@ export default function NewChallengePage() {
         </Para>
 
         {errors.prompts ? (
-          <div role="alert" className="text-[13px] text-red">
+          <div role="alert" className="text-support text-red">
             {errors.prompts}
           </div>
         ) : null}
         {errors.form ? (
-          <div role="alert" className="text-[13px] text-red">
+          <div role="alert" className="text-support text-red">
             {errors.form}
           </div>
         ) : null}

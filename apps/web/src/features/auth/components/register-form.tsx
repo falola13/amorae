@@ -135,7 +135,7 @@ function ConsentBox({
             {children}
           </Checkbox>
           {error ? (
-            <div role="alert" className="flex items-center gap-1.5 pb-1 text-[13px] text-red">
+            <div role="alert" className="flex items-center gap-1.5 pb-1 text-support text-red">
               <Icon name="alert" size={16} />
               {error}
             </div>

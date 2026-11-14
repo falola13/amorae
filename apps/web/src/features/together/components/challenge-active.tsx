@@ -73,7 +73,7 @@ function DayItem({
           )}
         </span>
         <span className="flex min-w-0 grow flex-col">
-          <span className="text-[12px] font-semibold text-stone">
+          <span className="text-support font-semibold text-stone">
             Day {d.n} · {dayDateLabel(d.date)}
             {d.skipped ? " · skipped" : ""}
             {catchUp ? " · catch up" : ""}
@@ -87,15 +87,15 @@ function DayItem({
             {d.text}
           </span>
           {!d.open ? (
-            <span className="mt-0.5 text-[13px] text-stone">{opensLabel(d.date, todayIso)}</span>
+            <span className="mt-0.5 text-support text-stone">{opensLabel(d.date, todayIso)}</span>
           ) : null}
         </span>
-        {isToday && d.open ? <span className="text-[12px] font-bold text-plum">Today</span> : null}
+        {isToday && d.open ? <span className="text-support font-bold text-plum">Today</span> : null}
       </div>
 
       {/* Label only, never a control: you can see the partner's status but not change it (DEC-30). */}
       {d.partner_done || d.partner_skipped ? (
-        <span className="pl-9 text-[12px] font-semibold text-stone">
+        <span className="pl-9 text-support font-semibold text-stone">
           {partner} {d.partner_done ? "did" : "skipped"}
         </span>
       ) : null}

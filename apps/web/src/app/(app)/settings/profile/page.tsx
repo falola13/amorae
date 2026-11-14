@@ -167,7 +167,7 @@ export default function ProfilePage() {
                   />
                 </div>
                 {photoError ? (
-                  <div role="alert" className="text-[13px] text-red">
+                  <div role="alert" className="text-support text-red">
                     {photoError}
                   </div>
                 ) : null}
@@ -208,7 +208,7 @@ export default function ProfilePage() {
                     className="press flex h-[54px] items-center justify-between gap-3 border-y border-line text-left text-[16px] font-medium text-ink"
                   >
                     <span className="flex min-w-0 flex-col">
-                      <span className="text-[13px] font-semibold text-stone">Email</span>
+                      <span className="text-support font-semibold text-stone">Email</span>
                       <span className="truncate">{profile.email}</span>
                     </span>
                     <span className="shrink-0 text-[15px] font-semibold text-plum">Change</span>

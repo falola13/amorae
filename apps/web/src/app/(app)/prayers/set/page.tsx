@@ -74,7 +74,7 @@ export default function SetPrayers() {
               >
                 <Icon name="x" size={22} />
               </Link>
-              <div role="status" className="flex items-center gap-1.5 pr-3 text-[13px] text-stone">
+              <div role="status" className="flex items-center gap-1.5 pr-3 text-support text-stone">
                 {saved ? (
                   <>
                     <Icon name="check" size={16} strokeWidth={2} className="text-green" />
@@ -144,7 +144,7 @@ export default function SetPrayers() {
                           : undefined
                       }
                     >
-                      <span className="tabular w-[22px] self-start pt-[17px] text-[13px] font-semibold text-stone">
+                      <span className="tabular w-[22px] self-start pt-[17px] text-support font-semibold text-stone">
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <Link
@@ -193,7 +193,7 @@ export default function SetPrayers() {
                 )}
               </ol>
               <section className="mt-8 border-t border-line pt-5">
-                <p className="m-0 text-[13px] font-semibold text-stone">This week</p>
+                <p className="m-0 text-support font-semibold text-stone">This week</p>
                 <Para className="mt-1 text-stone">
                   What&rsquo;s set for each day &mdash; a prayer with no days chosen shows up on all
                   of them.
@@ -215,7 +215,7 @@ export default function SetPrayers() {
                         <div className="flex min-w-0 grow flex-col gap-0.5 py-1">
                           <span
                             className={cx(
-                              "text-[13px] font-semibold",
+                              "text-support font-semibold",
                               isToday ? "text-plum" : "text-stone",
                             )}
                           >
@@ -273,7 +273,7 @@ export default function SetPrayers() {
               <ol className="m-0 list-none border-y border-line py-1">
                 {items.map((p, i) => (
                   <li key={p.id} className="flex h-10 items-center gap-3.5 text-[16px] font-medium">
-                    <span className="tabular w-[22px] text-[13px] font-semibold text-stone">
+                    <span className="tabular w-[22px] text-support font-semibold text-stone">
                       {String(i + 1).padStart(2, "0")}
                     </span>
                     {p.title}

@@ -81,7 +81,7 @@ export function BirthdayField({
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[13px] font-semibold text-stone">Birthday</span>
+      <span className="text-support font-semibold text-stone">Birthday</span>
       <div className="flex gap-3">
         <div className="flex-[1.3]">
           <Select
@@ -109,12 +109,12 @@ export function BirthdayField({
         onChange={(e) => set({ year: e.target.value ? Number(e.target.value) : null })}
       />
       {error ? (
-        <div role="alert" className="flex items-center gap-1.5 text-[13px] text-red">
+        <div role="alert" className="flex items-center gap-1.5 text-support text-red">
           <Icon name="alert" size={16} />
           {error}
         </div>
       ) : hint ? (
-        <div className="text-[13px] text-stone">{hint}</div>
+        <div className="text-support text-stone">{hint}</div>
       ) : null}
       {value ? (
         <button
@@ -124,7 +124,7 @@ export function BirthdayField({
             setSeen(null);
             onChange(null);
           }}
-          className="press self-start text-[13px] font-semibold text-plum"
+          className="press self-start text-support font-semibold text-plum"
         >
           Remove
         </button>

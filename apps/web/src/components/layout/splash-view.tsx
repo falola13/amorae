@@ -31,7 +31,7 @@ export function SplashView({ label = "Opening your space" }: { label?: string })
         className="flex shrink-0 animate-splash-wait flex-col items-center gap-3.5 pb-[74px]"
       >
         <div className="h-0.5 w-10 animate-breathe rounded-full bg-plum" />
-        <div className="text-[13px] text-stone">
+        <div className="text-support text-stone">
           {slow ? "Still opening. This is taking longer than usual." : label}
         </div>
       </div>

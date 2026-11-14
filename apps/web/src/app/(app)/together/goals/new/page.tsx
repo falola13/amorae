@@ -64,7 +64,7 @@ export default function NewGoalPage() {
           {...register("title")}
         />
         {errors.title ? (
-          <div role="alert" className="mt-1 text-[13px] text-red">
+          <div role="alert" className="mt-1 text-support text-red">
             {errors.title.message}
           </div>
         ) : null}
@@ -94,7 +94,7 @@ export default function NewGoalPage() {
             )}
           />
           {errors.target ? (
-            <div role="alert" className="py-1 text-[13px] text-red">
+            <div role="alert" className="py-1 text-support text-red">
               {errors.target.message}
             </div>
           ) : null}

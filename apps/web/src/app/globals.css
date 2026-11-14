@@ -488,11 +488,8 @@ button {
   cursor: pointer;
 }
 
-/* A calm, distinct surface for a birthday or anniversary card on Home — plum-tinted,
-   not another plain bg-surface card, but no louder than the rest of the page. */
-@utility bg-celebrate {
-  background: linear-gradient(160deg, var(--color-plum-tint), var(--color-surface) 85%);
-}
+/* bg-celebrate is retired: an everyday screen marks a date with rules, the
+   serif or a band of paper, never a gradient (docs/design/direction.md). */
 
 /* The anniversary's own surfaces: a card that glows a little, and the
    letter paper. Both read their colours from the tokens above. */

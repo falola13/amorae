@@ -41,7 +41,7 @@ function Side({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-[12px] font-semibold text-stone">{who}</span>
+      <span className="text-support font-semibold text-stone">{who}</span>
       <span className={cx("text-[14px]", done ? "font-semibold text-ink" : "text-stone")}>
         {done ? "Did it" : skipped ? "Skipped" : "Not marked"}
       </span>
@@ -54,7 +54,7 @@ function DayRow({ d, partner }: { d: ChallengeDay; partner: string }) {
   return (
     <li className="flex flex-col gap-2 border-b border-line py-3.5">
       <span className="flex flex-col">
-        <span className="text-[12px] font-semibold text-stone">
+        <span className="text-support font-semibold text-stone">
           Day {d.n} · {dayDateLabel(d.date)}
         </span>
         <span className="text-[16px] font-medium text-ink">{d.text}</span>
@@ -196,7 +196,7 @@ export function ChallengeFinish({
                     <span className="text-[16px] font-semibold text-ink">{t.title}</span>
                     <span className="text-support text-stone">{t.blurb}</span>
                   </span>
-                  <span className="shrink-0 text-[13px] font-semibold text-stone">
+                  <span className="shrink-0 text-support font-semibold text-stone">
                     {t.days} days
                   </span>
                 </button>

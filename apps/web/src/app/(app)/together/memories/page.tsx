@@ -56,7 +56,7 @@ function Photo({ label, src }: { label: string; src?: string }) {
     <div
       role="img"
       aria-label={label}
-      className="flex h-[132px] items-center justify-center gap-2 rounded-btn bg-photo text-[13px] font-semibold text-stone"
+      className="flex h-[132px] items-center justify-center gap-2 rounded-btn bg-photo text-support font-semibold text-stone"
     >
       <Icon name="image" size={18} />
       Photo

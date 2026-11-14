@@ -142,7 +142,7 @@ export default function PrayersPage() {
                         className="press flex min-h-[54px] items-center justify-between gap-3 border-b border-line py-2 text-ink no-underline"
                       >
                         <span className="text-[16px] font-medium text-stone">{p.title}</span>
-                        <span className="shrink-0 text-[13px] font-semibold text-stone">
+                        <span className="shrink-0 text-support font-semibold text-stone">
                           {daysLabel(p.weekdays)}
                         </span>
                       </Link>

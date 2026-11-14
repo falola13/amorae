@@ -176,7 +176,7 @@ function EventComposer({
           {...register("title")}
         />
         {errors.title ? (
-          <div role="alert" className="mt-1 text-[13px] text-red">
+          <div role="alert" className="mt-1 text-support text-red">
             {errors.title.message}
           </div>
         ) : null}
@@ -283,7 +283,7 @@ function EventComposer({
             value={checklist}
             onChange={(e) => setChecklist(e.target.value)}
           />
-          <div className="pt-1.5 text-[13px] text-stone">
+          <div className="pt-1.5 text-support text-stone">
             One per line. You can tick these off on the day.
           </div>
         </div>

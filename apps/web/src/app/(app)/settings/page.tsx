@@ -161,7 +161,7 @@ export default function SettingsPage() {
             last
           />
         </Section>
-        <div className="pb-2 pt-[22px] text-[13px] text-stone">
+        <div className="pb-2 pt-[22px] text-support text-stone">
           Amorae 1.0 &middot; Two hearts, one faith.
         </div>
       </Main>

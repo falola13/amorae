@@ -263,7 +263,7 @@ function EditPrayer() {
                   {...register("title")}
                 />
                 {errors.title ? (
-                  <div role="alert" className="mt-1 text-[13px] text-red">
+                  <div role="alert" className="mt-1 text-support text-red">
                     {errors.title.message}
                   </div>
                 ) : null}
@@ -276,7 +276,7 @@ function EditPrayer() {
                 {...register("text")}
               />
               <div>
-                <p className="m-0 pb-2 text-[13px] font-semibold text-stone">Which days?</p>
+                <p className="m-0 pb-2 text-support font-semibold text-stone">Which days?</p>
                 <Controller
                   name="weekdays"
                   control={control}
@@ -331,7 +331,7 @@ function EditPrayer() {
                     </p>
                     <div className="flex items-center gap-3">
                       {shown.translation ? (
-                        <span className="text-[13px] text-edge">{shown.translation}</span>
+                        <span className="text-support text-edge">{shown.translation}</span>
                       ) : null}
                       <button
                         type="button"
@@ -339,7 +339,7 @@ function EditPrayer() {
                           setVerse(null);
                           setFailure(null);
                         }}
-                        className="press text-[13px] font-semibold text-plum"
+                        className="press text-support font-semibold text-plum"
                       >
                         Remove the words
                       </button>

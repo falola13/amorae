@@ -82,9 +82,7 @@ export default function Journal() {
                           </span>{" "}
                           &middot; {relativeDay(j.date, todayIso)}
                         </span>
-                        <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
-                          {j.tag}
-                        </span>
+                        <span className="text-micro uppercase text-stone">{j.tag}</span>
                         {/* Only your own: the server refuses edits to your partner's. */}
                         {j.author_id === me?.id ? (
                           <button

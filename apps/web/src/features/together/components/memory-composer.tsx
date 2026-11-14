@@ -149,7 +149,7 @@ export function MemoryComposer({
           </div>
         ) : null}
         {tooBig ? (
-          <div role="alert" className="text-[13px] text-red">
+          <div role="alert" className="text-support text-red">
             That photo is over 10MB. Pick a smaller one.
           </div>
         ) : null}

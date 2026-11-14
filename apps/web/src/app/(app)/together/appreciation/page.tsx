@@ -102,7 +102,7 @@ export default function Appreciation() {
               i < arr.length - 1 && "border-b border-line",
             )}
           >
-            <div className="text-[13px] font-semibold text-stone">
+            <div className="text-support font-semibold text-stone">
               From {a.from_id === me?.id ? "you" : partner} &middot; {relativeDay(a.date, todayIso)}
             </div>
             <div className="text-body leading-[1.55]" data-selectable>

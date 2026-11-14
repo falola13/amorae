@@ -23,7 +23,7 @@ const dayLabel = (day: PrayerDay, partnerName: string): string => {
 function Dot({ mark }: { mark: Mark }) {
   if (mark === "dash") {
     return (
-      <span aria-hidden="true" className="text-[10px] leading-none text-edge">
+      <span aria-hidden="true" className="text-micro leading-none text-edge">
         &ndash;
       </span>
     );
@@ -71,10 +71,7 @@ export function DaysRow({
           >
             <span
               aria-hidden="true"
-              className={cx(
-                "text-[11px] font-semibold uppercase",
-                isToday ? "text-plum" : "text-stone",
-              )}
+              className={cx("text-micro uppercase", isToday ? "text-plum" : "text-stone")}
             >
               {dayName(day.date)[0]}
             </span>

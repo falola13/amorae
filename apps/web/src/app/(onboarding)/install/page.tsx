@@ -27,7 +27,7 @@ function Step({
 }) {
   return (
     <li className={`flex min-h-[76px] items-center gap-4 ${last ? "" : "border-b border-line"}`}>
-      <span className="tabular w-[22px] text-[13px] font-semibold text-stone">{n}</span>
+      <span className="tabular w-[22px] text-support font-semibold text-stone">{n}</span>
       <span className="flex grow flex-col gap-0.5">
         <span className="text-bodylg font-semibold">{title}</span>
         <span className="text-support text-stone">{text}</span>
@@ -113,7 +113,7 @@ export default function InstallPage() {
           Maybe later
         </Button>
         {ios ? (
-          <div className="flex items-center justify-center gap-1.5 pt-1 text-[13px] text-stone">
+          <div className="flex items-center justify-center gap-1.5 pt-1 text-support text-stone">
             <Icon name="down" size={16} />
             Share is in the bar below
           </div>
