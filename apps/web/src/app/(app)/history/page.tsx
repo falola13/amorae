@@ -51,6 +51,15 @@ const KIND: Record<TimelineItem["type"], string> = {
   challenge: "Challenge",
 };
 
+// The feed sends the first 80 characters of longer text; say so rather than
+// stopping mid-word.
+const EXCERPT = 80;
+function excerpt(s: string): string {
+  if (s.length < EXCERPT) return s;
+  const cut = s.slice(0, s.lastIndexOf(" ") > 40 ? s.lastIndexOf(" ") : s.length);
+  return `${cut.replace(/[\s,.;:—-]+$/, "")}…`;
+}
+
 /** An entry hung off its date in the left margin. Rules start at the text
  *  column, not the screen edge, and a photograph takes the whole column. */
 function TimelineRow({
@@ -62,6 +71,9 @@ function TimelineRow({
   name?: string;
   first?: boolean;
 }) {
+  // Journal and appreciation are the couple's own words, so they're set as
+  // words in the serif; their "title" is only the tag or the kind again.
+  const words = item.type === "journal" || item.type === "appreciation";
   return (
     <Link
       href={item.path}
@@ -94,8 +106,18 @@ function TimelineRow({
           {KIND[item.type]}
           {name ? ` · ${name}` : ""}
         </span>
-        <span className="mt-0.5 font-text text-[19px] leading-[1.3]">{item.title}</span>
-        {item.sub ? <span className="text-support text-stone">{item.sub}</span> : null}
+        {words ? null : (
+          <span className="mt-0.5 font-text text-[19px] leading-[1.3]">{item.title}</span>
+        )}
+        {item.sub ? (
+          words ? (
+            <span className={cx("mt-1 font-text text-bodylg leading-[1.45]", item.type === "appreciation" && "italic")}>
+              {item.type === "appreciation" ? `“${excerpt(item.sub)}”` : excerpt(item.sub)}
+            </span>
+          ) : (
+            <span className="text-support text-stone">{item.sub}</span>
+          )
+        ) : null}
       </span>
     </Link>
   );
@@ -119,12 +141,12 @@ function WorkingOn() {
             key={g.id}
             href={routes.goal(g.id)}
             className={cx(
-              "press flex min-h-[124px] w-[150px] shrink-0 flex-col py-1 pr-4 text-ink no-underline",
+              "press flex w-[150px] shrink-0 flex-col py-1 pr-4 text-ink no-underline",
               i > 0 && "border-l border-line pl-4",
             )}
           >
-            <span className="mb-4 font-text text-bodylg leading-[1.25]">{g.title}</span>
-            <span className="mt-auto">
+            <span className="mb-3 font-text text-bodylg leading-[1.25]">{g.title}</span>
+            <span>
               <Bar pct={(sumOf(g) / g.target) * 100} label={goalSub(g)} />
             </span>
             <span className="lining mt-2 text-support text-stone">{goalSub(g)}</span>

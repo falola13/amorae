@@ -20,7 +20,7 @@ export function PrayerRow({
       href={href}
       className="press flex min-h-[76px] items-center gap-4 border-b border-line py-3.5 text-ink no-underline"
     >
-      <span className="lining w-[22px] self-start pt-px font-text text-[17px] text-stone">
+      <span className="lining w-7 shrink-0 self-start pt-px font-text text-[17px] tabular-nums text-stone">
         {String(index + 1).padStart(2, "0")}
       </span>
       <span className="flex grow flex-col gap-0.5">

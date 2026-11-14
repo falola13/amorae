@@ -97,7 +97,7 @@ export default function Together() {
             sub={summary(
               events,
               nextEvent
-                ? `${nextEvent.title} ${relativeDay(nextEvent.date, todayIso).toLowerCase()}${nextEvent.start_time ? ` at ${time12(nextEvent.start_time)}` : ""}`
+                ? `${nextEvent.title} ${relativeDay(nextEvent.date, todayIso).replace(/^(Today|Tomorrow)$/, (w) => w.toLowerCase())}${nextEvent.start_time ? ` at ${time12(nextEvent.start_time)}` : ""}`
                 : "Nothing planned yet",
             )}
             href={routes.calendar}
@@ -153,7 +153,7 @@ export default function Together() {
             sub={summary(
               appr,
               lastAppreciated
-                ? `${lastAppreciated.from_id === couple.data?.me.id ? "You" : partner}, ${relativeDay(lastAppreciated.date, todayIso).toLowerCase()}`
+                ? `${lastAppreciated.from_id === couple.data?.me.id ? "You" : partner}, ${relativeDay(lastAppreciated.date, todayIso).replace(/^(Today|Tomorrow)$/, (w) => w.toLowerCase())}`
                 : "Something I appreciate about you",
             )}
             href={routes.appreciation}
