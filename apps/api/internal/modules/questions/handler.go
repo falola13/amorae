@@ -40,11 +40,19 @@ type answerDTO struct {
 }
 
 type entryDTO struct {
-	AskedOn        string     `json:"asked_on"`
-	Question       string     `json:"question"`
-	Mine           *answerDTO `json:"mine"`
-	Theirs         *answerDTO `json:"theirs"`
-	TheirsAnswered bool       `json:"theirs_answered"`
+	AskedOn        string       `json:"asked_on"`
+	Question       string       `json:"question"`
+	Mine           *answerDTO   `json:"mine"`
+	Theirs         *answerDTO   `json:"theirs"`
+	TheirsAnswered bool         `json:"theirs_answered"`
+	Previous       *previousDTO `json:"previous,omitempty"`
+}
+
+// previousDTO is the last time today's question was asked and both answered.
+type previousDTO struct {
+	AskedOn string     `json:"asked_on"`
+	Mine    *answerDTO `json:"mine"`
+	Theirs  *answerDTO `json:"theirs"`
 }
 
 type pageDTO struct {
@@ -60,13 +68,21 @@ func toAnswerDTO(a *Answer) *answerDTO {
 }
 
 func toEntryDTO(e Entry) entryDTO {
-	return entryDTO{
+	dto := entryDTO{
 		AskedOn:        e.AskedOn.Format(time.DateOnly),
 		Question:       e.Question,
 		Mine:           toAnswerDTO(e.Mine),
 		Theirs:         toAnswerDTO(e.Theirs),
 		TheirsAnswered: e.TheirsAnswered,
 	}
+	if e.Previous != nil {
+		dto.Previous = &previousDTO{
+			AskedOn: e.Previous.AskedOn.Format(time.DateOnly),
+			Mine:    toAnswerDTO(e.Previous.Mine),
+			Theirs:  toAnswerDTO(e.Previous.Theirs),
+		}
+	}
+	return dto
 }
 
 func (h *Handler) today(w http.ResponseWriter, r *http.Request) {

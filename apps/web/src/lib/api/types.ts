@@ -130,6 +130,14 @@ export interface QuestionEntry {
   mine: QuestionAnswer | null;
   theirs: QuestionAnswer | null;
   theirs_answered: boolean;
+  /** Today only: the last time this same question was asked and you both answered. */
+  previous?: QuestionPrevious;
+}
+
+export interface QuestionPrevious {
+  asked_on: string;
+  mine: QuestionAnswer | null;
+  theirs: QuestionAnswer | null;
 }
 
 export interface QuestionPage {

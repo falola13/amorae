@@ -97,6 +97,11 @@ type entryJSON struct {
 	Mine           *answerJSON `json:"mine"`
 	Theirs         *answerJSON `json:"theirs"`
 	TheirsAnswered bool        `json:"theirs_answered"`
+	Previous       *struct {
+		AskedOn string      `json:"asked_on"`
+		Mine    *answerJSON `json:"mine"`
+		Theirs  *answerJSON `json:"theirs"`
+	} `json:"previous"`
 }
 
 func (a api) do(user uuid.UUID, method, target, body string) (int, string) {
@@ -354,30 +359,161 @@ func asAppErr(err error, target **apperr.Error) bool {
 	return ok
 }
 
-func TestQuestionFor(t *testing.T) {
+func TestPick(t *testing.T) {
 	couple := uuid.MustParse("0192f0c0-0000-7000-8000-0000000000aa")
 	other := uuid.MustParse("0192f0c0-0000-7000-8000-0000000000bb")
-	day := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+	bank := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
+	day := func(n int) time.Time { return time.Date(2026, 3, n, 0, 0, 0, 0, time.UTC) }
 
-	if q := questions.QuestionFor(couple, day); q == "" || q != questions.QuestionFor(couple, day) {
-		t.Fatalf("not deterministic: %q", q)
-	}
-	if questions.QuestionFor(couple, day) == questions.QuestionFor(couple, day.AddDate(0, 0, 1)) {
-		t.Error("two days running got the same question")
-	}
-	if questions.QuestionFor(couple, day) == questions.QuestionFor(other, day) {
-		t.Error("two couples with different offsets got the same question")
-	}
-	// Every day for years yields a question, including before the epoch.
-	seen := map[string]bool{}
-	for d := -400; d < 2000; d++ {
-		q := questions.QuestionFor(couple, day.AddDate(0, 0, d))
-		if q == "" {
-			t.Fatalf("no question on day %d", d)
+	t.Run("deterministic, and the same for both partners", func(t *testing.T) {
+		if questions.Pick(bank, couple, nil) != questions.Pick(bank, couple, nil) {
+			t.Fatal("same inputs, different question")
 		}
-		seen[q] = true
+	})
+
+	t.Run("couples walk the bank in their own order", func(t *testing.T) {
+		a, b := map[string]time.Time{}, map[string]time.Time{}
+		var orderA, orderB []string
+		for range bank {
+			qa, qb := questions.Pick(bank, couple, a), questions.Pick(bank, other, b)
+			orderA, orderB = append(orderA, qa), append(orderB, qb)
+			a[qa], b[qb] = day(1), day(1)
+		}
+		if strings.Join(orderA, "") == strings.Join(orderB, "") {
+			t.Errorf("two couples share an order: %v", orderA)
+		}
+	})
+
+	t.Run("unused questions come first, each exactly once", func(t *testing.T) {
+		used := map[string]time.Time{}
+		seen := map[string]bool{}
+		for i := range bank {
+			q := questions.Pick(bank, couple, used)
+			if seen[q] {
+				t.Fatalf("%q came round again after %d of %d", q, i, len(bank))
+			}
+			seen[q] = true
+			used[q] = day(i + 1)
+		}
+	})
+
+	t.Run("a question that was not answered is still unused", func(t *testing.T) {
+		first := questions.Pick(bank, couple, nil)
+		// Nothing was answered, so nothing is recorded, and tomorrow offers it again.
+		if got := questions.Pick(bank, couple, map[string]time.Time{}); got != first {
+			t.Errorf("got %q, want %q again", got, first)
+		}
+	})
+
+	t.Run("once all are used, the longest-ago comes round first", func(t *testing.T) {
+		used := map[string]time.Time{}
+		for i, q := range bank {
+			used[q] = day(i + 1)
+		}
+		// Make "e" the oldest.
+		used["e"] = day(1).AddDate(-1, 0, 0)
+		if got := questions.Pick(bank, couple, used); got != "e" {
+			t.Errorf("got %q, want e", got)
+		}
+	})
+
+	t.Run("questions dropped from the bank are ignored", func(t *testing.T) {
+		used := map[string]time.Time{"gone": day(1)}
+		if got := questions.Pick(bank, couple, used); got == "" || got == "gone" {
+			t.Errorf("got %q", got)
+		}
+	})
+
+	t.Run("an empty bank asks nothing", func(t *testing.T) {
+		if got := questions.Pick(nil, couple, nil); got != "" {
+			t.Errorf("got %q", got)
+		}
+	})
+}
+
+func TestDailyQuestion_SkippedDayDoesNotUseUpAQuestion(t *testing.T) {
+	db := dbtest.New(t)
+	coupleID, ada, bo := pair(t, db)
+	clock := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+	svc := questions.NewService(questions.NewPostgresRepository(db),
+		couplesOf{ada: coupleID, bo: coupleID}, func() time.Time { return clock }, nil)
+	svc.SetBank([]string{"one?", "two?", "three?", "four?", "five?"})
+	app := newAPI(t, svc)
+
+	first, _ := app.today(ada)
+	// Nobody answers; the day passes and the same question is offered again.
+	clock = clock.Add(24 * time.Hour)
+	again, _ := app.today(ada)
+	if again.Question != first.Question {
+		t.Fatalf("an unanswered day used up %q; today is %q", first.Question, again.Question)
 	}
-	if len(seen) < 120 {
-		t.Errorf("only %d distinct questions in the rotation, want at least 120", len(seen))
+	clock = clock.Add(24 * time.Hour)
+	if third, _ := app.today(bo); third.Question != first.Question {
+		t.Fatalf("two skipped days used up %q; today is %q", first.Question, third.Question)
 	}
+
+	t.Run("both partners see the same one, even after one answers", func(t *testing.T) {
+		app.answer(bo, "Mine.")
+		a, _ := app.today(ada)
+		b, _ := app.today(bo)
+		if a.Question != b.Question || a.Question != first.Question {
+			t.Errorf("Ada %q, Bo %q, want %q", a.Question, b.Question, first.Question)
+		}
+	})
+
+	t.Run("an answer from one of you uses it up", func(t *testing.T) {
+		clock = clock.Add(24 * time.Hour)
+		next, _ := app.today(ada)
+		if next.Question == first.Question || next.Previous != nil {
+			t.Errorf("next = %+v, want a fresh question with no previous", next)
+		}
+	})
+}
+
+func TestDailyQuestion_Previous(t *testing.T) {
+	db := dbtest.New(t)
+	coupleID, ada, bo := pair(t, db)
+	clock := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+	svc := questions.NewService(questions.NewPostgresRepository(db),
+		couplesOf{ada: coupleID, bo: coupleID}, func() time.Time { return clock }, nil)
+	svc.SetBank([]string{"one?", "two?"})
+	app := newAPI(t, svc)
+	nextDay := func() { clock = clock.Add(24 * time.Hour) }
+
+	// Day 1 and 2: both answer both questions in the bank.
+	q1, _ := app.today(ada)
+	app.answer(ada, "Ada first time")
+	app.answer(bo, "Bo first time")
+	nextDay()
+	q2, _ := app.today(ada)
+	if q2.Question == q1.Question {
+		t.Fatalf("day 2 repeated %q", q1.Question)
+	}
+	app.answer(ada, "Ada second")
+	nextDay()
+
+	t.Run("a repeat shows the last time, once you have answered", func(t *testing.T) {
+		// Day 3: the bank is used up; the one asked longest ago is q1.
+		e, _ := app.today(bo)
+		if e.Question != q1.Question {
+			t.Fatalf("day 3 = %q, want %q (longest ago)", e.Question, q1.Question)
+		}
+		if e.Previous == nil || e.Previous.AskedOn != "2026-05-01" ||
+			e.Previous.Mine == nil || e.Previous.Mine.Text != "Bo first time" ||
+			e.Previous.Theirs == nil || e.Previous.Theirs.Text != "Ada first time" {
+			t.Fatalf("previous = %+v", e.Previous)
+		}
+	})
+
+	t.Run("a repeat that only one of you answered last time has no previous", func(t *testing.T) {
+		app.answer(bo, "Bo third")
+		nextDay()
+		e, raw := app.today(ada)
+		if e.Question != q2.Question {
+			t.Fatalf("day 4 = %q, want %q", e.Question, q2.Question)
+		}
+		if e.Previous != nil || strings.Contains(raw, "Ada second") {
+			t.Fatalf("previous = %+v in %s", e.Previous, raw)
+		}
+	})
 }

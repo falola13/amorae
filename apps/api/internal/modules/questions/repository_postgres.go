@@ -84,6 +84,34 @@ func (r *PostgresRepository) Keep(ctx context.Context, a Answer, at time.Time) (
 	return a, nil
 }
 
+// LastAsked is every question the couple has answered before `before`, each
+// with the latest day it was answered on, in one query.
+func (r *PostgresRepository) LastAsked(ctx context.Context, coupleID uuid.UUID, before time.Time) (map[string]time.Time, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT question, max(asked_on)
+		FROM daily_answers
+		WHERE couple_id = $1 AND asked_on < $2
+		GROUP BY question
+	`, coupleID, before)
+	if err != nil {
+		return nil, fmt.Errorf("reading the questions already used: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]time.Time{}
+	for rows.Next() {
+		var q string
+		var at time.Time
+		if err := rows.Scan(&q, &at); err != nil {
+			return nil, fmt.Errorf("scanning a used question: %w", err)
+		}
+		out[q] = at
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading the questions already used: %w", err)
+	}
+	return out, nil
+}
+
 // Before is every answer on the newest `days` days that have one, earlier
 // than `before`. Whether any of it may be read is the service's call.
 func (r *PostgresRepository) Before(ctx context.Context, coupleID uuid.UUID, before time.Time, days int) ([]Answer, error) {

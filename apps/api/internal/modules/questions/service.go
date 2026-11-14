@@ -15,6 +15,9 @@ type Repository interface {
 	// Before is every answer on the most recent `days` days that have one,
 	// strictly earlier than `before`, newest day first.
 	Before(ctx context.Context, coupleID uuid.UUID, before time.Time, days int) ([]Answer, error)
+	// LastAsked maps each question this couple has answered, on a day strictly
+	// before `before`, to the latest such day.
+	LastAsked(ctx context.Context, coupleID uuid.UUID, before time.Time) (map[string]time.Time, error)
 }
 
 type Couples interface {
@@ -35,10 +38,11 @@ type Service struct {
 	couples Couples
 	now     func() time.Time
 	poker   Poker
+	bank    []string
 }
 
 func NewService(repo Repository, couples Couples, now func() time.Time, poker Poker) *Service {
-	return &Service{repo: repo, couples: couples, now: now, poker: poker}
+	return &Service{repo: repo, couples: couples, now: now, poker: poker, bank: bank}
 }
 
 func (s *Service) today(ctx context.Context, userID uuid.UUID) (coupleID uuid.UUID, day time.Time, err error) {
@@ -63,7 +67,38 @@ func (s *Service) Today(ctx context.Context, userID uuid.UUID) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	return assemble(userID, day, QuestionFor(coupleID, day), answers), nil
+	question, lastAsked, err := s.questionFor(ctx, coupleID, day, answers)
+	if err != nil {
+		return Entry{}, err
+	}
+	e := assemble(userID, day, question, answers)
+	if prev, ok := lastAsked[question]; ok {
+		earlier, err := s.repo.AnswersOn(ctx, coupleID, prev)
+		if err != nil {
+			return Entry{}, err
+		}
+		p := assemble(userID, prev, question, earlier)
+		// Only a time you both answered is worth looking back on.
+		if p.Mine != nil && p.Theirs != nil {
+			e.Previous = &p
+		}
+	}
+	return e, nil
+}
+
+// questionFor is the couple's question for the day. Once either has answered,
+// it is the one stored with that answer, so both stay on it all day; before
+// that it is the first unused question in the couple's order. lastAsked is
+// what was used before today.
+func (s *Service) questionFor(ctx context.Context, coupleID uuid.UUID, day time.Time, answers []Answer) (string, map[string]time.Time, error) {
+	lastAsked, err := s.repo.LastAsked(ctx, coupleID, day)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(answers) > 0 {
+		return answers[0].Question, lastAsked, nil
+	}
+	return Pick(s.bank, coupleID, lastAsked), lastAsked, nil
 }
 
 // Answer keeps the caller's answer to today's question, or rewrites it. Only
@@ -77,11 +112,19 @@ func (s *Service) Answer(ctx context.Context, userID uuid.UUID, text string) (En
 	if err != nil {
 		return Entry{}, err
 	}
+	answers, err := s.repo.AnswersOn(ctx, coupleID, day)
+	if err != nil {
+		return Entry{}, err
+	}
+	question, _, err := s.questionFor(ctx, coupleID, day, answers)
+	if err != nil {
+		return Entry{}, err
+	}
 	if _, err := s.repo.Keep(ctx, Answer{
 		CoupleID: coupleID,
 		AuthorID: userID,
 		AskedOn:  day,
-		Question: QuestionFor(coupleID, day),
+		Question: question,
 		Text:     clean,
 	}, s.now()); err != nil {
 		return Entry{}, err
@@ -138,7 +181,7 @@ func (s *Service) Past(ctx context.Context, userID uuid.UUID, before *time.Time,
 			page.Next = &next
 			break
 		}
-		page.Entries = append(page.Entries, assemble(userID, day, QuestionFor(coupleID, day), byDay[day]))
+		page.Entries = append(page.Entries, assemble(userID, day, "", byDay[day]))
 	}
 	return page, nil
 }

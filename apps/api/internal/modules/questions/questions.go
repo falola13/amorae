@@ -37,6 +37,9 @@ type Entry struct {
 	// answered without saying what.
 	Theirs         *Answer
 	TheirsAnswered bool
+	// Previous is the last time this same question was asked and both of you
+	// answered it, for Today only. It is sealed by the same rule as any day.
+	Previous *Entry
 }
 
 // ValidateAnswer trims and bounds an answer.

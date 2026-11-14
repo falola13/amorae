@@ -1,32 +1,70 @@
 package questions
 
 import (
-	"encoding/binary"
+	"bytes"
+	"crypto/sha256"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// epoch is day zero of the rotation. Fixed, so the question for a given day
-// never depends on when the server started or what was asked before.
-var epoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-
-// QuestionFor is the question a couple is asked on a calendar day. Both
-// partners get the same one; different couples are offset from each other so
-// they are not all asked the same thing on the same morning.
-func QuestionFor(coupleID uuid.UUID, day time.Time) string {
-	days := int(day.Sub(epoch).Hours() / 24)
-	offset := int(binary.BigEndian.Uint32(coupleID[12:16]) % uint32(len(bank)))
-	i := (days + offset) % len(bank)
-	if i < 0 {
-		i += len(bank)
+// Pick is the question a couple is asked today. A question counts as used
+// only once one of them has answered it, so a skipped day does not burn one.
+// The bank is walked in an order that is the couple's own (a stable shuffle
+// seeded from their id, so two couples are not asked the same thing on the
+// same morning) and the first unused question wins. When every question has
+// been used, the one whose latest use is oldest comes round again.
+//
+// lastAsked is each used question's most recent day, as stored with the
+// answers. Questions that are no longer in the bank are ignored.
+func Pick(bank []string, coupleID uuid.UUID, lastAsked map[string]time.Time) string {
+	if len(bank) == 0 {
+		return ""
 	}
-	return bank[i]
+	order := coupleOrder(bank, coupleID)
+	var oldest string
+	var oldestAt time.Time
+	for n, q := range order {
+		at, used := lastAsked[q]
+		if !used {
+			return q
+		}
+		if n == 0 || at.Before(oldestAt) {
+			oldest, oldestAt = q, at
+		}
+	}
+	return oldest
 }
 
-// bank is the fixed list the days are drawn from. Reordering it changes what
-// is asked on future days, never what was already answered (the question is
-// stored with the answer).
+// coupleOrder is the bank in this couple's own order. It sorts by a hash of
+// the couple and the question text, so adding to the bank never reshuffles
+// what comes next for questions already in it.
+func coupleOrder(bank []string, coupleID uuid.UUID) []string {
+	type keyed struct {
+		q   string
+		key [sha256.Size]byte
+	}
+	ks := make([]keyed, len(bank))
+	for i, q := range bank {
+		ks[i] = keyed{q: q, key: sha256.Sum256(append(coupleID[:len(coupleID):len(coupleID)], q...))}
+	}
+	sort.Slice(ks, func(a, b int) bool {
+		if c := bytes.Compare(ks[a].key[:], ks[b].key[:]); c != 0 {
+			return c < 0
+		}
+		return ks[a].q < ks[b].q
+	})
+	out := make([]string, len(ks))
+	for i, k := range ks {
+		out[i] = k.q
+	}
+	return out
+}
+
+// bank is the list the questions are drawn from. Its order does not matter
+// (each couple walks it in their own order), and the question is stored with
+// the answer, so editing it never changes what was already answered.
 var bank = []string{
 	// Light
 	"What is a small thing that made you smile this week?",
