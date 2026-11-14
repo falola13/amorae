@@ -1,5 +1,9 @@
 # Build guide: "Pray for me today" and the daily question
 
+> **Start with [pray-for-me-today.md](pray-for-me-today.md).** It's the full step-by-step for
+> Feature 1: real code for each file, the commands to run, and how to check each step. This page
+> is the overview; Feature 2 will get the same detailed treatment when you reach it.
+
 A working guide for building two features by hand. Every step names the existing code to copy,
 so the new code reads like the rest of Amorae. Paths are from the repo root.
 
