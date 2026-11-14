@@ -77,8 +77,10 @@ export default function Together() {
     <Main>
       <div className="flex items-start justify-between pt-1.5">
         <div>
-          <Title>Our space</Title>
-          <Para className="mt-1.5">Everything we&rsquo;re building together.</Para>
+          <Title size="display">Our space</Title>
+          <Para size="support" className="mt-2">
+            Everything we&rsquo;re building together.
+          </Para>
         </div>
         <Link
           href={routes.eventNew()}
@@ -89,9 +91,8 @@ export default function Together() {
         </Link>
       </div>
       <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-x-8">
-        <Section label="Dates & plans" className="mt-[22px]">
+        <Section label="Dates & plans" className="mt-8">
           <Row
-            icon="calendar"
             title="Calendar"
             sub={summary(
               events,
@@ -102,13 +103,11 @@ export default function Together() {
             href={routes.calendar}
           />
           <Row
-            icon="pin"
             title="Events"
             sub={summary(events, eventsLine || "Add something you’d love to do")}
             href={routes.events}
           />
           <Row
-            icon="bookmark"
             title="Important dates"
             sub={summary(
               milestones,
@@ -120,32 +119,36 @@ export default function Together() {
             last
           />
         </Section>
-        <Section label="Our story" className="mt-[22px]">
-          <Row
-            icon="image"
-            title="Our story"
-            sub={summary(
+        {/* Our story is read, not used, so it opens like a chapter: an ink rule,
+            the title in the serif and the latest entry, rather than one more row. */}
+        <Link
+          href={routes.story}
+          className="press mt-8 block border-b border-t-[1.5px] border-b-line border-t-ink pb-[22px] pt-5 text-ink no-underline"
+        >
+          <h2 className="m-0 font-text text-title">Our story</h2>
+          <p className="m-0 mt-2 font-text text-[17px] italic text-stone">
+            {summary(
               story,
               latestStory
                 ? `Latest: ${latestStory.title}`
                 : "Memories, journal and goals, all in one place",
             )}
-            href={routes.story}
-            last
-          />
-        </Section>
-        <Section label="Grow" className="mt-[22px]">
+          </p>
+          <span className="-mb-3 inline-flex h-11 items-center gap-1 text-[15px] font-semibold text-plum">
+            Read our story
+            <Icon name="right" size={18} />
+          </span>
+        </Link>
+        <Section label="Grow" className="mt-8">
           <Row
-            icon="flag"
             title="Challenges"
             sub={summary(challenge, challengeLine)}
             href={routes.challenges}
             last
           />
         </Section>
-        <Section label="Connect" className="mb-4 mt-[22px]">
+        <Section label="Connect" className="mb-6 mt-8">
           <Row
-            icon="note"
             title="Appreciation"
             sub={summary(
               appr,
@@ -156,7 +159,6 @@ export default function Together() {
             href={routes.appreciation}
           />
           <Row
-            icon="check"
             title="Answered prayers"
             sub={summary(
               answered,

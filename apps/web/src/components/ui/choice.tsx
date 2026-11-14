@@ -51,10 +51,7 @@ export function Tabs<T extends string>({
           >
             {o.label}
             {on ? (
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-2.5 -bottom-px h-0.5 bg-plum"
-              />
+              <span aria-hidden="true" className="absolute inset-x-2.5 -bottom-px h-0.5 bg-plum" />
             ) : null}
           </button>
         );

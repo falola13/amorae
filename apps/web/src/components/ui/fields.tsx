@@ -120,7 +120,10 @@ export const BareInput = forwardRef<
   const fid = id ?? rest.name ?? label.toLowerCase().replace(/\W+/g, "-");
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={fid} className={hideLabel ? "sr-only" : "text-support font-semibold text-stone"}>
+      <label
+        htmlFor={fid}
+        className={hideLabel ? "sr-only" : "text-support font-semibold text-stone"}
+      >
         {label}
       </label>
       <input
@@ -159,7 +162,10 @@ export const BareTextarea = forwardRef<
   const fid = id ?? rest.name ?? label.toLowerCase().replace(/\W+/g, "-");
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={fid} className={hideLabel ? "sr-only" : "text-support font-semibold text-stone"}>
+      <label
+        htmlFor={fid}
+        className={hideLabel ? "sr-only" : "text-support font-semibold text-stone"}
+      >
         {label}
       </label>
       <textarea

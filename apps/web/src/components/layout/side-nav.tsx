@@ -25,7 +25,10 @@ export function SideNav() {
     <nav
       aria-label="Primary"
       className="grain sticky top-0 hidden h-[100dvh] shrink-0 flex-col gap-1 border-r border-line bg-bg md:flex md:w-[88px] lg:w-[236px] lg:gap-0"
-      style={{ paddingTop: "calc(var(--safe-top) + 20px)", paddingBottom: "calc(var(--safe-bottom) + 24px)" }}
+      style={{
+        paddingTop: "calc(var(--safe-top) + 20px)",
+        paddingBottom: "calc(var(--safe-bottom) + 24px)",
+      }}
     >
       <Link
         href={routes.home}

@@ -29,9 +29,7 @@ export function Ornament({ caption, className }: { caption?: string; className?:
         <EndMark />
         <span className="h-px grow bg-line" />
       </div>
-      {caption ? (
-        <p className="m-0 text-center text-support text-stone">{caption}</p>
-      ) : null}
+      {caption ? <p className="m-0 text-center text-support text-stone">{caption}</p> : null}
     </div>
   );
 }

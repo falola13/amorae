@@ -37,9 +37,7 @@ export function DateRow({
         >
           {dayNum(date)}
         </span>
-        <span className="mt-1 text-micro uppercase text-stone">
-          {shortMonth(date)}
-        </span>
+        <span className="mt-1 text-micro uppercase text-stone">{shortMonth(date)}</span>
       </span>
       <span className="flex grow flex-col gap-px">
         <span className="font-text text-bodylg text-ink">{title}</span>
