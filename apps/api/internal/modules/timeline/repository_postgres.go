@@ -232,7 +232,9 @@ WITH items AS (
 -- Stable ordering: "at" alone can tie (an event with no start time, two
 -- rows sharing an instant), so type and id break the tie the same way on
 -- every page — what makes offset-free cursor paging safe.
-SELECT type, id, at, date, title, sub, path, COALESCE(photo_id, ''), actor_id, version
+-- A source may have no line to show under its title (a memory with neither a
+-- place nor a note): an empty string, not NULL, which a Go string can't hold.
+SELECT type, id, at, date, COALESCE(title, ''), COALESCE(sub, ''), path, COALESCE(photo_id, ''), actor_id, version
 FROM items
 WHERE type = ANY($2)
   AND ($3::timestamptz IS NULL OR at < $3::timestamptz)

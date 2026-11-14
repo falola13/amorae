@@ -553,3 +553,32 @@ func TestTimeline_Questions(t *testing.T) {
 		}
 	}
 }
+
+// A memory kept with neither a place nor a note has nothing to show under its
+// title. That used to come back as NULL and fail the whole feed, so "All" and
+// "Moments" wouldn't load at all while "Prayer" (no memories) still did.
+func TestTimeline_MemoryWithNothingUnderItsTitle(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := timeline.NewPostgresRepository(db)
+	coupleID, _, _ := pair(t, db)
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	if _, err := db.Q(ctx).Exec(ctx, `
+		INSERT INTO memories (id, couple_id, title, date, created_at, updated_at)
+		VALUES ($1, $2, 'Just a good day', $3, $4, $4)
+	`, uuid.New(), coupleID, today, now); err != nil {
+		t.Fatalf("seeding a bare memory: %v", err)
+	}
+
+	for _, f := range []timeline.Filter{timeline.FilterAll, timeline.FilterMoments} {
+		got, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(f), nil, 20)
+		if err != nil {
+			t.Fatalf("Timeline(%v): %v", f, err)
+		}
+		if len(got) != 1 || got[0].Title != "Just a good day" || got[0].Sub != "" {
+			t.Errorf("Timeline(%v) = %+v, want the one memory with an empty sub", f, got)
+		}
+	}
+}
