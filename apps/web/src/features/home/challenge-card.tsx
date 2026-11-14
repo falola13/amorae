@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Micro } from "@/components/ui/kit";
+import { Button } from "@/components/ui/kit";
 import { ChallengeNoteSheet } from "@/features/together/components/challenge-note-sheet";
 import { homeChallengeRows } from "@/features/together/challenges";
 import { useActiveChallenges, useChallengeDay } from "@/features/together/hooks";
@@ -30,11 +30,10 @@ export function HomeChallengeCard({ partner }: { partner: string }) {
   return (
     <>
       {rows.length > 0 ? (
-        <section
-          aria-label="Today’s challenges"
-          className="mt-5 flex flex-col gap-1 rounded-card border border-line bg-surface px-5 py-[18px]"
-        >
-          <Micro tone="plum">Today’s challenges</Micro>
+        // A section of the page with ruled items, not a second card: Home keeps
+        // at most one raised leaf.
+        <section aria-label="Today’s challenges" className="mt-8 flex flex-col gap-1">
+          <h2 className="m-0 font-text text-section italic text-ink">Today’s challenges</h2>
           <ul className="m-0 flex list-none flex-col p-0">
             {rows.map(({ c, day }) => (
               <li
@@ -43,7 +42,7 @@ export function HomeChallengeCard({ partner }: { partner: string }) {
               >
                 <Link
                   href={routes.challenge(c.id)}
-                  className="press text-[17px] font-semibold leading-snug tracking-[-0.01em] text-ink no-underline"
+                  className="press font-text text-bodylg text-ink no-underline"
                 >
                   {c.title} · Day {day.n}: {day.text}
                 </Link>

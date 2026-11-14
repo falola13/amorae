@@ -128,8 +128,9 @@ export function HomeScreen() {
       <div className="flex items-start justify-between pt-1.5">
         <div>
           <Micro>{weekdayDate(todayIso)}</Micro>
-          <h1 className="m-0 mt-2 text-[30px] font-semibold leading-[1.18] tracking-[-0.022em]">
-            <span className="font-medium text-stone">{greeting(now)},</span>
+          {/* The masthead: a tab root has no back button, so the display title leads. */}
+          <h1 className="m-0 mt-3 font-text text-display">
+            <span className="font-light italic text-stone">{greeting(now)},</span>
             <br />
             {alone ? me.display_name : `${me.display_name} & ${partner}`}
           </h1>
@@ -172,11 +173,10 @@ export function HomeScreen() {
       {weekPrompt}
 
       {alone ? (
-        <div className="mt-6 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
-          <Micro tone="plum">Just you, so far</Micro>
-          <h2 className="m-0 mt-2 text-[21px] font-semibold tracking-[-0.015em]">
-            Amorae is for two.
-          </h2>
+        // The one raised leaf: the thing someone is waiting on.
+        <div className="mt-8 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
+          <Micro>Just you, so far</Micro>
+          <h2 className="m-0 mt-2 font-text text-section">Amorae is for two.</h2>
           <Para className="mt-1.5">
             The week&rsquo;s prayers, the plans, the things you keep &mdash; none of it starts until{" "}
             {partner} is here too.
@@ -190,18 +190,17 @@ export function HomeScreen() {
       {alone ? null : <HomeChallengeCard partner={partner} />}
 
       {/* Side by side from `lg`; a single column would leave the right half empty. */}
-      <div className="flex flex-col lg:mt-6 lg:flex-row lg:items-start lg:gap-8">
+      <div className="flex flex-col lg:mt-8 lg:flex-row lg:items-start lg:gap-8">
         {todays ? (
+          // Ruled above and below rather than boxed: there is only one leaf a screen.
           <Link
             href={routes.event(todays.id)}
-            className="press mt-5 flex items-center gap-4 rounded-card border border-line bg-surface py-[18px] pl-5 pr-4 text-ink no-underline lg:mt-0 lg:flex-1"
+            className="press mt-8 flex items-center gap-4 border-y border-line py-4 text-ink no-underline lg:mt-0 lg:flex-1"
           >
             <span className="flex grow flex-col gap-0.5">
-              <Micro tone="plum">{partOfDay(todays.start_time)}</Micro>
-              <span className="mt-1 text-[21px] font-semibold tracking-[-0.015em]">
-                {todays.title}
-              </span>
-              <span className="text-[15px] text-stone">
+              <Micro>{partOfDay(todays.start_time)}</Micro>
+              <span className="mt-1 font-text text-section not-italic">{todays.title}</span>
+              <span className="text-support text-stone">
                 {eventPhase(todays, now) === "ongoing"
                   ? nowLabel(todays)
                   : time12(todays.start_time)}
@@ -219,10 +218,10 @@ export function HomeScreen() {
         {alone && !eventsBroke && !goalsBroke && !nextEvent && !goal ? null : (
           <Section
             label="This week"
-            className="mt-6 lg:mt-0 lg:flex-1"
+            className="mt-8 lg:mt-0 lg:flex-1"
             trailing={
               planned !== null ? (
-                <span className="text-[13px] text-stone">
+                <span className="lining text-support text-stone">
                   {planned} {planned === 1 ? "thing" : "things"} planned
                 </span>
               ) : undefined
@@ -233,10 +232,10 @@ export function HomeScreen() {
               <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
                 {(wk) => {
                   // Not shared yet: the prompt above says what to do; this row just says so.
+                  // Content rows lose their leading icon: the words name the thing.
                   if (wk.status !== "published") {
                     return (
                       <Row
-                        icon="book"
                         title="Weekly prayer"
                         sub={wk.status === "draft" ? "Not shared yet" : `${partner} is setting it`}
                         href={wk.status === "draft" ? routes.prayersSet : routes.prayers}
@@ -247,7 +246,6 @@ export function HomeScreen() {
                   const done = wk.my_completed.length;
                   return (
                     <Row
-                      icon="book"
                       title="Weekly prayer"
                       sub={
                         total === 0
@@ -278,8 +276,7 @@ export function HomeScreen() {
               />
             ) : nextEvent ? (
               <Row
-                icon="calendar"
-                title={nextEvent.title}
+                title={<span className="font-text text-bodylg font-normal">{nextEvent.title}</span>}
                 sub={`${relativeDay(nextEvent.date, todayIso)}${nextEvent.start_time ? `, ${time12(nextEvent.start_time)}` : ""}`}
                 href={routes.event(nextEvent.id)}
               />
@@ -293,8 +290,7 @@ export function HomeScreen() {
               />
             ) : goal ? (
               <Row
-                icon="target"
-                title={goal.goal.title}
+                title={<span className="font-text text-bodylg font-normal">{goal.goal.title}</span>}
                 sub={
                   goal.goal.unit === "naira"
                     ? `${naira(goal.total)} so far`
@@ -320,14 +316,10 @@ export function HomeScreen() {
   );
 }
 
-/** The icon for a milestone: cake for a birthday, heart for an anniversary,
- *  gift for anything else worth marking. */
-const celebrationIcon = (m: Milestone) =>
-  m.source === "birthday" ? "cake" : m.source === "anniversary" ? "heart" : "gift";
-
-/** What's today, and what's coming in the week ahead — a calm card per date
- *  happening today (stacked if there's more than one), then a slim row for
- *  each one still a few days off. Nothing renders when there's nothing to say. */
+/** What's today, and what's coming in the week ahead — a ruled block per date
+ *  happening today (stacked if there's more than one), a countdown to the
+ *  nearest one still to come, then a slim row for each after it. Nothing
+ *  renders when there's nothing to say. */
 function Celebrations({
   milestones,
   meId,
@@ -347,6 +339,7 @@ function Celebrations({
     (m) => !(anniversary && m.source === "anniversary" && aheadShown(anniversary)),
   );
   if (todays.length === 0 && soon.length === 0) return null;
+  const [next, ...later] = soon;
   return (
     <div className="mt-6 flex flex-col gap-3">
       {todays.map((m) => {
@@ -378,23 +371,39 @@ function Celebrations({
             </Link>
           );
         }
+        // Today's date, set between rules in the serif rather than on a
+        // gradient card: an everyday screen keeps everyday stock.
         return (
-          <div key={m.id} className="flex flex-col items-start rounded-card bg-celebrate px-5 py-5">
-            <Icon name={celebrationIcon(m)} size={26} strokeWidth={1.4} className="text-plum" />
-            <h2 className="m-0 mt-3 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-plum-dark">
-              {title}
-            </h2>
+          <div key={m.id} className="flex flex-col items-start border-y border-line py-5">
+            <h2 className="m-0 font-text text-title text-ink">{title}</h2>
             {sub ? <Para className="mt-1">{sub}</Para> : null}
           </div>
         );
       })}
-      {soon.map((m) => (
+      {next ? (
+        // The nearest date as a countdown: the figure is the point, so it is
+        // the largest thing here, in ink (plum would be decoration).
+        <Link
+          href={routes.milestones}
+          className="press grid grid-cols-[auto_1fr] items-center gap-x-4 border-y border-line py-4 text-ink no-underline"
+        >
+          <span className="lining font-text text-[64px] font-light leading-[0.9] tracking-[-0.03em]">
+            {next.days}
+          </span>
+          <span className="flex flex-col">
+            <strong className="text-[16px] font-semibold leading-[1.35]">
+              {next.days === 1 ? "day" : "days"} to {next.title}
+            </strong>
+            {next.sub ? <span className="text-support text-stone">{next.sub}</span> : null}
+          </span>
+        </Link>
+      ) : null}
+      {later.map((m) => (
         <Link
           key={m.id}
           href={routes.milestones}
-          className="press -my-1 flex items-center gap-2.5 py-1 text-ink no-underline"
+          className="press -my-1 flex min-h-11 items-center py-1 text-ink no-underline"
         >
-          <Icon name={celebrationIcon(m)} size={18} className="text-stone" />
           <span className="text-support text-stone">
             {m.title} · {daysAwayLabel(m.days)}
           </span>
@@ -491,7 +500,7 @@ function PrayerFooter({
   const partnerToday = w.partner_completed.length > 0;
   return (
     <>
-      <div className="mt-[18px]">
+      <div className="mt-4">
         <LinkButton href={routes.prayerMode()}>
           {total === 0 || done >= total
             ? "Open prayer mode"
@@ -500,8 +509,8 @@ function PrayerFooter({
               : "Continue praying"}
         </LinkButton>
       </div>
-      <div className="mt-3.5 flex items-center gap-2 pb-4 text-support text-stone">
-        <Initial letter={partner[0]} photoUrl={partnerPhoto} name={partner} size={18} />
+      <div className="mt-3 flex items-center gap-2 pb-4 text-support text-stone">
+        <Initial letter={partner[0]} photoUrl={partnerPhoto} name={partner} size={22} />
         {total === 0
           ? "Nothing set for today"
           : partnerToday
@@ -531,9 +540,10 @@ function WeekPrompt({
   const mine = w.setter_id === meId;
   const waiting = w.status === "waiting";
   return (
-    <div className="mt-5 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
-      <Micro tone="plum">{range(w.week_start, w.week_end)}</Micro>
-      <h2 className="m-0 mt-2 text-[21px] font-semibold leading-tight tracking-[-0.015em]">
+    // The screen's one raised leaf while it shows: the week is waiting on someone.
+    <div className="mt-8 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
+      <Micro className="lining">{range(w.week_start, w.week_end)}</Micro>
+      <h2 className="m-0 mt-2 font-text text-section">
         {waiting
           ? `${first} is setting this week’s prayers`
           : mine
