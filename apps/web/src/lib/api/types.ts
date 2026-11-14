@@ -458,7 +458,15 @@ export interface SessionInfo {
   expires_at: string;
 }
 
-export type TimelineFilter = "all" | "prayer" | "moments" | "plans";
+export type TimelineFilter =
+  "all" | "prayer" | "memories" | "journal" | "notes" | "questions" | "plans";
+
+/** One month that has entries (GET /v1/timeline/months), newest first. */
+export interface TimelineMonth {
+  /** YYYY-MM, in the couple's own timezone. */
+  month: string;
+  count: number;
+}
 
 export type TimelineItemType =
   | "prayer_week"

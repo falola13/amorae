@@ -35,5 +35,8 @@ export const keys = {
   inbox: ["notifications", "inbox"] as const,
   /** Prefix of every timeline filter, for invalidating them all. */
   timelineAll: ["timeline"] as const,
-  timeline: (filter: string) => ["timeline", filter] as const,
+  timeline: (filter: string, month?: string) =>
+    month ? (["timeline", filter, month] as const) : (["timeline", filter] as const),
+  /** Under the timelineAll prefix, so the existing invalidations cover it. */
+  timelineMonths: (filter: string) => ["timeline", "months", filter] as const,
 };

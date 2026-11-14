@@ -5,7 +5,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { goalSub, sumOf } from "@/features/together/goals";
-import { useGoals } from "@/features/together/hooks";
+import { useGoals, useJournal } from "@/features/together/hooks";
 import { JournalComposer } from "@/features/together/components/journal-composer";
 import { MemoryComposer } from "@/features/together/components/memory-composer";
 
@@ -28,8 +28,8 @@ import {
 import { QueryState, inPage } from "@/components/ui/query-state";
 import { useCouple, useMe } from "@/features/couple/hooks";
 import { groupByMonth } from "@/features/timeline/derive";
-import { useTimeline } from "@/features/timeline/hooks";
-import { dayName, dayNum, iso, monthName } from "@/lib/dates";
+import { useTimeline, useTimelineMonths } from "@/features/timeline/hooks";
+import { dayName, dayNum, iso, longDate, monthLabel, monthName } from "@/lib/dates";
 import { today } from "@/lib/today";
 import { ordinal, yearsWord } from "@/features/anniversary/derive";
 import { routes } from "@/lib/routes";
@@ -38,7 +38,10 @@ import type { TimelineFilter, TimelineItem } from "@/lib/api/types";
 const FILTERS: { value: TimelineFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "prayer", label: "Prayer" },
-  { value: "moments", label: "Moments" },
+  { value: "memories", label: "Memories" },
+  { value: "journal", label: "Journal" },
+  { value: "notes", label: "Notes" },
+  { value: "questions", label: "Questions" },
   { value: "plans", label: "Plans" },
 ];
 
@@ -72,6 +75,7 @@ function withAnniversaries(
   items: TimelineItem[],
   startedOn: string | undefined,
   complete: boolean,
+  until?: string,
 ): TimelineItem[] {
   if (!startedOn || items.length === 0) return items;
   const [y, m, d] = startedOn.split("-").map(Number);
@@ -81,6 +85,8 @@ function withAnniversaries(
   for (let year = y + 1; ; year++) {
     const day = `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     if (day > todayIso) break;
+    // Jumped to a month: nothing newer than its last day belongs above it.
+    if (until && day > until) break;
     if (!complete && day < oldest) continue;
     const n = year - y;
     marks.push({
@@ -102,6 +108,43 @@ function withAnniversaries(
   });
 }
 
+/** A journal entry read in full, since the feed carries only its opening. */
+function JournalEntrySheet({
+  item,
+  name,
+  onClose,
+}: {
+  item: TimelineItem;
+  name?: string;
+  onClose: () => void;
+}) {
+  const journal = useJournal();
+  const entry = journal.data?.find((j) => j.id === item.id);
+  const date = entry?.date ?? item.date;
+  return (
+    <Sheet open onClose={onClose} title="From the journal" labelledBy={`journal-${item.id}-h`}>
+      <div className="flex items-baseline justify-between gap-3 text-support text-stone">
+        <span>
+          {name ? <span className="font-semibold text-ink">{name}</span> : null}
+          {name ? " · " : ""}
+          {longDate(date)} {date.slice(0, 4)}
+        </span>
+        <span className="text-micro uppercase">{entry?.tag ?? item.title}</span>
+      </div>
+      {journal.isPending ? (
+        <Skeleton lines={4} />
+      ) : (
+        <p className="m-0 whitespace-pre-wrap font-text text-bodylg leading-[1.6]" data-selectable>
+          {entry?.text ?? item.sub}
+        </p>
+      )}
+      <LinkButton href={routes.journal} variant="secondary">
+        Open the journal
+      </LinkButton>
+    </Sheet>
+  );
+}
+
 /** An entry hung off its date in the left margin. Rules start at the text
  *  column, not the screen edge, and a photograph takes the whole column. */
 function TimelineRow({
@@ -116,11 +159,10 @@ function TimelineRow({
   // Journal and appreciation are the couple's own words, so they're set as
   // words in the serif; their "title" is only the tag or the kind again.
   const words = item.type === "journal" || item.type === "appreciation";
-  return (
-    <Link
-      href={item.path}
-      className="press grid grid-cols-[44px_1fr] gap-x-1 py-5 text-left text-ink no-underline"
-    >
+  const [reading, setReading] = useState(false);
+  const rowClass = "press grid grid-cols-[44px_1fr] gap-x-1 py-5 text-left text-ink no-underline";
+  const body = (
+    <>
       <span className="lining pt-px font-text text-[22px] leading-none">
         {String(dayNum(item.date)).padStart(2, "0")}
         <span className="mt-1 block font-sans text-micro uppercase text-stone">
@@ -136,6 +178,8 @@ function TimelineRow({
           <img
             src={item.photo_url}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="mb-3 aspect-[4/3] w-full rounded-xs bg-photo object-cover"
           />
         ) : null}
@@ -166,6 +210,24 @@ function TimelineRow({
           )
         ) : null}
       </span>
+    </>
+  );
+  // A journal entry opens in place; everything else goes where it belongs.
+  if (item.type === "journal") {
+    return (
+      <>
+        <button type="button" onClick={() => setReading(true)} className={cx(rowClass, "w-full")}>
+          {body}
+        </button>
+        {reading ? (
+          <JournalEntrySheet item={item} name={name} onClose={() => setReading(false)} />
+        ) : null}
+      </>
+    );
+  }
+  return (
+    <Link href={item.path} className={rowClass}>
+      {body}
     </Link>
   );
 }
@@ -204,6 +266,62 @@ function WorkingOn() {
   );
 }
 
+/** Every month that has something in it for this filter, by year. */
+function JumpSheet({
+  open,
+  filter,
+  current,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  filter: TimelineFilter;
+  current?: string;
+  onClose: () => void;
+  onPick: (month: string) => void;
+}) {
+  const months = useTimelineMonths(filter, open);
+  const years: { year: string; months: { month: string; count: number }[] }[] = [];
+  for (const m of months.data ?? []) {
+    const year = m.month.slice(0, 4);
+    const last = years[years.length - 1];
+    if (last && last.year === year) last.months.push(m);
+    else years.push({ year, months: [m] });
+  }
+  return (
+    <Sheet open={open} onClose={onClose} title="Jump to" labelledBy="story-jump-h">
+      {months.isPending ? (
+        <Skeleton lines={4} />
+      ) : years.length === 0 ? (
+        <Para size="support">Nothing here yet.</Para>
+      ) : (
+        <div className="flex flex-col">
+          {years.map((y) => (
+            <section key={y.year} aria-label={y.year}>
+              <h3 className="m-0 mt-2 font-text text-title">{y.year}</h3>
+              {y.months.map((m) => (
+                <button
+                  key={m.month}
+                  type="button"
+                  onClick={() => onPick(m.month)}
+                  aria-current={m.month === current ? "true" : undefined}
+                  className={cx(
+                    "press flex h-11 w-full items-center justify-between border-b border-line text-left text-body",
+                    m.month === current ? "font-semibold text-plum" : "text-ink",
+                  )}
+                >
+                  <span>{monthName(`${m.month}-01`)}</span>
+                  <span className="lining text-support text-stone">{m.count}</span>
+                </button>
+              ))}
+            </section>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 export default function HistoryPage() {
   return (
     <Suspense fallback={null}>
@@ -218,7 +336,10 @@ function History() {
   const [filter, setFilter] = useState<TimelineFilter>(
     FILTERS.some((f) => f.value === asked) ? (asked as TimelineFilter) : "all",
   );
-  const timeline = useTimeline(filter);
+  // Set by "Jump to": starts the feed at the end of that month (YYYY-MM).
+  const [month, setMonth] = useState<string | undefined>();
+  const [jumping, setJumping] = useState(false);
+  const timeline = useTimeline(filter, month);
   const couple = useCouple();
   const me = useMe();
   const [adding, setAdding] = useState(false);
@@ -277,11 +398,35 @@ function History() {
           label="Filter"
           options={FILTERS}
           value={filter}
-          onChange={setFilter}
+          onChange={(f) => {
+            setFilter(f);
+            setMonth(undefined);
+          }}
           className="-mx-6 mt-4 px-3.5 md:-mx-8 md:px-5.5"
         />
-        {/* Only on the whole story: under "Prayer" it would be out of place. */}
-        {filter === "all" ? <WorkingOn /> : null}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setJumping(true)}
+            className="press -mr-2 flex h-11 items-center px-2 text-support font-semibold text-plum"
+          >
+            Jump to
+          </button>
+        </div>
+        {month ? (
+          <div className="flex items-center justify-between gap-3 border-t border-line pt-1 text-support text-stone">
+            <span>From {monthLabel(`${month}-01`)}</span>
+            <button
+              type="button"
+              onClick={() => setMonth(undefined)}
+              className="press -mr-2 flex h-11 items-center px-2 font-semibold text-plum"
+            >
+              Back to newest
+            </button>
+          </div>
+        ) : null}
+        {/* Only where goals belong: under "Prayer" it would be out of place. */}
+        {filter === "all" || filter === "plans" ? <WorkingOn /> : null}
         <QueryState
           queries={[timeline]}
           frame={inPage}
@@ -294,8 +439,13 @@ function History() {
           {(data) => {
             const fetched = data.pages.flatMap((p) => p.items);
             const items =
-              filter === "all" || filter === "moments"
-                ? withAnniversaries(fetched, couple.data?.started_on, !timeline.hasNextPage)
+              filter === "all" || filter === "memories"
+                ? withAnniversaries(
+                    fetched,
+                    couple.data?.started_on,
+                    !timeline.hasNextPage,
+                    month ? `${month}-31` : undefined,
+                  )
                 : fetched;
             if (items.length === 0) {
               return (
@@ -351,6 +501,16 @@ function History() {
           }}
         </QueryState>
       </Main>
+      <JumpSheet
+        open={jumping}
+        filter={filter}
+        current={month}
+        onClose={() => setJumping(false)}
+        onPick={(m) => {
+          setMonth(m);
+          setJumping(false);
+        }}
+      />
       <Sheet
         open={adding}
         onClose={() => setAdding(false)}
