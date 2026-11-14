@@ -83,3 +83,16 @@ export const useUnanswer = () => useWrite(prayerWrites.unanswer);
 export const useSavePoints = () => useWrite(prayerWrites.savePoints);
 export const usePublish = () => useWrite(prayerWrites.publish);
 export const useSaveReflection = () => useWrite(prayerWrites.reflection);
+
+/** What each of you asked to be prayed for today. */
+export function useTodayRequests() {
+  const couple = useCouple();
+  return useQuery({
+    queryKey: keys.requestsToday,
+    queryFn: prayersApi.todayRequests,
+    enabled: Boolean(couple.data?.partner),
+  });
+}
+export const useAsk = () => useWrite(prayerWrites.ask);
+export const useWithdraw = () => useWrite(prayerWrites.withdraw);
+export const usePrayedFor = () => useWrite(prayerWrites.prayedFor);

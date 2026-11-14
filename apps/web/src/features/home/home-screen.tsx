@@ -28,6 +28,7 @@ import { useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
 import { AnniversaryHome } from "./anniversary-home";
 import { HomeChallengeCard } from "./challenge-card";
+import { PrayerRequestCard } from "./prayer-request-card";
 import { eventPhase, nowLabel } from "@/features/together/events";
 import { useEvents, useGoals, useMilestones, useNudge } from "@/features/together/hooks";
 import {
@@ -169,6 +170,8 @@ export function HomeScreen() {
       {anniversary.data && !alone ? (
         <AnniversaryAhead a={anniversary.data} partner={partner} />
       ) : null}
+
+      {alone ? null : <PrayerRequestCard partner={partner} />}
 
       {weekPrompt}
 

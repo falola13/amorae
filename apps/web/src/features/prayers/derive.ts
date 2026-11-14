@@ -1,5 +1,5 @@
 import type { PrayerPoint, PrayerWeek } from "@/lib/api/types";
-import { parse } from "@/lib/dates";
+import { parse, time12 } from "@/lib/dates";
 
 /** "1 prayer" / "3 prayers" / "no prayers". */
 export const prayerCount = (n: number): string =>
@@ -64,4 +64,10 @@ export const startIndex = (week: PrayerWeek, at: string | null): number => {
   if (Number.isInteger(n) && n >= 0 && n < todays.length) return n;
   const first = todays.findIndex((p) => !week.my_completed.includes(p.id));
   return first === -1 ? 0 : first;
+};
+
+/** "7:42 am" in the reader's own clock, from an API timestamp. */
+export const prayedAtLabel = (isoTimestamp: string): string => {
+  const d = new Date(isoTimestamp);
+  return time12(`${d.getHours()}:${d.getMinutes()}`);
 };

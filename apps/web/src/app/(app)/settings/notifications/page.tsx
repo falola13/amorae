@@ -125,6 +125,7 @@ export default function NotificationSettings() {
                 disabled={!p.prayer_reminder}
                 onChange={(v: string) => v && save.mutate({ reminder_time: v })}
               />
+              {row(p, "prayer_requests", `When ${partner} asks for prayer, or prays for you`)}
               {row(p, "prayer_answered", `When ${partner} marks a prayer answered`, true)}
             </Section>
             <Section label="Events" className="mt-[22px]">

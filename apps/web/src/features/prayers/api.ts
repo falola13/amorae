@@ -1,5 +1,5 @@
 import { apiPath, http } from "@/lib/api/http";
-import type { AnsweredPrayer, PrayerPoint, PrayerWeek } from "@/lib/api/types";
+import type { AnsweredPrayer, PrayerPoint, PrayerWeek, TodayRequests } from "@/lib/api/types";
 
 export const prayersApi = {
   current: () => http.get<PrayerWeek>("/prayers/current").then((r) => r.data),
@@ -25,4 +25,14 @@ export const prayersApi = {
     http
       .patch<PrayerWeek>(apiPath`/prayers/weeks/${weekId}/reflection`, { reflection })
       .then((r) => r.data),
+  todayRequests: () => http.get<TodayRequests>("/prayers/requests/today").then((r) => r.data),
+  // PUT: asking again today is an edit, not a second request.
+  ask: (text: string) =>
+    http.put<TodayRequests>("/prayers/requests/today", { text }).then((r) => r.data),
+  withdraw: () => http.delete<TodayRequests>("/prayers/requests/today").then((r) => r.data),
+  prayedFor: (done: boolean) =>
+    (done
+      ? http.post<TodayRequests>("/prayers/requests/today/prayed")
+      : http.delete<TodayRequests>("/prayers/requests/today/prayed")
+    ).then((r) => r.data),
 };

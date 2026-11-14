@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PrayerPoint, PrayerWeek } from "@/lib/api/types";
-import { daysLabel, isForDay, startIndex, todaysPoints, weekdayOf } from "./derive";
+import { daysLabel, isForDay, prayedAtLabel, startIndex, todaysPoints, weekdayOf } from "./derive";
 
 const point = (over: Partial<PrayerPoint> = {}): PrayerPoint => ({
   id: "p1",
@@ -109,5 +109,12 @@ describe("daysLabel", () => {
 
   it("lists chosen days short and in order", () => {
     expect(daysLabel([4, 1])).toBe("Mon · Thu");
+  });
+});
+
+describe("prayedAtLabel", () => {
+  it("reads the timestamp on the reader's own clock", () => {
+    expect(prayedAtLabel(new Date(2026, 10, 14, 7, 42).toISOString())).toBe("7:42 am");
+    expect(prayedAtLabel(new Date(2026, 10, 14, 19, 5).toISOString())).toBe("7:05 pm");
   });
 });

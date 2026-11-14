@@ -99,6 +99,18 @@ export interface PrayerDay {
   partner: string[];
 }
 
+export interface PrayerRequest {
+  text: string;
+  asked_on: string;
+  /** When the other one prayed for it; null means not yet. */
+  prayed_at: string | null;
+}
+
+export interface TodayRequests {
+  mine: PrayerRequest | null;
+  theirs: PrayerRequest | null;
+}
+
 export interface PrayerWeek {
   id: string;
   week_start: string; // ISO date, a Sunday
@@ -334,6 +346,8 @@ export interface NotificationPrefs {
   challenges: boolean;
   /** When your partner starts a challenge. */
   partner_challenges: boolean;
+  /** When your partner asks for prayer, or prays for what you asked. */
+  prayer_requests: boolean;
   prayer_answered: boolean;
   /** When the second of you finishes something you are both doing. */
   together: boolean;
@@ -372,7 +386,9 @@ export type NotificationKind =
   | "both_marked"
   | "memory_on_this_day"
   | "nudge"
-  | "letter";
+  | "letter"
+  | "prayer_request"
+  | "prayed_for_you";
 
 /** One row of the notifications inbox (GET /v1/notifications/inbox). Newest first,
  *  at most 30 — the server keeps only that many. */

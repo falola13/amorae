@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { Icon } from "@/components/icons";
 import { Button, cx } from "@/components/ui/kit";
 import { Scripture } from "@/components/ui/scripture";
 import { todaysPoints } from "@/features/prayers/derive";
-import { useSetCompleted } from "@/features/prayers/hooks";
+import { useCouple } from "@/features/couple/hooks";
+import { usePrayedFor, useSetCompleted, useTodayRequests } from "@/features/prayers/hooks";
 import type { PrayerWeek } from "@/lib/api/types";
 import type { useTimer } from "@/lib/hooks/use-timer";
 import { routes } from "@/lib/routes";
@@ -26,12 +28,33 @@ export function PrayerSession({
 }) {
   const complete = useSetCompleted();
   const router = useRouter();
+  const requests = useTodayRequests();
+  const partner = useCouple().data?.partner?.display_name ?? "your partner";
+  const theirs = requests.data?.theirs ?? null;
+  // Decided once, when the requests first load: a request already prayed for
+  // on arrival isn't a page, and one prayed for here must not vanish under you.
+  const [hadRequest, setHadRequest] = useState<boolean | null>(null);
+  const [past, setPast] = useState(false);
+  if (hadRequest === null && requests.data) {
+    setHadRequest(Boolean(theirs && !theirs.prayed_at));
+  }
   const todays = todaysPoints(w);
   const p = todays[i];
   const n = todays.length;
   const prayed = w.my_completed.includes(p.id);
   const allDone = todays.every((x) => w.my_completed.includes(x.id));
   const last = i === n - 1;
+
+  if (hadRequest && theirs && !past) {
+    return (
+      <RequestPage
+        partner={partner.split(" ")[0]}
+        text={theirs.text}
+        prayed={Boolean(theirs.prayed_at)}
+        onContinue={() => setPast(true)}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col grain bg-paper md:max-w-[640px]">
@@ -164,6 +187,70 @@ export function PrayerSession({
             </Link>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** The partner's ask for today, ahead of the week's prayers. */
+function RequestPage({
+  partner,
+  text,
+  prayed,
+  onContinue,
+}: {
+  partner: string;
+  text: string;
+  prayed: boolean;
+  onContinue: () => void;
+}) {
+  const pray = usePrayedFor();
+  return (
+    <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col grain bg-paper md:max-w-[640px]">
+      <div className="shrink-0" style={{ height: "calc(var(--safe-top) + 12px)" }} />
+      <div className="flex h-11 shrink-0 items-center px-3">
+        <Link
+          href={routes.prayers}
+          aria-label="Leave prayer mode"
+          className="press flex h-11 w-11 items-center justify-center text-ink"
+        >
+          <Icon name="x" size={22} />
+        </Link>
+      </div>
+      <main className="flex grow animate-page flex-col justify-center gap-4 px-8 pb-4">
+        <div className="text-micro uppercase text-stone">{partner} asked you to pray</div>
+        <p
+          className="m-0 font-text text-[34px] font-[450] leading-[1.2] tracking-[-0.02em]"
+          data-selectable
+        >
+          &ldquo;{text}&rdquo;
+        </p>
+      </main>
+      <div className="flex shrink-0 flex-col gap-1.5 px-6 pb-safe">
+        {prayed ? (
+          <div
+            role="status"
+            className="flex h-[54px] items-center justify-between rounded-btn bg-green-tint pl-[18px] pr-1.5"
+          >
+            <span className="text-[16px] font-semibold text-green">Prayed</span>
+            <button
+              type="button"
+              disabled={pray.isPending}
+              onClick={() => pray.mutate(false)}
+              className="press h-11 px-3 text-[15px] font-semibold text-green"
+            >
+              Undo
+            </button>
+          </div>
+        ) : (
+          <Button icon="check" loading={pray.isPending} onClick={() => pray.mutate(true)}>
+            I prayed for this
+          </Button>
+        )}
+        <Button variant="quiet" className="self-end" onClick={onContinue}>
+          Continue
+          <Icon name="right" size={20} />
+        </Button>
       </div>
     </div>
   );

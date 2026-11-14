@@ -1,4 +1,4 @@
-import type { PrayerPoint, PrayerWeek } from "@/lib/api/types";
+import type { PrayerPoint, PrayerWeek, TodayRequests } from "@/lib/api/types";
 import { keys } from "@/lib/query/keys";
 import { defineWrite } from "@/lib/query/mutations";
 import { prayersApi } from "./api";
@@ -77,5 +77,25 @@ export const prayerWrites = {
       prayersApi.reflection(weekId, text),
     invalidates: [keys.history, keys.week, keys.weeksById],
     idempotent: "one reflection per person per week, replaced rather than added to.",
+  }),
+  ask: defineWrite({
+    mutationKey: ["prayers", "ask"],
+    mutationFn: (text: string) => prayersApi.ask(text),
+    invalidates: [keys.requestsToday],
+    idempotent: "one request per person per day, so a replay rewrites the same line.",
+  }),
+  withdraw: defineWrite<void, TodayRequests>({
+    mutationKey: ["prayers", "withdraw"],
+    mutationFn: () => prayersApi.withdraw(),
+    invalidates: [keys.requestsToday],
+    idempotent: "deleting what is already gone changes nothing.",
+  }),
+  prayedFor: defineWrite({
+    mutationKey: ["prayers", "prayedFor"],
+    mutationFn: (done: boolean) => prayersApi.prayedFor(done),
+    invalidates: [keys.requestsToday],
+    // Same scope idea as completion: "prayed, then undo" can never land reversed.
+    scope: "prayers.prayedFor",
+    idempotent: "sets one flag on one row, so a replay lands the same state.",
   }),
 };
