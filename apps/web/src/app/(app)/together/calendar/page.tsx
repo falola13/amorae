@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCouple } from "@/features/couple/hooks";
 import { useWeek } from "@/features/prayers/hooks";
 import { eventOwnerLabel, remindersSummary } from "@/features/together/events";
+import { nextAhead } from "@/features/together/calendar";
 import { useEvents, useMilestones } from "@/features/together/hooks";
 import { occursOn, yearsBy } from "@/features/together/milestones";
 import {
@@ -203,6 +204,17 @@ export default function Calendar() {
               ? [selected]
               : days.filter((d) => (byDay.get(d)?.length ?? 0) > 0 && (!atToday || d >= todayIso));
 
+            // Only looked for when the view is empty: the next thing after what's
+            // on screen, and never one that has already gone.
+            const lastShown = month
+              ? iso(new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0))
+              : days[6];
+            const dayAfter = iso(addDays(parse(lastShown), 1));
+            const ahead =
+              list.length === 0
+                ? nextAhead(eventsData, milestoneData, dayAfter > todayIso ? dayAfter : todayIso)
+                : null;
+
             const cell = (d: string) => {
               const isToday = d === todayIso;
               const sel = d === selected;
@@ -299,8 +311,18 @@ export default function Calendar() {
                 )}
 
                 {list.length === 0 ? (
-                  <div className="py-8 text-support text-stone">
-                    Nothing planned {month ? "this month" : "this week"} yet.
+                  <div className="py-8">
+                    <p className="m-0 text-support text-stone">
+                      Nothing planned {month ? "this month" : "this week"} yet.
+                    </p>
+                    {ahead ? (
+                      <Link
+                        href={ahead.href}
+                        className="press -mb-3 flex min-h-11 items-center text-support text-plum no-underline"
+                      >
+                        Next: {ahead.title} · {weekdayDate(ahead.date)}
+                      </Link>
+                    ) : null}
                   </div>
                 ) : null}
 
