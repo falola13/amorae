@@ -59,7 +59,7 @@
      Warm, not cold: the light palette is linen and ink, so the dark one is a
      warm near-black rather than the blue-grey most dark modes default to. */
 
-  /* Type scale (docs/design/direction.md). A size token can't carry a family,
+  /* Type scale. A size token can't carry a family,
      so everything from bodylg up is paired with `font-text` where it is used:
      the couple's words and the headings are set in Newsreader, the interface
      in Manrope. 12px is the floor, and only for uppercase folios and tab
@@ -489,7 +489,7 @@ button {
 }
 
 /* bg-celebrate is retired: an everyday screen marks a date with rules, the
-   serif or a band of paper, never a gradient (docs/design/direction.md). */
+   serif or a band of paper, never a gradient. */
 
 /* The anniversary's own surfaces: a card that glows a little, and the
    letter paper. Both read their colours from the tokens above. */
