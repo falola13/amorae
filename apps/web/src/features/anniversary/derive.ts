@@ -93,3 +93,13 @@ export function markOpeningSeen(on: string) {
     // Private mode: it shows again next time, which is no harm on this day.
   }
 }
+
+/** The years a letter was written for (by the anniversary it opens on), so a
+ *  marker only mentions letters where there are some. */
+export function letterYears(a: Anniversary | undefined): Set<number> {
+  const years = new Set<number>();
+  if (!a) return years;
+  for (const l of [...(a.past ?? []), a.mine, a.theirs])
+    if (l) years.add(Number(l.opens_on.slice(0, 4)));
+  return years;
+}

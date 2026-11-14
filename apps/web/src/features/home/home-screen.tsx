@@ -16,6 +16,7 @@ import { useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
 import { AnniversaryHome } from "./anniversary-home";
 import { HomeChallengeCard } from "./challenge-card";
+import { goalNothingYet } from "@/features/together/goals";
 import { homeChallengeRows } from "@/features/together/challenges";
 import { TodaysPrayer } from "./todays-prayer";
 import { QuestionCard } from "./question-card";
@@ -178,9 +179,11 @@ export function HomeScreen() {
           <Row
             title={<span className="font-text text-bodylg font-normal">{goal.goal.title}</span>}
             sub={
-              goal.goal.unit === "naira"
-                ? `${naira(goal.total)} so far`
-                : `${goal.total} of ${goal.goal.target} ${goal.goal.unit_label ?? ""}`
+              goal.total === 0
+                ? goalNothingYet(goal.goal)
+                : goal.goal.unit === "naira"
+                  ? `${naira(goal.total)} so far`
+                  : `${goal.total} of ${goal.goal.target} ${goal.goal.unit_label ?? ""}`
             }
             href={routes.goal(goal.goal.id)}
           />

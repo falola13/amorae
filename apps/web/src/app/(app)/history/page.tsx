@@ -5,7 +5,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 
-import { goalSub, sumOf } from "@/features/together/goals";
+import { goalNothingYet, goalSub, sumOf } from "@/features/together/goals";
 import { useGoals, useJournal } from "@/features/together/hooks";
 import { JournalComposer } from "@/features/together/components/journal-composer";
 import { MemoryComposer } from "@/features/together/components/memory-composer";
@@ -32,7 +32,8 @@ import { groupByMonth } from "@/features/timeline/derive";
 import { useTimeline, useTimelineMonths } from "@/features/timeline/hooks";
 import { dayName, dayNum, iso, longDate, monthLabel, monthName } from "@/lib/dates";
 import { today } from "@/lib/today";
-import { ordinal, yearsWord } from "@/features/anniversary/derive";
+import { letterYears, ordinal, yearsWord } from "@/features/anniversary/derive";
+import { useAnniversary } from "@/features/anniversary/hooks";
 import { routes } from "@/lib/routes";
 import type { TimelineFilter, TimelineItem } from "@/lib/api/types";
 
@@ -76,6 +77,7 @@ function withAnniversaries(
   items: TimelineItem[],
   startedOn: string | undefined,
   complete: boolean,
+  letters: Set<number>,
   until?: string,
 ): TimelineItem[] {
   if (!startedOn || items.length === 0) return items;
@@ -96,7 +98,8 @@ function withAnniversaries(
       at: `${day}T23:59:59Z`,
       date: day,
       title: `Our ${ordinal(n)} anniversary`,
-      sub: `${yearsWord(n)} together · your letters`,
+      // Only claim letters that exist: most years nobody wrote one.
+      sub: letters.has(year) ? `${yearsWord(n)} together · your letters` : `${yearsWord(n)} together`,
       path: routes.ourDay(),
     });
   }
@@ -259,10 +262,17 @@ function WorkingOn() {
             )}
           >
             <span className="mb-3 font-text text-bodylg leading-[1.25]">{g.title}</span>
-            <span>
-              <Bar pct={(sumOf(g) / g.target) * 100} label={goalSub(g)} />
-            </span>
-            <span className="lining mt-2 text-support text-stone">{goalSub(g)}</span>
+            {sumOf(g) === 0 ? (
+              // Nothing saved yet: an empty bar says nothing, so say what's next.
+              <span className="lining text-support text-stone">{goalNothingYet(g)}</span>
+            ) : (
+              <>
+                <span>
+                  <Bar pct={(sumOf(g) / g.target) * 100} label={goalSub(g)} />
+                </span>
+                <span className="lining mt-2 text-support text-stone">{goalSub(g)}</span>
+              </>
+            )}
           </Link>
         ))}
       </div>
@@ -346,6 +356,8 @@ function History() {
   const timeline = useTimeline(filter, month);
   const couple = useCouple();
   const me = useMe();
+  // A failed or absent anniversary just means no letters line.
+  const anniversary = useAnniversary();
   const [adding, setAdding] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
@@ -398,21 +410,22 @@ function History() {
         <Para size="support" className="mt-2">
           Everything you’ve done together, newest first.
         </Para>
-        <Tabs
-          label="Filter"
-          options={FILTERS}
-          value={filter}
-          onChange={(f) => {
-            setFilter(f);
-            setMonth(undefined);
-          }}
-          className="-mx-6 mt-4 px-3.5 md:-mx-8 md:px-5.5"
-        />
-        <div className="flex justify-end">
+        {/* "Jump to" keeps its place at the right end; only the tabs scroll. */}
+        <div className="-mx-6 mt-4 flex md:-mx-8">
+          <Tabs
+            label="Filter"
+            options={FILTERS}
+            value={filter}
+            onChange={(f) => {
+              setFilter(f);
+              setMonth(undefined);
+            }}
+            className="min-w-0 grow pl-3.5 md:pl-5.5"
+          />
           <button
             type="button"
             onClick={() => setJumping(true)}
-            className="press -mr-2 flex h-11 items-center px-2 text-support font-semibold text-plum"
+            className="press flex h-11 shrink-0 items-center border-b border-line pl-2.5 pr-3.5 text-support font-semibold text-plum md:pr-5.5"
           >
             Jump to
           </button>
@@ -448,6 +461,7 @@ function History() {
                     fetched,
                     couple.data?.started_on,
                     !timeline.hasNextPage,
+                    letterYears(anniversary.data),
                     month ? `${month}-31` : undefined,
                   )
                 : fetched;

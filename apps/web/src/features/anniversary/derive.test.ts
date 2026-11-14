@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { AnniversaryYear, Appreciation, Memory } from "@/lib/api/types";
+import type { Anniversary, AnniversaryYear, Appreciation, Memory } from "@/lib/api/types";
 import {
   daysTogether,
+  letterYears,
   notesOfTheYear,
   ordinal,
   photosOfTheYear,
@@ -104,5 +105,28 @@ describe("ordinal", () => {
       "22nd",
       "112th",
     ]);
+  });
+});
+
+describe("letterYears", () => {
+  const letter = (opens_on: string) => ({
+    id: opens_on,
+    author_id: "a",
+    opens_on,
+    text: "x",
+    updated_at: "",
+  });
+
+  it("is empty when there is no anniversary", () => {
+    expect(letterYears(undefined).size).toBe(0);
+  });
+
+  it("collects past letters and this year's, by the year they open on", () => {
+    const a = {
+      mine: letter("2026-03-04"),
+      theirs: null,
+      past: [letter("2025-03-04"), letter("2025-03-04"), letter("2024-03-04")],
+    } as unknown as Anniversary;
+    expect([...letterYears(a)].sort()).toEqual([2024, 2025, 2026]);
   });
 });
