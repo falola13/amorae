@@ -1329,3 +1329,34 @@ func TestForWritten_PrayerRequests(t *testing.T) {
 		}
 	})
 }
+
+func TestForWritten_QuestionAnswered(t *testing.T) {
+	at := time.Date(2026, 11, 20, 7, 0, 0, 0, time.UTC)
+	answered := WrittenCandidate{
+		UserID: uuid.New(), AuthorID: uuid.New(), AuthorName: "Ada",
+		ItemID: uuid.New(), Kind: KindQuestionAnswered, WrittenAt: at,
+		Prefs: Preferences{DailyQuestion: true},
+	}
+
+	t.Run("says who, and not what", func(t *testing.T) {
+		n, ok := ForWritten(answered, at.Add(time.Minute))
+		if !ok {
+			t.Fatal("nobody was told")
+		}
+		if n.Message.Title != "Ada answered today’s question" || n.Message.Body != "Answer yours to see it." || n.Message.Path != "/" {
+			t.Errorf("message = %+v", n.Message)
+		}
+	})
+	t.Run("switched off, nothing", func(t *testing.T) {
+		off := answered
+		off.Prefs.DailyQuestion = false
+		if _, ok := ForWritten(off, at.Add(time.Minute)); ok {
+			t.Error("sent although the switch is off")
+		}
+	})
+	t.Run("a day old, it is no longer news", func(t *testing.T) {
+		if !Perishable(KindQuestionAnswered) {
+			t.Error("should be perishable")
+		}
+	})
+}

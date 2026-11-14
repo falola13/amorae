@@ -27,6 +27,7 @@ const (
 	TypeJournal        Type = "journal"
 	TypeAppreciation   Type = "appreciation"
 	TypeChallenge      Type = "challenge"
+	TypeQuestion       Type = "question"
 )
 
 // Filter is a client-facing grouping of Types — coarser than Type, and the
@@ -48,13 +49,13 @@ func TypesFor(f Filter) []Type {
 	case FilterPrayer:
 		return []Type{TypePrayerWeek, TypePrayerAnswered}
 	case FilterMoments:
-		return []Type{TypeMemory, TypeJournal, TypeAppreciation, TypeChallenge}
+		return []Type{TypeMemory, TypeJournal, TypeAppreciation, TypeChallenge, TypeQuestion}
 	case FilterPlans:
 		return []Type{TypeEvent, TypeGoal}
 	default:
 		return []Type{
 			TypePrayerWeek, TypePrayerAnswered, TypeMemory, TypeEvent,
-			TypeGoal, TypeJournal, TypeAppreciation, TypeChallenge,
+			TypeGoal, TypeJournal, TypeAppreciation, TypeChallenge, TypeQuestion,
 		}
 	}
 }

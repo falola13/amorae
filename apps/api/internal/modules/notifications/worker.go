@@ -361,6 +361,15 @@ func ForWritten(c WrittenCandidate, now time.Time) (Notification, bool) {
 			Path:  "/",
 			Tag:   KindPrayedForYou,
 		}
+	case KindQuestionAnswered:
+		// Never the answer itself; it is sealed until the recipient has written theirs.
+		wanted = c.Prefs.DailyQuestion
+		message = push.Message{
+			Title: c.AuthorName + " answered today’s question",
+			Body:  "Answer yours to see it.",
+			Path:  "/",
+			Tag:   KindQuestionAnswered,
+		}
 	case KindPrayerAnswered:
 		// No prayer content: private writing (FR-NOTF-005.AC1), unlike the
 		// event exception (AC2) — wrong here costs more than it saves.

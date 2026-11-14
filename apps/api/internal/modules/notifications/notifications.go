@@ -49,6 +49,8 @@ type Preferences struct {
 	// Whether the other partner asking for prayer, or praying for what you
 	// asked, is announced.
 	PrayerRequests bool
+	// Whether the other partner answering today's question is announced.
+	DailyQuestion bool
 	// What the create-event screen offers as already chosen. "1 hour
 	// before" out of the box, matching what the screen always offered
 	// before this was a preference; "" is a real choice — no default —
@@ -86,6 +88,7 @@ func Defaults() Preferences {
 		PartnerEvents:        true,
 		PartnerChallenges:    true,
 		PrayerRequests:       true,
+		DailyQuestion:        true,
 		Nudges:               true,
 		DefaultEventReminder: "1 hour before",
 		QuietFrom:            "22:00",
@@ -127,6 +130,7 @@ type Patch struct {
 	PartnerEvents        *bool
 	PartnerChallenges    *bool
 	PrayerRequests       *bool
+	DailyQuestion        *bool
 	DefaultEventReminder *string
 	Nudges               *bool
 }
@@ -170,6 +174,7 @@ func (p Preferences) Apply(patch Patch) (Preferences, error) {
 	setBool(&p.PartnerEvents, patch.PartnerEvents)
 	setBool(&p.PartnerChallenges, patch.PartnerChallenges)
 	setBool(&p.PrayerRequests, patch.PrayerRequests)
+	setBool(&p.DailyQuestion, patch.DailyQuestion)
 	setBool(&p.Nudges, patch.Nudges)
 
 	if patch.QuietFrom != nil || patch.QuietTo != nil {
@@ -400,6 +405,8 @@ const (
 	KindPrayerRequest = "prayer_request"
 	// Your partner prayed for what you asked.
 	KindPrayedForYou = "prayed_for_you"
+	// Your partner answered today's question; yours is still to write.
+	KindQuestionAnswered = "question_answered"
 )
 
 // AllKinds is every kind there is. A kind missing from here is a kind no
@@ -411,6 +418,7 @@ var AllKinds = []string{
 	KindPrayerAnswered, KindBothPrayed, KindBothMarked, KindMemoryOnThisDay,
 	KindEventOver, KindGoalCrossing, KindEventAdded, KindNudge, KindChallengeStarted,
 	KindLetter, KindPrayerRequest, KindPrayedForYou,
+	KindQuestionAnswered,
 }
 
 // OccursOn reports whether a date recurs on the given day (same month and

@@ -54,3 +54,40 @@ func TestPostgresRepository_RecentlyWritten_PrayerRequests(t *testing.T) {
 		t.Errorf("prayed candidate = %+v", prayed)
 	}
 }
+
+// An answer is announced to the partner only while they have not answered
+// that day themselves.
+func TestPostgresRepository_RecentlyWritten_QuestionAnswered(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := notifications.NewPostgresRepository(db)
+	coupleID, a, b := pair(t, db)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	insert := func(author uuid.UUID) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if _, err := db.Q(ctx).Exec(ctx, `
+			INSERT INTO daily_answers (id, couple_id, author_id, asked_on, question, text, created_at, updated_at)
+			VALUES ($1, $2, $3, ($4 AT TIME ZONE 'UTC')::date, 'A question?', 'secret', $4, $4)
+		`, id, coupleID, author, now); err != nil {
+			t.Fatalf("insert answer: %v", err)
+		}
+		return id
+	}
+
+	first := insert(a)
+	got := writtenFor(t, repo, first)
+	if len(got) != 1 || got[0].UserID != b || got[0].AuthorID != a ||
+		got[0].Kind != notifications.KindQuestionAnswered || !got[0].Prefs.DailyQuestion {
+		t.Fatalf("first answer candidates = %+v", got)
+	}
+
+	second := insert(b)
+	if got := writtenFor(t, repo, second); len(got) != 0 {
+		t.Errorf("second answer was announced to the one who had already answered: %+v", got)
+	}
+	if got := writtenFor(t, repo, first); len(got) != 0 {
+		t.Errorf("once both have answered, the first is no longer news: %+v", got)
+	}
+}

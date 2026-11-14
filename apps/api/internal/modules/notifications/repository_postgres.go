@@ -30,7 +30,7 @@ func (r *PostgresRepository) PreferencesFor(ctx context.Context, userID uuid.UUI
 		       important_dates, appreciation, journal, goals, challenges,
 		       prayer_answered, together, memories, goal_milestones,
 		       event_followups, partner_events, default_event_reminder, nudges,
-		       partner_challenges, prayer_requests,
+		       partner_challenges, prayer_requests, daily_question,
 		       COALESCE(to_char(quiet_from, 'HH24:MI'), ''),
 		       COALESCE(to_char(quiet_to, 'HH24:MI'), ''),
 		       daily_cap
@@ -39,7 +39,7 @@ func (r *PostgresRepository) PreferencesFor(ctx context.Context, userID uuid.UUI
 		&p.ImportantDates, &p.Appreciation, &p.Journal, &p.Goals, &p.Challenges,
 		&p.PrayerAnswered, &p.Together, &p.Memories, &p.GoalMilestones,
 		&p.EventFollowups, &p.PartnerEvents, &p.DefaultEventReminder, &p.Nudges,
-		&p.PartnerChallenges, &p.PrayerRequests,
+		&p.PartnerChallenges, &p.PrayerRequests, &p.DailyQuestion,
 		&p.QuietFrom, &p.QuietTo, &p.DailyCap)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Defaults(), false, nil
@@ -60,11 +60,11 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 			 important_dates, appreciation, journal, goals, challenges,
 			 prayer_answered, together, memories, goal_milestones,
 			 event_followups, partner_events, default_event_reminder, nudges,
-			 partner_challenges, prayer_requests,
+			 partner_challenges, prayer_requests, daily_question,
 			 quiet_from, quiet_to, daily_cap, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-		        $15, $16, $17, $18, $19, $20,
-		        NULLIF($21, '')::time, NULLIF($22, '')::time, $23, $24, $24)
+		        $15, $16, $17, $18, $19, $20, $21,
+		        NULLIF($22, '')::time, NULLIF($23, '')::time, $24, $25, $25)
 		ON CONFLICT (user_id) DO UPDATE SET
 			new_week = EXCLUDED.new_week,
 			prayer_reminder = EXCLUDED.prayer_reminder,
@@ -85,6 +85,7 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 			nudges = EXCLUDED.nudges,
 			partner_challenges = EXCLUDED.partner_challenges,
 			prayer_requests = EXCLUDED.prayer_requests,
+			daily_question = EXCLUDED.daily_question,
 			quiet_from = EXCLUDED.quiet_from,
 			quiet_to = EXCLUDED.quiet_to,
 			daily_cap = EXCLUDED.daily_cap,
@@ -93,7 +94,7 @@ func (r *PostgresRepository) SavePreferences(ctx context.Context, userID uuid.UU
 		p.ImportantDates, p.Appreciation, p.Journal, p.Goals, p.Challenges,
 		p.PrayerAnswered, p.Together, p.Memories, p.GoalMilestones,
 		p.EventFollowups, p.PartnerEvents, p.DefaultEventReminder, p.Nudges,
-		p.PartnerChallenges, p.PrayerRequests, p.QuietFrom, p.QuietTo, p.DailyCap, at); err != nil {
+		p.PartnerChallenges, p.PrayerRequests, p.DailyQuestion, p.QuietFrom, p.QuietTo, p.DailyCap, at); err != nil {
 		return fmt.Errorf("saving notification preferences: %w", err)
 	}
 	return nil

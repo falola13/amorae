@@ -26,6 +26,7 @@ import (
 	"github.com/falola13/amorae/apps/api/internal/modules/milestones"
 	"github.com/falola13/amorae/apps/api/internal/modules/notifications"
 	"github.com/falola13/amorae/apps/api/internal/modules/prayers"
+	"github.com/falola13/amorae/apps/api/internal/modules/questions"
 	"github.com/falola13/amorae/apps/api/internal/modules/timeline"
 	"github.com/falola13/amorae/apps/api/internal/modules/user"
 	"github.com/falola13/amorae/apps/api/internal/platform/database"
@@ -157,6 +158,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	// The anniversary as a day of its own: letters sealed until it, and the year before it.
 	anniversarySvc := anniversary.NewService(anniversary.NewPostgresRepository(db), togetherCouples, now, notificationsWorker)
 
+	// The daily question: answered in private, sealed until both have.
+	questionsSvc := questions.NewService(questions.NewPostgresRepository(db), togetherCouples, now, notificationsWorker)
+
 	// Leaving a couple freezes it; this deletes it once the retention window
 	// for both partners to read/export has passed (FR-PAIR-008).
 	purger := couples.NewPurger(couplesRepo, now, log)
@@ -204,6 +208,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	journalHandler := journal.NewHandler(journalSvc)
 	appreciationHandler := appreciation.NewHandler(appreciationSvc)
 	anniversaryHandler := anniversary.NewHandler(anniversarySvc)
+	questionsHandler := questions.NewHandler(questionsSvc)
 	timelineHandler := timeline.NewHandler(timelineSvc)
 
 	// --- HTTP ---
@@ -246,6 +251,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	journalHandler.RegisterRoutes(v1)
 	appreciationHandler.RegisterRoutes(v1)
 	anniversaryHandler.RegisterRoutes(v1)
+	questionsHandler.RegisterRoutes(v1)
 	timelineHandler.RegisterRoutes(v1)
 
 	// Order matters: RequestID first so panics/logs get the id; ClientIP

@@ -26,8 +26,8 @@ func TestValidateFilter(t *testing.T) {
 
 func TestTypesFor(t *testing.T) {
 	all := TypesFor(FilterAll)
-	if len(all) != 8 {
-		t.Fatalf("all = %d types, want 8", len(all))
+	if len(all) != 9 {
+		t.Fatalf("all = %d types, want 9", len(all))
 	}
 
 	prayer := TypesFor(FilterPrayer)
@@ -36,8 +36,8 @@ func TestTypesFor(t *testing.T) {
 	}
 
 	moments := TypesFor(FilterMoments)
-	if len(moments) != 4 {
-		t.Errorf("moments = %v, want 4 types", moments)
+	if len(moments) != 5 {
+		t.Errorf("moments = %v, want 5 types", moments)
 	}
 
 	plans := TypesFor(FilterPlans)

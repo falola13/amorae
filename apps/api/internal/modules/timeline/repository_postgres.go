@@ -211,6 +211,23 @@ WITH items AS (
 	JOIN couples c ON c.id = ch.couple_id
 	LEFT JOIN users u ON u.id = ch.created_by
 	WHERE ch.couple_id = $1 AND ch.status IN ('finished', 'ended') AND ch.ended_at IS NOT NULL
+
+	UNION ALL
+
+	-- A day's question that both of them answered. One row per day (the pair is
+	-- matched once, by id order), at the moment the second answer was kept. A
+	-- day only one of them answered is not part of the story.
+	SELECT 'question', a.id,
+	       GREATEST(a.created_at, b.created_at),
+	       a.asked_on,
+	       a.question,
+	       'Both answered'::text,
+	       '/together/questions',
+	       NULL::text, NULL::uuid, NULL::timestamptz
+	FROM daily_answers a
+	JOIN daily_answers b ON b.couple_id = a.couple_id AND b.asked_on = a.asked_on
+	                    AND b.author_id <> a.author_id AND a.id < b.id
+	WHERE a.couple_id = $1
 )
 -- Stable ordering: "at" alone can tie (an event with no start time, two
 -- rows sharing an instant), so type and id break the tie the same way on

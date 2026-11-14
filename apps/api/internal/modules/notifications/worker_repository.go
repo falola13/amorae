@@ -289,6 +289,20 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 			       NULL::text AS subject, pr.asked_on, false
 			FROM prayer_requests pr
 			WHERE pr.prayed_at >= $1 AND pr.prayed_by IS NOT NULL
+			UNION ALL
+			-- An answer to today's question, the first time it is kept (created_at
+			-- doesn't move on an edit). Only worth telling when the other one has
+			-- not answered that day: once they have, both can already read it.
+			SELECT da.id, da.couple_id, da.author_id, da.created_at, $11::text AS kind,
+			       NULL::text AS subject, da.asked_on, false
+			FROM daily_answers da
+			WHERE da.created_at >= $1
+			  AND NOT EXISTS (
+			      SELECT 1 FROM daily_answers other
+			      WHERE other.couple_id = da.couple_id
+			        AND other.asked_on = da.asked_on
+			        AND other.author_id <> da.author_id
+			  )
 		)
 		SELECT u.id, written.author_id, author.display_name, written.id, written.kind,
 		       written.created_at,
@@ -300,6 +314,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		       COALESCE(p.partner_events, true),
 		       COALESCE(p.partner_challenges, true),
 		       COALESCE(p.prayer_requests, true),
+		       COALESCE(p.daily_question, true),
 		       c.timezone, written.starts_on, written.mine,
 		       COALESCE(g.title, written.subject, '')
 		FROM written
@@ -312,7 +327,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		LEFT JOIN notification_preferences p ON p.user_id = u.id
 		WHERE u.id <> written.author_id
 	`, since, KindAppreciation, KindJournal, KindGoal, KindPrayerAnswered, KindEventAdded, KindChallengeStarted,
-		KindLetter, KindPrayerRequest, KindPrayedForYou)
+		KindLetter, KindPrayerRequest, KindPrayedForYou, KindQuestionAnswered)
 	if err != nil {
 		return nil, fmt.Errorf("finding what they have written: %w", err)
 	}
@@ -325,7 +340,7 @@ func (r *PostgresRepository) RecentlyWritten(ctx context.Context, since time.Tim
 		if err := rows.Scan(&c.UserID, &c.AuthorID, &c.AuthorName, &c.ItemID, &c.Kind,
 			&c.WrittenAt, &c.Prefs.Appreciation, &c.Prefs.Journal, &c.Prefs.Goals,
 			&c.Prefs.PrayerAnswered, &c.Prefs.PartnerEvents, &c.Prefs.PartnerChallenges,
-			&c.Prefs.PrayerRequests, &c.Timezone, &startsOn, &c.Mine, &c.Subject); err != nil {
+			&c.Prefs.PrayerRequests, &c.Prefs.DailyQuestion, &c.Timezone, &startsOn, &c.Mine, &c.Subject); err != nil {
 			return nil, fmt.Errorf("scanning something written: %w", err)
 		}
 		if startsOn != nil {

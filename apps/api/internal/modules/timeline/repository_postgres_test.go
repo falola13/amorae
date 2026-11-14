@@ -505,3 +505,51 @@ func TestTimeline_EventInclusion(t *testing.T) {
 		}
 	}
 }
+
+// A day's question joins the story only once both of them have answered it,
+// and then as a single entry under the moments filter.
+func TestTimeline_Questions(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	repo := timeline.NewPostgresRepository(db)
+
+	coupleID, a, b := pair(t, db)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	day := func(back int) time.Time {
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -back)
+	}
+	answer := func(author uuid.UUID, on time.Time, q string, at time.Time) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if _, err := db.Q(ctx).Exec(ctx, `
+			INSERT INTO daily_answers (id, couple_id, author_id, asked_on, question, text, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, 'an answer', $6, $6)
+		`, id, coupleID, author, on, q, at); err != nil {
+			t.Fatalf("insert answer: %v", err)
+		}
+		return id
+	}
+
+	answer(a, day(1), "Both days?", now.Add(-26*time.Hour))
+	answer(b, day(1), "Both days?", now.Add(-25*time.Hour))
+	answer(a, day(2), "Only Ada?", now.Add(-50*time.Hour))
+
+	got, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterMoments), nil, 20)
+	if err != nil {
+		t.Fatalf("Timeline: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("moments = %+v, want just the day both answered", got)
+	}
+	q := got[0]
+	if q.Type != timeline.TypeQuestion || q.Title != "Both days?" || q.Path != "/together/questions" ||
+		!q.Date.Equal(day(1)) || !q.At.Equal(now.Add(-25*time.Hour)) {
+		t.Errorf("question = %+v", q)
+	}
+	for _, f := range []timeline.Filter{timeline.FilterPrayer, timeline.FilterPlans} {
+		other, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(f), nil, 20)
+		if err != nil || len(other) != 0 {
+			t.Errorf("%s = %+v, err %v; want nothing", f, other, err)
+		}
+	}
+}
