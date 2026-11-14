@@ -8,7 +8,7 @@ import { useGoals } from "@/features/together/hooks";
 import { JournalComposer } from "@/features/together/components/journal-composer";
 import { MemoryComposer } from "@/features/together/components/memory-composer";
 
-import { Icon, type IconName } from "@/components/icons";
+import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
 import {
   Alert,
@@ -16,11 +16,11 @@ import {
   Button,
   cx,
   EmptyState,
-  Initial,
   LinkButton,
   Para,
   Sheet,
   Skeleton,
+  Tabs,
   Title,
   TopBar,
 } from "@/components/ui/kit";
@@ -28,7 +28,7 @@ import { QueryState, inPage } from "@/components/ui/query-state";
 import { useCouple, useMe } from "@/features/couple/hooks";
 import { groupByMonth } from "@/features/timeline/derive";
 import { useTimeline } from "@/features/timeline/hooks";
-import { dayNum } from "@/lib/dates";
+import { dayName, dayNum, monthName } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 import type { TimelineFilter, TimelineItem } from "@/lib/api/types";
 
@@ -39,51 +39,64 @@ const FILTERS: { value: TimelineFilter; label: string }[] = [
   { value: "plans", label: "Plans" },
 ];
 
-const TYPE_ICON: Record<TimelineItem["type"], IconName> = {
-  prayer_week: "book",
-  prayer_answered: "check",
-  memory: "image",
-  event: "calendar",
-  goal: "target",
-  journal: "note",
-  appreciation: "heart",
-  challenge: "flag",
+// Each entry is named by a small word rather than an icon: the words do the work.
+const KIND: Record<TimelineItem["type"], string> = {
+  prayer_week: "Prayer",
+  prayer_answered: "Prayer answered",
+  memory: "Memory",
+  event: "Plan",
+  goal: "Goal",
+  journal: "Journal",
+  appreciation: "Appreciation",
+  challenge: "Challenge",
 };
 
+/** An entry hung off its date in the left margin. Rules start at the text
+ *  column, not the screen edge, and a photograph takes the whole column. */
 function TimelineRow({
   item,
-  photoUrl,
   name,
-  last,
+  first,
 }: {
   item: TimelineItem;
-  photoUrl?: string | null;
   name?: string;
-  last?: boolean;
+  first?: boolean;
 }) {
   return (
     <Link
       href={item.path}
-      className={cx(
-        "press flex min-h-[62px] items-center gap-3.5 py-2.5 text-left no-underline",
-        !last && "border-b border-line",
-      )}
+      className="press grid grid-cols-[44px_1fr] gap-x-1 py-5 text-left text-ink no-underline"
     >
-      <Icon name={TYPE_ICON[item.type]} size={22} className="text-stone" />
-      <span className="flex min-w-0 grow flex-col gap-px">
-        <span className="text-[16px] font-semibold text-ink">{item.title}</span>
-        <span className="truncate text-support text-stone">{item.sub}</span>
+      <span className="lining pt-px font-text text-[22px] leading-none">
+        {String(dayNum(item.date)).padStart(2, "0")}
+        <span className="mt-1 block font-sans text-micro uppercase text-stone">
+          {dayName(item.date).slice(0, 3)}
+        </span>
       </span>
-      {item.photo_url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- already optimised at the CDN
-        <img
-          src={item.photo_url}
-          alt=""
-          className="h-10 w-10 shrink-0 rounded-btn bg-photo object-cover"
-        />
-      ) : null}
-      {item.actor_id ? <Initial letter={name?.[0] ?? "?"} photoUrl={photoUrl} name={name} /> : null}
-      <span className="shrink-0 tabular text-support text-stone">{dayNum(item.date)}</span>
+      <span className="relative flex min-w-0 flex-col">
+        {first ? null : (
+          <span aria-hidden="true" className="absolute inset-x-0 -top-5 border-t border-line" />
+        )}
+        {item.photo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- already optimised at the CDN
+          <img
+            src={item.photo_url}
+            alt=""
+            className="mb-3 aspect-[4/3] w-full rounded-xs bg-photo object-cover"
+          />
+        ) : null}
+        <span
+          className={cx(
+            "text-support font-medium",
+            item.type === "prayer_answered" ? "text-green" : "text-stone",
+          )}
+        >
+          {KIND[item.type]}
+          {name ? ` · ${name}` : ""}
+        </span>
+        <span className="mt-0.5 font-text text-[19px] leading-[1.3]">{item.title}</span>
+        {item.sub ? <span className="text-support text-stone">{item.sub}</span> : null}
+      </span>
     </Link>
   );
 }
@@ -93,25 +106,31 @@ function WorkingOn() {
   const goals = useGoals();
   const active = (goals.data ?? []).filter((g) => !g.done);
   if (active.length === 0) return null;
+  // Ruled newspaper columns, not tiles: a hairline between goals, and the
+  // strip runs off the edge because it scrolls.
   return (
-    <section className="mt-4" aria-label="Working on">
-      <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
-        Working on
-      </span>
-      {active.map((g, i) => (
-        <Link
-          key={g.id}
-          href={routes.goal(g.id)}
-          className={cx(
-            "press flex flex-col gap-2 py-3 text-ink no-underline",
-            i < active.length - 1 && "border-b border-line",
-          )}
-        >
-          <span className="text-[16px] font-semibold">{g.title}</span>
-          <Bar pct={(sumOf(g) / g.target) * 100} label={goalSub(g)} />
-          <span className="text-support text-stone">{goalSub(g)}</span>
-        </Link>
-      ))}
+    <section className="mt-6" aria-label="Working on">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="m-0 font-text text-section italic">Working on</h2>
+      </div>
+      <div className="-mr-6 mt-3 flex overflow-x-auto md:-mr-8">
+        {active.map((g, i) => (
+          <Link
+            key={g.id}
+            href={routes.goal(g.id)}
+            className={cx(
+              "press flex min-h-[124px] w-[150px] shrink-0 flex-col py-1 pr-4 text-ink no-underline",
+              i > 0 && "border-l border-line pl-4",
+            )}
+          >
+            <span className="mb-4 font-text text-bodylg leading-[1.25]">{g.title}</span>
+            <span className="mt-auto">
+              <Bar pct={(sumOf(g) / g.target) * 100} label={goalSub(g)} />
+            </span>
+            <span className="lining mt-2 text-support text-stone">{goalSub(g)}</span>
+          </Link>
+        ))}
+      </div>
     </section>
   );
 }
@@ -156,7 +175,7 @@ export default function History() {
       />
       <Main>
         <div className="pt-1.5">
-          <Title>Our story</Title>
+          <Title size="display">Our story</Title>
         </div>
         {photoFailed ? (
           <div className="mt-3 flex flex-col gap-1.5">
@@ -170,24 +189,16 @@ export default function History() {
             </button>
           </div>
         ) : null}
-        <Para className="mt-1.5">Everything you’ve done together, newest first.</Para>
-        <div role="tablist" aria-label="Filter" className="-mx-1 mt-3 flex flex-wrap gap-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.value}
-              onClick={() => setFilter(f.value)}
-              className={cx(
-                "press h-9 rounded-full px-3.5 text-[14px] font-semibold",
-                filter === f.value ? "bg-plum-tint text-plum" : "text-stone",
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <Para size="support" className="mt-2">
+          Everything you’ve done together, newest first.
+        </Para>
+        <Tabs
+          label="Filter"
+          options={FILTERS}
+          value={filter}
+          onChange={setFilter}
+          className="-mx-6 mt-4 px-3.5 md:-mx-8 md:px-5.5"
+        />
         {/* Only on the whole story: under "Prayer" it would be out of place. */}
         {filter === "all" ? <WorkingOn /> : null}
         <QueryState
@@ -219,27 +230,25 @@ export default function History() {
             }
             const groups = groupByMonth(items);
             return (
-              <div className="mt-2 flex flex-col pb-4">
+              <div className="flex flex-col pb-4">
                 {groups.map((g, gi) => (
-                  <div key={`${g.month}-${gi}`}>
-                    <div className="pb-1.5 pt-[18px]">
-                      <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-stone">
-                        {g.month}
+                  // A chapter per month: a heavy ink rule and the month in the serif.
+                  <section key={`${g.month}-${gi}`} className="mt-10">
+                    <div className="flex items-baseline justify-between border-t-[1.5px] border-ink pt-3">
+                      <h2 className="m-0 font-text text-title">{monthName(g.items[0].date)}</h2>
+                      <span className="lining text-support text-stone">
+                        {g.items[0].date.slice(0, 4)}
                       </span>
                     </div>
-                    {g.items.map((item, i) => {
-                      const who = actor(item.actor_id);
-                      return (
-                        <TimelineRow
-                          key={item.id}
-                          item={item}
-                          name={who.name}
-                          photoUrl={who.photoUrl}
-                          last={gi === groups.length - 1 && i === g.items.length - 1}
-                        />
-                      );
-                    })}
-                  </div>
+                    {g.items.map((item, i) => (
+                      <TimelineRow
+                        key={item.id}
+                        item={item}
+                        name={actor(item.actor_id).name}
+                        first={i === 0}
+                      />
+                    ))}
+                  </section>
                 ))}
                 {timeline.hasNextPage ? (
                   <div className="pt-4">
