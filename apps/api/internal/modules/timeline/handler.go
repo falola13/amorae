@@ -15,6 +15,8 @@ import (
 // service is the handler's view of the service: only what HTTP calls.
 type service interface {
 	List(ctx context.Context, userID uuid.UUID, before *time.Time, filter Filter, limit int) (Page, error)
+	Months(ctx context.Context, userID uuid.UUID, filter Filter) ([]MonthCount, error)
+	MonthCursor(ctx context.Context, userID uuid.UUID, month string) (*time.Time, error)
 	PhotoURL(it Item) string
 }
 
@@ -28,6 +30,7 @@ func NewHandler(svc service) *Handler {
 
 func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /timeline", http.HandlerFunc(h.list))
+	r.HandleAuthed("GET /timeline/months", http.HandlerFunc(h.months))
 }
 
 // The shape in apps/web/src/lib/api/types.ts.
@@ -70,7 +73,22 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, r, err)
 		return
 	}
+	month, err := ParseMonth(r.URL.Query().Get("month"))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
 	filter := ValidateFilter(r.URL.Query().Get("filter"))
+
+	// A month only picks where the first page starts; once the client holds a
+	// cursor, that cursor wins.
+	if month != "" && before == nil {
+		before, err = h.svc.MonthCursor(r.Context(), userID, month)
+		if err != nil {
+			httpx.Error(w, r, err)
+			return
+		}
+	}
 
 	page, err := h.svc.List(r.Context(), userID, before, filter, limit)
 	if err != nil {
@@ -85,6 +103,28 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	if page.Next != nil {
 		next := page.Next.UTC().Format(time.RFC3339)
 		out.Next = &next
+	}
+	httpx.Data(w, http.StatusOK, out)
+}
+
+type monthDTO struct {
+	Month string `json:"month"`
+	Count int    `json:"count"`
+}
+
+func (h *Handler) months(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	months, err := h.svc.Months(r.Context(), userID, ValidateFilter(r.URL.Query().Get("filter")))
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	out := make([]monthDTO, 0, len(months))
+	for _, m := range months {
+		out = append(out, monthDTO{Month: m.Month, Count: m.Count})
 	}
 	httpx.Data(w, http.StatusOK, out)
 }

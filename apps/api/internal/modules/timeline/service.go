@@ -14,6 +14,10 @@ type Repository interface {
 	// many rows to return — the service, not the repository, asks for one
 	// extra to know whether another page follows.
 	Timeline(ctx context.Context, coupleID uuid.UUID, types []Type, before *time.Time, limit int) ([]Item, error)
+	// Months counts the couple's items per couple-local "YYYY-MM", newest first.
+	Months(ctx context.Context, coupleID uuid.UUID, types []Type) ([]MonthCount, error)
+	// MonthEnd is the first instant after that month in the couple's timezone.
+	MonthEnd(ctx context.Context, coupleID uuid.UUID, month string) (time.Time, error)
 }
 
 // Couples is the smaller question the Together modules ask: which couple,
@@ -72,6 +76,29 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID, before *time.Time,
 		next = &at
 	}
 	return Page{Items: items, Next: next}, nil
+}
+
+// Months is which months have entries for the filter, newest first.
+func (s *Service) Months(ctx context.Context, userID uuid.UUID, filter Filter) ([]MonthCount, error) {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.Months(ctx, coupleID, TypesFor(filter))
+}
+
+// MonthCursor is the "before" that starts a page at the end of the given
+// "YYYY-MM" in the couple's own timezone.
+func (s *Service) MonthCursor(ctx context.Context, userID uuid.UUID, month string) (*time.Time, error) {
+	coupleID, err := s.couples.CoupleFor(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	end, err := s.repo.MonthEnd(ctx, coupleID, month)
+	if err != nil {
+		return nil, err
+	}
+	return &end, nil
 }
 
 // PhotoURL resolves a memory item's photo, or "" when there is none, or

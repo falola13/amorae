@@ -69,12 +69,11 @@ func (r *PostgresRepository) Timeline(
 	return out, nil
 }
 
-// timelineQuery unions every source the timeline draws from into one common
-// shape (type, id, at, date, title, sub, path, photo_id, actor_id, version),
-// then filters and pages the result. Each branch is commented with what "at"
-// and "sub" mean for that source; the outer SELECT is the only place paging
-// and filtering happen.
-const timelineQuery = `
+// itemsCTE unions every source the timeline draws from into one common
+// shape (type, id, at, date, title, sub, path, photo_id, actor_id, version).
+// Each branch is commented with what "at" and "sub" mean for that source.
+// Shared by the feed and the month index so both see identical rows.
+const itemsCTE = `
 WITH items AS (
 	-- Every PAST published prayer week — "at" is the moment the week ends,
 	-- so a week never appears until it's over, and never as the current one.
@@ -229,6 +228,11 @@ WITH items AS (
 	                    AND b.author_id <> a.author_id AND a.id < b.id
 	WHERE a.couple_id = $1
 )
+`
+
+// timelineQuery pages and filters itemsCTE. The outer SELECT is the only
+// place paging and filtering happen.
+const timelineQuery = itemsCTE + `
 -- Stable ordering: "at" alone can tie (an event with no start time, two
 -- rows sharing an instant), so type and id break the tie the same way on
 -- every page — what makes offset-free cursor paging safe.
@@ -241,3 +245,53 @@ WHERE type = ANY($2)
 ORDER BY at DESC, type, id
 LIMIT $4
 `
+
+// monthsQuery counts itemsCTE's rows per couple-local calendar month.
+const monthsQuery = itemsCTE + `
+SELECT to_char(date, 'YYYY-MM') AS month, count(*)
+FROM items
+WHERE type = ANY($2)
+GROUP BY 1
+ORDER BY 1 DESC
+`
+
+// Months is which couple-local months have entries for the given Types, and
+// how many, newest month first.
+func (r *PostgresRepository) Months(ctx context.Context, coupleID uuid.UUID, types []Type) ([]MonthCount, error) {
+	typeNames := make([]string, len(types))
+	for i, t := range types {
+		typeNames[i] = string(t)
+	}
+	rows, err := r.db.Q(ctx).Query(ctx, monthsQuery, coupleID, typeNames)
+	if err != nil {
+		return nil, fmt.Errorf("loading timeline months: %w", err)
+	}
+	defer rows.Close()
+
+	out := []MonthCount{}
+	for rows.Next() {
+		var m MonthCount
+		if err := rows.Scan(&m.Month, &m.Count); err != nil {
+			return nil, fmt.Errorf("scanning timeline month: %w", err)
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("loading timeline months: %w", err)
+	}
+	return out, nil
+}
+
+// MonthEnd is the first instant after the given "YYYY-MM" in the couple's own
+// timezone: local midnight of the following month's first day, in UTC.
+func (r *PostgresRepository) MonthEnd(ctx context.Context, coupleID uuid.UUID, month string) (time.Time, error) {
+	var end time.Time
+	err := r.db.Q(ctx).QueryRow(ctx, `
+		SELECT ((($2::text || '-01')::date + interval '1 month')::timestamp AT TIME ZONE c.timezone)
+		FROM couples c WHERE c.id = $1
+	`, coupleID, month).Scan(&end)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("resolving month end: %w", err)
+	}
+	return end.UTC(), nil
+}

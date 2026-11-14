@@ -9,13 +9,17 @@ import (
 
 func TestValidateFilter(t *testing.T) {
 	cases := map[string]Filter{
-		"":         FilterAll,
-		"all":      FilterAll,
-		"prayer":   FilterPrayer,
-		"moments":  FilterMoments,
-		"plans":    FilterPlans,
-		"nonsense": FilterAll,
-		"Prayer":   FilterAll, // exact spelling only, same rule as journal.Validate
+		"":          FilterAll,
+		"all":       FilterAll,
+		"prayer":    FilterPrayer,
+		"memories":  FilterMemories,
+		"journal":   FilterJournal,
+		"notes":     FilterNotes,
+		"questions": FilterQuestions,
+		"moments":   FilterMoments, // old clients still send it
+		"plans":     FilterPlans,
+		"nonsense":  FilterAll,
+		"Prayer":    FilterAll, // exact spelling only, same rule as journal.Validate
 	}
 	for raw, want := range cases {
 		if got := ValidateFilter(raw); got != want {
@@ -35,13 +39,22 @@ func TestTypesFor(t *testing.T) {
 		t.Errorf("prayer = %v", prayer)
 	}
 
+	for f, want := range map[Filter]Type{
+		FilterMemories: TypeMemory, FilterJournal: TypeJournal,
+		FilterNotes: TypeAppreciation, FilterQuestions: TypeQuestion,
+	} {
+		if got := TypesFor(f); len(got) != 1 || got[0] != want {
+			t.Errorf("%s = %v, want [%s]", f, got, want)
+		}
+	}
+
 	moments := TypesFor(FilterMoments)
 	if len(moments) != 5 {
 		t.Errorf("moments = %v, want 5 types", moments)
 	}
 
 	plans := TypesFor(FilterPlans)
-	if len(plans) != 2 || plans[0] != TypeEvent || plans[1] != TypeGoal {
+	if len(plans) != 3 || plans[0] != TypeEvent || plans[1] != TypeGoal || plans[2] != TypeChallenge {
 		t.Errorf("plans = %v", plans)
 	}
 }
@@ -105,4 +118,18 @@ func TestParseCursor(t *testing.T) {
 			t.Fatalf("err = %v, want ErrBadCursor", err)
 		}
 	})
+}
+
+func TestParseMonth(t *testing.T) {
+	for raw, want := range map[string]string{"": "", "2026-10": "2026-10", "1999-01": "1999-01"} {
+		got, err := ParseMonth(raw)
+		if err != nil || got != want {
+			t.Errorf("ParseMonth(%q) = %q, %v", raw, got, err)
+		}
+	}
+	for _, raw := range []string{"2026-13", "2026-00", "2026-1", "2026-10-01", "oct", "26-10", " 2026-10"} {
+		if _, err := ParseMonth(raw); err != ErrBadMonth {
+			t.Errorf("ParseMonth(%q) err = %v, want ErrBadMonth", raw, err)
+		}
+	}
 }

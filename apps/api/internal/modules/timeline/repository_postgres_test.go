@@ -390,12 +390,14 @@ func TestTimeline_Challenges(t *testing.T) {
 		t.Errorf("ended = %+v", e)
 	}
 
-	// Not in the other filters, but in "all".
-	for _, f := range []timeline.Filter{timeline.FilterPrayer, timeline.FilterPlans} {
-		other, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(f), nil, 20)
-		if err != nil || len(other) != 0 {
-			t.Errorf("%s = %+v, err %v; want nothing", f, other, err)
-		}
+	// In plans and "all", not in the prayer filter.
+	other, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterPrayer), nil, 20)
+	if err != nil || len(other) != 0 {
+		t.Errorf("prayer = %+v, err %v; want nothing", other, err)
+	}
+	plans, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterPlans), nil, 20)
+	if err != nil || len(plans) != 2 {
+		t.Errorf("plans = %+v, err %v; want the two kept challenges", plans, err)
 	}
 	all, err := repo.Timeline(ctx, coupleID, timeline.TypesFor(timeline.FilterAll), nil, 20)
 	if err != nil || len(all) != 2 {

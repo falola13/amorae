@@ -35,10 +35,16 @@ const (
 type Filter string
 
 const (
-	FilterAll     Filter = "all"
-	FilterPrayer  Filter = "prayer"
+	FilterAll       Filter = "all"
+	FilterPrayer    Filter = "prayer"
+	FilterMemories  Filter = "memories"
+	FilterJournal   Filter = "journal"
+	FilterNotes     Filter = "notes"
+	FilterQuestions Filter = "questions"
+	FilterPlans     Filter = "plans"
+	// FilterMoments is the old grouping, no longer offered by the web but
+	// still accepted so an older client keeps working.
 	FilterMoments Filter = "moments"
-	FilterPlans   Filter = "plans"
 )
 
 // TypesFor is which concrete Types a Filter includes. all is every Type this
@@ -48,10 +54,18 @@ func TypesFor(f Filter) []Type {
 	switch f {
 	case FilterPrayer:
 		return []Type{TypePrayerWeek, TypePrayerAnswered}
+	case FilterMemories:
+		return []Type{TypeMemory}
+	case FilterJournal:
+		return []Type{TypeJournal}
+	case FilterNotes:
+		return []Type{TypeAppreciation}
+	case FilterQuestions:
+		return []Type{TypeQuestion}
 	case FilterMoments:
 		return []Type{TypeMemory, TypeJournal, TypeAppreciation, TypeChallenge, TypeQuestion}
 	case FilterPlans:
-		return []Type{TypeEvent, TypeGoal}
+		return []Type{TypeEvent, TypeGoal, TypeChallenge}
 	default:
 		return []Type{
 			TypePrayerWeek, TypePrayerAnswered, TypeMemory, TypeEvent,
@@ -65,7 +79,7 @@ func TypesFor(f Filter) []Type {
 // version no longer knows, should see everything, not a 400.
 func ValidateFilter(raw string) Filter {
 	switch Filter(raw) {
-	case FilterPrayer, FilterMoments, FilterPlans:
+	case FilterPrayer, FilterMemories, FilterJournal, FilterNotes, FilterQuestions, FilterPlans, FilterMoments:
 		return Filter(raw)
 	default:
 		return FilterAll
@@ -112,6 +126,27 @@ func ParseCursor(raw string) (*time.Time, error) {
 		return nil, ErrBadCursor
 	}
 	return &t, nil
+}
+
+// MonthCount is one couple-local month ("2026-11") and how many entries fall
+// in it.
+type MonthCount struct {
+	Month string
+	Count int
+}
+
+// ErrBadMonth is ParseMonth's answer for a "month" that isn't YYYY-MM.
+var ErrBadMonth = apperr.Validation(map[string]string{"month": "That's not a valid month."})
+
+// ParseMonth checks the "month" query parameter; "" means none.
+func ParseMonth(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	if _, err := time.Parse("2006-01", raw); err != nil || len(raw) != 7 {
+		return "", ErrBadMonth
+	}
+	return raw, nil
 }
 
 // Item is one entry in the couple's timeline, already resolved from
