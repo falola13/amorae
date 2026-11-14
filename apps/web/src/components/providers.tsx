@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { Toaster } from "@/components/layout/toaster";
 import { anniversaryWrites } from "@/features/anniversary/writes";
 import { prayerWrites } from "@/features/prayers/writes";
+import { questionWrites } from "@/features/questions/writes";
 import { settingsWrites } from "@/features/settings/writes";
 import { togetherWrites } from "@/features/together/writes";
 import { useKeyboardInset } from "@/lib/hooks/use-keyboard-inset";
@@ -19,6 +20,7 @@ const resumableWrites: AnyWriteDef[] = [
   ...Object.values(togetherWrites),
   ...Object.values(settingsWrites),
   ...Object.values(anniversaryWrites),
+  ...Object.values(questionWrites),
 ];
 
 // One QueryClient per browser tab. Client-only state (prayer-mode session,

@@ -111,6 +111,31 @@ export interface TodayRequests {
   theirs: PrayerRequest | null;
 }
 
+/** One person's answer to a day's question. */
+export interface QuestionAnswer {
+  text: string;
+  updated_at: string;
+}
+
+/**
+ * A day's question as I may see it (GET /v1/questions/today). `theirs` is
+ * null until I have answered that day, however long ago: the server keeps it
+ * sealed, and `theirs_answered` only says that they did.
+ */
+export interface QuestionEntry {
+  asked_on: string;
+  question: string;
+  mine: QuestionAnswer | null;
+  theirs: QuestionAnswer | null;
+  theirs_answered: boolean;
+}
+
+export interface QuestionPage {
+  items: QuestionEntry[];
+  /** Pass as `before` for the next page; null on the last one. */
+  next: string | null;
+}
+
 export interface PrayerWeek {
   id: string;
   week_start: string; // ISO date, a Sunday
@@ -348,6 +373,8 @@ export interface NotificationPrefs {
   partner_challenges: boolean;
   /** When your partner asks for prayer, or prays for what you asked. */
   prayer_requests: boolean;
+  /** When your partner answers today's question. */
+  daily_question: boolean;
   prayer_answered: boolean;
   /** When the second of you finishes something you are both doing. */
   together: boolean;
@@ -388,7 +415,8 @@ export type NotificationKind =
   | "nudge"
   | "letter"
   | "prayer_request"
-  | "prayed_for_you";
+  | "prayed_for_you"
+  | "question_answered";
 
 /** One row of the notifications inbox (GET /v1/notifications/inbox). Newest first,
  *  at most 30 — the server keeps only that many. */
@@ -430,7 +458,8 @@ export type TimelineItemType =
   | "goal"
   | "journal"
   | "appreciation"
-  | "challenge";
+  | "challenge"
+  | "question";
 
 /** One row of "Our story" (GET /v1/timeline), newest first. */
 export interface TimelineItem {

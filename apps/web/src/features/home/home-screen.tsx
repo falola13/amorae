@@ -29,6 +29,7 @@ import { usePrefs } from "@/features/settings/hooks";
 import { AnniversaryHome } from "./anniversary-home";
 import { HomeChallengeCard } from "./challenge-card";
 import { PrayerRequestCard } from "./prayer-request-card";
+import { QuestionCard } from "./question-card";
 import { eventPhase, nowLabel } from "@/features/together/events";
 import { useEvents, useGoals, useMilestones, useNudge } from "@/features/together/hooks";
 import {
@@ -172,6 +173,7 @@ export function HomeScreen() {
       ) : null}
 
       {alone ? null : <PrayerRequestCard partner={partner} />}
+      {alone ? null : <QuestionCard partner={partner} />}
 
       {weekPrompt}
 

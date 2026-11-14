@@ -49,6 +49,7 @@ const KIND: Record<TimelineItem["type"], string> = {
   journal: "Journal",
   appreciation: "Appreciation",
   challenge: "Challenge",
+  question: "Question",
 };
 
 // The feed sends the first 80 characters of longer text; say so rather than
@@ -111,7 +112,12 @@ function TimelineRow({
         )}
         {item.sub ? (
           words ? (
-            <span className={cx("mt-1 font-text text-bodylg leading-[1.45]", item.type === "appreciation" && "italic")}>
+            <span
+              className={cx(
+                "mt-1 font-text text-bodylg leading-[1.45]",
+                item.type === "appreciation" && "italic",
+              )}
+            >
               {item.type === "appreciation" ? `“${excerpt(item.sub)}”` : excerpt(item.sub)}
             </span>
           ) : (
