@@ -12,7 +12,13 @@ import { routes } from "@/lib/routes";
 /** Today's open, unmarked prompt for each running challenge (at most three), one row each.
  *  A row goes once you have marked it; the card goes when none are left. The note sheet
  *  outlives the card. */
-export function HomeChallengeCard({ partner }: { partner: string }) {
+export function HomeChallengeCard({
+  partner,
+  embedded = false,
+}: {
+  partner: string;
+  embedded?: boolean;
+}) {
   const active = useActiveChallenges();
   const set = useChallengeDay();
   const [noting, setNoting] = useState<{ id: string; n: number } | null>(null);
@@ -32,8 +38,13 @@ export function HomeChallengeCard({ partner }: { partner: string }) {
       {rows.length > 0 ? (
         // A section of the page with ruled items, not a second card: Home keeps
         // at most one raised leaf.
-        <section aria-label="Today’s challenges" className="mt-8 flex flex-col gap-1">
-          <h2 className="m-0 font-text text-section italic text-ink">Today’s challenges</h2>
+        <section
+          aria-label="Today’s challenges"
+          className={embedded ? "mt-3 flex flex-col" : "mt-8 flex flex-col gap-1"}
+        >
+          {embedded ? null : (
+            <h2 className="m-0 font-text text-section italic text-ink">Today’s challenges</h2>
+          )}
           <ul className="m-0 flex list-none flex-col p-0">
             {rows.map(({ c, day }) => (
               <li
@@ -46,7 +57,11 @@ export function HomeChallengeCard({ partner }: { partner: string }) {
                 >
                   {c.title} · Day {day.n}: {day.text}
                 </Link>
-                <Button icon="check" onClick={() => setNoting({ id: c.id, n: day.n })}>
+                <Button
+                  variant="secondary"
+                  icon="check"
+                  onClick={() => setNoting({ id: c.id, n: day.n })}
+                >
                   Done
                 </Button>
               </li>

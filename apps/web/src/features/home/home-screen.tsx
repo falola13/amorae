@@ -5,33 +5,28 @@ import { useState } from "react";
 
 import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
-import {
-  Button,
-  Initial,
-  LinkButton,
-  Micro,
-  Para,
-  Row,
-  Section,
-  Segments,
-  Skeleton,
-} from "@/components/ui/kit";
-import { QueryState } from "@/components/ui/query-state";
+import { Button, LinkButton, Micro, Para, Row, Section, cx, Skeleton } from "@/components/ui/kit";
 import { isAbsence } from "@/lib/api/envelope";
 import { readableMessage } from "@/lib/query/client";
 import { whenLabel, yearsWord } from "@/features/anniversary/derive";
 import { useAnniversary } from "@/features/anniversary/hooks";
 import { useCouple } from "@/features/couple/hooks";
 import { useInbox } from "@/features/notifications/hooks";
-import { setterWord, todaysPoints } from "@/features/prayers/derive";
 import { useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
 import { AnniversaryHome } from "./anniversary-home";
 import { HomeChallengeCard } from "./challenge-card";
-import { PrayerRequestCard } from "./prayer-request-card";
+import { homeChallengeRows } from "@/features/together/challenges";
+import { TodaysPrayer } from "./todays-prayer";
 import { QuestionCard } from "./question-card";
 import { eventPhase, nowLabel } from "@/features/together/events";
-import { useEvents, useGoals, useMilestones, useNudge } from "@/features/together/hooks";
+import {
+  useActiveChallenges,
+  useEvents,
+  useGoals,
+  useMilestones,
+  useNudge,
+} from "@/features/together/hooks";
 import {
   celebrationCopy,
   daysAwayLabel,
@@ -43,7 +38,6 @@ import {
   activeGoal,
   isAlone,
   nextUpcomingEvent,
-  plannedCount,
   reminderLabel,
   todayEvent,
   upcomingEvents,
@@ -66,6 +60,7 @@ export function HomeScreen() {
   const week = useWeek();
   const events = useEvents();
   const goals = useGoals();
+  const challenges = useActiveChallenges();
   // data ?? [] below would make a failed fetch look identical to an empty week, so track it separately.
   const eventsBroke = events.isError && !isAbsence(events.error);
   const goalsBroke = goals.isError && !isAbsence(goals.error);
@@ -122,8 +117,76 @@ export function HomeScreen() {
     );
   }
 
-  // Counted only when every source answered; a failed one would undercount.
-  const planned = w && events.data && goals.data ? plannedCount(upcoming, goal, w) : null;
+  const challengeRows = homeChallengeRows(challenges.data);
+  const alsoToday =
+    todays || challengeRows.length > 0 ? (
+      <Section label="Also today" className="mt-8">
+        {todays ? (
+          // Ruled above and below rather than boxed: there is only one leaf a screen.
+          <Link
+            href={routes.event(todays.id)}
+            className="press mt-2 flex items-center gap-4 border-y border-line py-4 text-ink no-underline"
+          >
+            <span className="flex grow flex-col gap-0.5">
+              <Micro>{partOfDay(todays.start_time)}</Micro>
+              <span className="mt-1 font-text text-section not-italic">{todays.title}</span>
+              <span className="text-support text-stone">
+                {eventPhase(todays, now) === "ongoing"
+                  ? nowLabel(todays)
+                  : time12(todays.start_time)}
+                {(eventPhase(todays, now) === "ongoing" || todays.start_time) && todays.location
+                  ? " · "
+                  : ""}
+                {todays.location ?? ""}
+              </span>
+            </span>
+            <Icon name="right" size={18} className="text-stone" />
+          </Link>
+        ) : null}
+        <HomeChallengeCard partner={partner} embedded />
+      </Section>
+    ) : (
+      // The note sheet outlives the card, so it stays mounted.
+      <HomeChallengeCard partner={partner} embedded />
+    );
+
+  const comingUp =
+    eventsBroke || goalsBroke || nextEvent || goal ? (
+      <Section label="Coming up" className="mt-8">
+        {eventsBroke ? (
+          <Row
+            icon="alert"
+            title="Plans didn’t load"
+            sub="Open events to try again"
+            href={routes.events}
+          />
+        ) : nextEvent ? (
+          <Row
+            title={<span className="font-text text-bodylg font-normal">{nextEvent.title}</span>}
+            sub={`${relativeDay(nextEvent.date, todayIso)}${nextEvent.start_time ? `, ${time12(nextEvent.start_time)}` : ""}`}
+            href={routes.event(nextEvent.id)}
+          />
+        ) : null}
+        {goalsBroke ? (
+          <Row
+            icon="alert"
+            title="Goals didn’t load"
+            sub="Open goals to try again"
+            href={routes.goals}
+          />
+        ) : goal ? (
+          <Row
+            title={<span className="font-text text-bodylg font-normal">{goal.goal.title}</span>}
+            sub={
+              goal.goal.unit === "naira"
+                ? `${naira(goal.total)} so far`
+                : `${goal.total} of ${goal.goal.target} ${goal.goal.unit_label ?? ""}`
+            }
+            href={routes.goal(goal.goal.id)}
+          />
+        ) : null}
+      </Section>
+    ) : null;
 
   return (
     <Main>
@@ -172,150 +235,44 @@ export function HomeScreen() {
         <AnniversaryAhead a={anniversary.data} partner={partner} />
       ) : null}
 
-      {alone ? null : <PrayerRequestCard partner={partner} />}
-      {alone ? null : <QuestionCard partner={partner} />}
-
-      {weekPrompt}
-
       {alone ? (
-        // The one raised leaf: the thing someone is waiting on.
-        <div className="mt-8 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
-          <Micro>Just you, so far</Micro>
-          <h2 className="m-0 mt-2 font-text text-section">Amorae is for two.</h2>
-          <Para className="mt-1.5">
-            The week&rsquo;s prayers, the plans, the things you keep &mdash; none of it starts until{" "}
-            {partner} is here too.
-          </Para>
-          <LinkButton href={routes.invite} className="mt-4">
-            Invite them
-          </LinkButton>
+        <>
+          {/* The one raised leaf: the thing someone is waiting on. */}
+          <div className="mt-8 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
+            <Micro>Just you, so far</Micro>
+            <h2 className="m-0 mt-2 font-text text-section">Amorae is for two.</h2>
+            <Para className="mt-1.5">
+              The week&rsquo;s prayers, the plans, the things you keep &mdash; none of it starts
+              until {partner} is here too.
+            </Para>
+            <LinkButton href={routes.invite} className="mt-4">
+              Invite them
+            </LinkButton>
+          </div>
+          {comingUp}
+        </>
+      ) : (
+        <div className="flex flex-col lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-8">
+          <div className="flex flex-col">
+            <TodaysPrayer
+              couple={coupleData}
+              week={w}
+              reminder={prefs.data ? reminder : null}
+              weekPrompt={(raised) =>
+                w && w.status !== "published" ? (
+                  <WeekPrompt week={w} meId={me.id} partner={partner} raised={raised} />
+                ) : null
+              }
+            />
+            <QuestionCard partner={partner} />
+          </div>
+          <div className="flex flex-col">
+            {alsoToday}
+            {comingUp}
+          </div>
         </div>
-      ) : null}
+      )}
 
-      {alone ? null : <HomeChallengeCard partner={partner} />}
-
-      {/* Side by side from `lg`; a single column would leave the right half empty. */}
-      <div className="flex flex-col lg:mt-8 lg:flex-row lg:items-start lg:gap-8">
-        {todays ? (
-          // Ruled above and below rather than boxed: there is only one leaf a screen.
-          <Link
-            href={routes.event(todays.id)}
-            className="press mt-8 flex items-center gap-4 border-y border-line py-4 text-ink no-underline lg:mt-0 lg:flex-1"
-          >
-            <span className="flex grow flex-col gap-0.5">
-              <Micro>{partOfDay(todays.start_time)}</Micro>
-              <span className="mt-1 font-text text-section not-italic">{todays.title}</span>
-              <span className="text-support text-stone">
-                {eventPhase(todays, now) === "ongoing"
-                  ? nowLabel(todays)
-                  : time12(todays.start_time)}
-                {(eventPhase(todays, now) === "ongoing" || todays.start_time) && todays.location
-                  ? " · "
-                  : ""}
-                {todays.location ?? ""}
-              </span>
-            </span>
-            <Icon name="right" size={18} className="text-stone" />
-          </Link>
-        ) : null}
-
-        {/* Hidden entirely when alone with nothing planned — a heading with nothing under it reads as broken. */}
-        {alone && !eventsBroke && !goalsBroke && !nextEvent && !goal ? null : (
-          <Section
-            label="This week"
-            className="mt-8 lg:mt-0 lg:flex-1"
-            trailing={
-              planned !== null ? (
-                <span className="lining text-support text-stone">
-                  {planned} {planned === 1 ? "thing" : "things"} planned
-                </span>
-              ) : undefined
-            }
-          >
-            {/* No week can exist without a partner (prayer alternates between two people), so skip it. */}
-            {alone ? null : (
-              <QueryState queries={[week]} loading={<Skeleton lines={1} />}>
-                {(wk) => {
-                  // Not shared yet: the prompt above says what to do; this row just says so.
-                  // Content rows lose their leading icon: the words name the thing.
-                  if (wk.status !== "published") {
-                    return (
-                      <Row
-                        title="Weekly prayer"
-                        sub={wk.status === "draft" ? "Not shared yet" : `${partner} is setting it`}
-                        href={wk.status === "draft" ? routes.prayersSet : routes.prayers}
-                      />
-                    );
-                  }
-                  const total = todaysPoints(wk).length;
-                  const done = wk.my_completed.length;
-                  return (
-                    <Row
-                      title="Weekly prayer"
-                      sub={
-                        total === 0
-                          ? `Set by ${setterWord(wk, me.id, partner)} · nothing set for today`
-                          : `Set by ${setterWord(wk, me.id, partner)} · today ${done} of ${total} prayed`
-                      }
-                      href={routes.prayers}
-                    >
-                      {total > 0 ? (
-                        <Segments
-                          total={total}
-                          done={done}
-                          height={4}
-                          className="mb-0.5 mt-1.5 w-24"
-                        />
-                      ) : null}
-                    </Row>
-                  );
-                }}
-              </QueryState>
-            )}
-            {eventsBroke ? (
-              <Row
-                icon="alert"
-                title="Plans didn’t load"
-                sub="Open events to try again"
-                href={routes.events}
-              />
-            ) : nextEvent ? (
-              <Row
-                title={<span className="font-text text-bodylg font-normal">{nextEvent.title}</span>}
-                sub={`${relativeDay(nextEvent.date, todayIso)}${nextEvent.start_time ? `, ${time12(nextEvent.start_time)}` : ""}`}
-                href={routes.event(nextEvent.id)}
-              />
-            ) : null}
-            {goalsBroke ? (
-              <Row
-                icon="alert"
-                title="Goals didn’t load"
-                sub="Open goals to try again"
-                href={routes.goals}
-              />
-            ) : goal ? (
-              <Row
-                title={<span className="font-text text-bodylg font-normal">{goal.goal.title}</span>}
-                sub={
-                  goal.goal.unit === "naira"
-                    ? `${naira(goal.total)} so far`
-                    : `${goal.total} of ${goal.goal.target} ${goal.goal.unit_label ?? ""}`
-                }
-                href={routes.goal(goal.goal.id)}
-              />
-            ) : null}
-          </Section>
-        )}
-      </div>
-
-      {w && w.status === "published" ? (
-        <PrayerFooter
-          week={w}
-          partner={partner}
-          partnerPhoto={coupleData.partner?.photo_url}
-          reminder={prefs.data ? reminder : null}
-        />
-      ) : null}
       {coupleData.partner ? <Nudge partner={partner} /> : null}
     </Main>
   );
@@ -488,45 +445,6 @@ function Nudge({ partner }: { partner: string }) {
   );
 }
 
-/** The prayer call to action and the partner's progress, shown only once the week has loaded. */
-function PrayerFooter({
-  week: w,
-  partner,
-  partnerPhoto,
-  reminder,
-}: {
-  week: PrayerWeek;
-  partner: string;
-  partnerPhoto?: string | null;
-  reminder: string | null;
-}) {
-  const done = w.my_completed.length;
-  const total = todaysPoints(w).length;
-  const partnerToday = w.partner_completed.length > 0;
-  return (
-    <>
-      <div className="mt-4">
-        <LinkButton href={routes.prayerMode()}>
-          {total === 0 || done >= total
-            ? "Open prayer mode"
-            : done === 0
-              ? "Begin praying"
-              : "Continue praying"}
-        </LinkButton>
-      </div>
-      <div className="mt-3 flex items-center gap-2 pb-4 text-support text-stone">
-        <Initial letter={partner[0]} photoUrl={partnerPhoto} name={partner} size={22} />
-        {total === 0
-          ? "Nothing set for today"
-          : partnerToday
-            ? `${partner} has prayed today`
-            : `${partner} hasn’t prayed yet today`}
-        {reminder ? <> &middot; reminder {reminder}</> : null}
-      </div>
-    </>
-  );
-}
-
 /**
  * The week's prayers aren't shared yet. Once this was the whole of Home,
  * which hid everything else for days at a time; now it is the first card,
@@ -536,17 +454,26 @@ function WeekPrompt({
   week: w,
   meId,
   partner,
+  raised = true,
 }: {
   week: PrayerWeek;
   meId: string;
   partner: string;
+  raised?: boolean;
 }) {
   const first = partner.split(" ")[0];
   const mine = w.setter_id === meId;
   const waiting = w.status === "waiting";
   return (
-    // The screen's one raised leaf while it shows: the week is waiting on someone.
-    <div className="mt-8 flex flex-col items-start rounded-card border border-line bg-surface px-5 py-5">
+    // The screen's one raised leaf while it shows, unless a request already is.
+    <div
+      className={cx(
+        "flex flex-col items-start",
+        raised
+          ? "mt-8 rounded-card border border-line bg-surface px-5 py-5"
+          : "mt-3 border-y border-line py-4",
+      )}
+    >
       <Micro className="lining">{range(w.week_start, w.week_end)}</Micro>
       <h2 className="m-0 mt-2 font-text text-section">
         {waiting

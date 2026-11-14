@@ -5,20 +5,46 @@ import { useState } from "react";
 
 import { BareTextarea, Button, Para, StatusMark } from "@/components/ui/kit";
 import { useAnswerQuestion, useTodayQuestion } from "@/features/questions/hooks";
+import type { QuestionPrevious } from "@/lib/api/types";
+import { longDate } from "@/lib/dates";
 import { routes } from "@/lib/routes";
 
 const MAX = 1000;
 
 /**
- * Today's question, sealed until both of you have written. A change of paper
- * with an envelope flap, not a second raised card. The seal is the server's:
+ * Today's question, sealed until both of you have written. While you haven't,
+ * it is a change of paper with an envelope flap, not a second raised card.
+ * Once you have, it settles into a ruled block. The seal is the server's:
  * `theirs` simply is not in the response until you have answered.
  */
 export function QuestionCard({ partner }: { partner: string }) {
   const today = useTodayQuestion();
   const first = partner.split(" ")[0];
   if (!today.data) return null;
-  const { question, mine, theirs, theirs_answered: theyAnswered } = today.data;
+  const { question, mine, theirs, theirs_answered: theyAnswered, previous } = today.data;
+
+  if (mine) {
+    return (
+      <section aria-label="Today’s question" className="mt-8 border-y border-line py-5">
+        <div className="text-micro uppercase text-stone">Today’s question</div>
+        <h2 className="m-0 mt-2 font-text text-section" data-selectable>
+          {question}
+        </h2>
+        {theirs ? (
+          <Both
+            question={question}
+            mine={mine.text}
+            theirs={theirs.text}
+            first={first}
+            previous={previous}
+          />
+        ) : (
+          <Sealed question={question} mine={mine.text} first={first} previous={previous} />
+        )}
+        <PastLink />
+      </section>
+    );
+  }
 
   return (
     <section
@@ -62,25 +88,21 @@ export function QuestionCard({ partner }: { partner: string }) {
         {question}
       </h2>
 
-      {mine ? (
-        <Answered
-          question={question}
-          mine={mine.text}
-          theirs={theirs?.text ?? null}
-          first={first}
-          theyAnswered={theyAnswered}
-        />
-      ) : (
-        <Unanswered first={first} theyAnswered={theyAnswered} />
-      )}
+      <Unanswered first={first} theyAnswered={theyAnswered} />
 
-      <Link
-        href={routes.questions}
-        className="press mt-1 inline-flex h-11 items-center text-[15px] font-semibold text-plum no-underline"
-      >
-        Past questions
-      </Link>
+      <PastLink />
     </section>
+  );
+}
+
+function PastLink() {
+  return (
+    <Link
+      href={routes.questions}
+      className="press mt-1 inline-flex h-11 items-center text-[15px] font-semibold text-plum no-underline"
+    >
+      Past questions
+    </Link>
   );
 }
 
@@ -128,57 +150,118 @@ function Unanswered({ first, theyAnswered }: { first: string; theyAnswered: bool
   );
 }
 
-function Answered({
+function Mine({ question, mine }: { question: string; mine: string }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="mt-4 flex flex-col gap-1 border-t border-line pt-4">
+      <span className="text-micro uppercase text-stone">You</span>
+      {editing ? (
+        <Composer
+          question={question}
+          initial={mine}
+          onDone={() => setEditing(false)}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          <p className="m-0 font-text text-bodylg text-ink" data-selectable>
+            {mine}
+          </p>
+          <div className="-ml-2">
+            <Button variant="quiet" onClick={() => setEditing(true)}>
+              Change
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The last time this same question came round and you both answered it. */
+function LastTime({ previous, first }: { previous?: QuestionPrevious; first: string }) {
+  if (!previous?.mine || !previous.theirs) return null;
+  return (
+    <div className="mt-4 flex flex-col gap-1 border-t border-line pt-4">
+      <span className="text-micro uppercase text-stone">
+        Last time ({longDate(previous.asked_on)})
+      </span>
+      <p className="m-0 text-support text-stone" data-selectable>
+        You said <span className="font-text text-ink">{previous.mine.text}</span>
+      </p>
+      <p className="m-0 text-support text-stone" data-selectable>
+        {first} said <span className="font-text text-ink">{previous.theirs.text}</span>
+      </p>
+    </div>
+  );
+}
+
+/** You have answered and they have not: yours, and a note that theirs is sealed. */
+function Sealed({
+  question,
+  mine,
+  first,
+  previous,
+}: {
+  question: string;
+  mine: string;
+  first: string;
+  previous?: QuestionPrevious;
+}) {
+  return (
+    <>
+      <Para size="support" className="mt-2">
+        Sealed until {first} answers
+      </Para>
+      <Mine question={question} mine={mine} />
+      <LastTime previous={previous} first={first} />
+    </>
+  );
+}
+
+/** You both answered: one line, with the answers a tap away. */
+function Both({
   question,
   mine,
   theirs,
   first,
-  theyAnswered,
+  previous,
 }: {
   question: string;
   mine: string;
-  theirs: string | null;
+  theirs: string;
   first: string;
-  theyAnswered: boolean;
+  previous?: QuestionPrevious;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(false);
   return (
     <>
-      <Who first={first} theyAnswered={theyAnswered} iAnswered />
-      {theirs !== null ? (
-        <div className="mt-4 flex flex-col gap-1 border-t border-line pt-4">
-          <span className="text-micro uppercase text-stone">{first}</span>
-          <p className="m-0 font-text text-bodylg text-ink" data-selectable>
-            {theirs}
-          </p>
-        </div>
-      ) : (
-        <Para size="support" className="mt-3">
-          {first} hasn’t answered yet. Theirs opens here when they do.
-        </Para>
-      )}
-      <div className="mt-4 flex flex-col gap-1 border-t border-line pt-4">
-        <span className="text-micro uppercase text-stone">You</span>
-        {editing ? (
-          <Composer
-            question={question}
-            initial={mine}
-            onDone={() => setEditing(false)}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <>
-            <p className="m-0 font-text text-bodylg text-ink" data-selectable>
-              {mine}
-            </p>
-            <div className="-ml-2">
-              <Button variant="quiet" onClick={() => setEditing(true)}>
-                Change
-              </Button>
-            </div>
-          </>
-        )}
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-2 text-support text-stone">
+          <StatusMark done size={20} label="Answered" />
+          You both answered
+        </span>
+        <Button
+          variant="text"
+          className="w-auto px-2"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          {open ? "Hide answers" : "Show answers"}
+        </Button>
       </div>
+      {open ? (
+        <>
+          <div className="mt-2 flex flex-col gap-1 border-t border-line pt-4">
+            <span className="text-micro uppercase text-stone">{first}</span>
+            <p className="m-0 font-text text-bodylg text-ink" data-selectable>
+              {theirs}
+            </p>
+          </div>
+          <Mine question={question} mine={mine} />
+          <LastTime previous={previous} first={first} />
+        </>
+      ) : null}
     </>
   );
 }
