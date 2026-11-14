@@ -277,8 +277,10 @@ func pathID(w http.ResponseWriter, r *http.Request, name, thing string) (uuid.UU
 // requestDTO is one request as the app sees it. prayed_at is when the other
 // person prayed for it; nil means not yet.
 type requestDTO struct {
-	Text     string     `json:"text"`
-	AskedOn  string     `json:"asked_on"`
+	Text    string `json:"text"`
+	AskedOn string `json:"asked_on"`
+	// AskedAt is when the request was first written, so the partner sees the time it was asked.
+	AskedAt  string     `json:"asked_at"`
 	PrayedAt *time.Time `json:"prayed_at"`
 }
 
@@ -291,7 +293,8 @@ func toRequestDTO(q *Request) *requestDTO {
 	if q == nil {
 		return nil
 	}
-	return &requestDTO{Text: q.Text, AskedOn: q.AskedOn.Format("2006-01-02"), PrayedAt: q.PrayedAt}
+	return &requestDTO{Text: q.Text, AskedOn: q.AskedOn.Format("2006-01-02"),
+		AskedAt: q.CreatedAt.UTC().Format(time.RFC3339), PrayedAt: q.PrayedAt}
 }
 
 // respondRequests answers any request call with today's state, or the error.

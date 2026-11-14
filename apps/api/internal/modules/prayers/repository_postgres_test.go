@@ -672,6 +672,9 @@ func TestService_PrayerRequests(t *testing.T) {
 		if mine == nil || mine.PrayedAt == nil || mine.Text != "The interview at two" {
 			t.Fatalf("mine = %+v, want it kept and marked prayed", mine)
 		}
+		if mine.CreatedAt.IsZero() {
+			t.Errorf("created_at (asked_at in the API) is empty: %+v", mine)
+		}
 	})
 
 	t.Run("praying again later keeps the first time", func(t *testing.T) {

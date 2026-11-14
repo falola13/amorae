@@ -102,6 +102,8 @@ export interface PrayerDay {
 export interface PrayerRequest {
   text: string;
   asked_on: string;
+  /** When the request was first written (RFC 3339). */
+  asked_at: string;
   /** When the other one prayed for it; null means not yet. */
   prayed_at: string | null;
 }

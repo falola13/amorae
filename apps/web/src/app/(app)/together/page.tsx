@@ -10,6 +10,7 @@ import {
 } from "@/features/together/hooks";
 import { useTimeline } from "@/features/timeline/hooks";
 import { useAnswered } from "@/features/prayers/hooks";
+import { usePastQuestions, useTodayQuestion } from "@/features/questions/hooks";
 import { challengesLine } from "@/features/together/challenges";
 import { eventPhase } from "@/features/together/events";
 import type { Event } from "@/lib/api/types";
@@ -40,6 +41,8 @@ export default function Together() {
   const milestones = useMilestones();
   const answered = useAnswered();
   const appr = useAppreciations();
+  const pastQuestions = usePastQuestions();
+  const todayQuestion = useTodayQuestion();
   const partner = couple.data?.partner?.display_name ?? "your partner";
   const todayIso = iso(today());
 
@@ -72,6 +75,12 @@ export default function Together() {
     .map((d) => ({ ...d, next: nextOccurrence(d.date, todayIso) }))
     .sort((a, b) => a.next.localeCompare(b.next))[0];
   const answeredCount = (answered.data ?? []).length;
+  // Days you both answered: the first page of the archive plus today, so a long
+  // run reads "20+" rather than a number that quietly stops counting.
+  const bothAnswered =
+    (pastQuestions.data?.pages[0]?.items ?? []).filter((d) => d.mine && d.theirs).length +
+    (todayQuestion.data?.mine && todayQuestion.data.theirs ? 1 : 0);
+  const moreQuestions = Boolean(pastQuestions.data?.pages[0]?.next);
 
   return (
     <Main>
@@ -157,6 +166,16 @@ export default function Together() {
                 : "Something I appreciate about you",
             )}
             href={routes.appreciation}
+          />
+          <Row
+            title="Questions"
+            sub={summary(
+              pastQuestions,
+              bothAnswered
+                ? `${bothAnswered}${moreQuestions ? "+" : ""} ${bothAnswered === 1 && !moreQuestions ? "day" : "days"} you both answered`
+                : "One question a day, sealed until you both answer",
+            )}
+            href={routes.questions}
           />
           <Row
             title="Answered prayers"
