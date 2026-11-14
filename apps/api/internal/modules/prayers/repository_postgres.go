@@ -482,3 +482,101 @@ func nullIfEmpty(s string) *string {
 	}
 	return &s
 }
+
+// RequestsOn is both partners' requests for one day, at most one each.
+func (r *PostgresRepository) RequestsOn(ctx context.Context, coupleID uuid.UUID, day time.Time) ([]Request, error) {
+	rows, err := r.db.Q(ctx).Query(ctx, `
+		SELECT id, couple_id, author_id, asked_on, text, prayed_by, prayed_at, created_at
+		FROM prayer_requests
+		WHERE couple_id = $1 AND asked_on = $2
+	`, coupleID, day)
+	if err != nil {
+		return nil, fmt.Errorf("reading prayer requests: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Request
+	for rows.Next() {
+		var q Request
+		if err := rows.Scan(&q.ID, &q.CoupleID, &q.AuthorID, &q.AskedOn, &q.Text,
+			&q.PrayedBy, &q.PrayedAt, &q.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scanning a prayer request: %w", err)
+		}
+		out = append(out, q)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading prayer requests: %w", err)
+	}
+	return out, nil
+}
+
+// KeepRequest writes today's request, or rewrites it, but never once it has
+// been prayed for. The WHERE on the update leaves a locked row alone, so no
+// row is affected and we say why.
+func (r *PostgresRepository) KeepRequest(
+	ctx context.Context, coupleID, authorID uuid.UUID, day time.Time, text string, at time.Time,
+) error {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("making a request id: %w", err)
+	}
+	tag, err := r.db.Q(ctx).Exec(ctx, `
+		INSERT INTO prayer_requests (id, couple_id, author_id, asked_on, text, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $6)
+		ON CONFLICT (couple_id, author_id, asked_on)
+		DO UPDATE SET text = EXCLUDED.text, updated_at = EXCLUDED.updated_at
+		WHERE prayer_requests.prayed_at IS NULL
+	`, id, coupleID, authorID, day, text, at)
+	if err != nil {
+		return fmt.Errorf("keeping a prayer request: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrAlreadyPrayedFor
+	}
+	return nil
+}
+
+// DeleteRequest withdraws today's request, unless it has been prayed for.
+// Deleting one that isn't there is fine: a second tap after a dropped
+// response lands the same way as the first.
+func (r *PostgresRepository) DeleteRequest(ctx context.Context, coupleID, authorID uuid.UUID, day time.Time) error {
+	if _, err := r.db.Q(ctx).Exec(ctx, `
+		DELETE FROM prayer_requests
+		WHERE couple_id = $1 AND author_id = $2 AND asked_on = $3 AND prayed_at IS NULL
+	`, coupleID, authorID, day); err != nil {
+		return fmt.Errorf("withdrawing a prayer request: %w", err)
+	}
+	return nil
+}
+
+// MarkRequestPrayed sets or clears "prayed for" on the request authorID made
+// on day. Returns ErrNoRequest when there is none to mark.
+func (r *PostgresRepository) MarkRequestPrayed(
+	ctx context.Context, coupleID, authorID uuid.UUID, day time.Time, prayedBy uuid.UUID, done bool, at time.Time,
+) error {
+	// Two statements: "done" keeps the first prayed_at (a repeat tap must not
+	// move the time), while "undo" clears both columns together so the
+	// both-or-neither CHECK holds.
+	query := `
+		UPDATE prayer_requests
+		SET prayed_by = NULL, prayed_at = NULL
+		WHERE couple_id = $1 AND author_id = $2 AND asked_on = $3
+	`
+	args := []any{coupleID, authorID, day}
+	if done {
+		query = `
+			UPDATE prayer_requests
+			SET prayed_by = COALESCE(prayed_by, $4), prayed_at = COALESCE(prayed_at, $5)
+			WHERE couple_id = $1 AND author_id = $2 AND asked_on = $3
+		`
+		args = append(args, prayedBy, at)
+	}
+	tag, err := r.db.Q(ctx).Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("marking a request prayed for: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNoRequest
+	}
+	return nil
+}

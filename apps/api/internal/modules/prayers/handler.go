@@ -3,6 +3,7 @@ package prayers
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -22,6 +23,10 @@ type service interface {
 	SetReflection(ctx context.Context, userID, weekID uuid.UUID, body string) (Record, CoupleContext, error)
 	SetAnswered(ctx context.Context, userID, pointID uuid.UUID, answered bool, note string) (Record, CoupleContext, error)
 	Answered(ctx context.Context, userID uuid.UUID) ([]Answered, CoupleContext, error)
+	TodayRequests(ctx context.Context, userID uuid.UUID) (mine, theirs *Request, err error)
+	AskForPrayer(ctx context.Context, userID uuid.UUID, text string) error
+	WithdrawRequest(ctx context.Context, userID uuid.UUID) error
+	PrayedForPartner(ctx context.Context, userID uuid.UUID, done bool) error
 }
 
 type Handler struct {
@@ -44,6 +49,11 @@ func (h *Handler) RegisterRoutes(r *httpx.Router) {
 	r.HandleAuthed("GET /prayers/answered", http.HandlerFunc(h.answered))
 	r.HandleAuthed("PUT /prayers/points/{id}/answered", http.HandlerFunc(h.setAnswered))
 	r.HandleAuthed("DELETE /prayers/points/{id}/answered", http.HandlerFunc(h.unsetAnswered))
+	r.HandleAuthed("GET /prayers/requests/today", http.HandlerFunc(h.todayRequests))
+	r.HandleAuthed("PUT /prayers/requests/today", http.HandlerFunc(h.askForPrayer))
+	r.HandleAuthed("DELETE /prayers/requests/today", http.HandlerFunc(h.withdrawRequest))
+	r.HandleAuthed("POST /prayers/requests/today/prayed", http.HandlerFunc(h.prayedForPartner))
+	r.HandleAuthed("DELETE /prayers/requests/today/prayed", http.HandlerFunc(h.unprayedForPartner))
 }
 
 // Every write responds with the whole week, so a client never has to
@@ -262,4 +272,87 @@ func pathID(w http.ResponseWriter, r *http.Request, name, thing string) (uuid.UU
 		return uuid.UUID{}, false
 	}
 	return id, true
+}
+
+// requestDTO is one request as the app sees it. prayed_at is when the other
+// person prayed for it; nil means not yet.
+type requestDTO struct {
+	Text     string     `json:"text"`
+	AskedOn  string     `json:"asked_on"`
+	PrayedAt *time.Time `json:"prayed_at"`
+}
+
+type todayRequestsDTO struct {
+	Mine   *requestDTO `json:"mine"`
+	Theirs *requestDTO `json:"theirs"`
+}
+
+func toRequestDTO(q *Request) *requestDTO {
+	if q == nil {
+		return nil
+	}
+	return &requestDTO{Text: q.Text, AskedOn: q.AskedOn.Format("2006-01-02"), PrayedAt: q.PrayedAt}
+}
+
+// respondRequests answers any request call with today's state, or the error.
+func (h *Handler) respondRequests(w http.ResponseWriter, r *http.Request, userID uuid.UUID, err error) {
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	mine, theirs, err := h.svc.TodayRequests(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	httpx.Data(w, http.StatusOK, todayRequestsDTO{Mine: toRequestDTO(mine), Theirs: toRequestDTO(theirs)})
+}
+
+func (h *Handler) todayRequests(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	h.respondRequests(w, r, userID, nil)
+}
+
+type askRequest struct {
+	Text string `json:"text"`
+}
+
+func (h *Handler) askForPrayer(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	var req askRequest
+	if err := httpx.Decode(w, r, &req); err != nil {
+		httpx.Error(w, r, err)
+		return
+	}
+	h.respondRequests(w, r, userID, h.svc.AskForPrayer(r.Context(), userID, req.Text))
+}
+
+func (h *Handler) withdrawRequest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	h.respondRequests(w, r, userID, h.svc.WithdrawRequest(r.Context(), userID))
+}
+
+func (h *Handler) prayedForPartner(w http.ResponseWriter, r *http.Request) {
+	h.setPrayedForPartner(w, r, true)
+}
+
+func (h *Handler) unprayedForPartner(w http.ResponseWriter, r *http.Request) {
+	h.setPrayedForPartner(w, r, false)
+}
+
+func (h *Handler) setPrayedForPartner(w http.ResponseWriter, r *http.Request, done bool) {
+	userID, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	h.respondRequests(w, r, userID, h.svc.PrayedForPartner(r.Context(), userID, done))
 }

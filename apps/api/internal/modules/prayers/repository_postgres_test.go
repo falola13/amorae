@@ -3,6 +3,7 @@ package prayers_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -618,4 +619,167 @@ func TestService_Pokes(t *testing.T) {
 			t.Errorf("pokes = %d, want 0 after taking the mark back", poker.pokes)
 		}
 	})
+}
+
+func TestService_PrayerRequests(t *testing.T) {
+	db := dbtest.New(t)
+	ctx := context.Background()
+	coupleID, ada, ben := pair(t, db)
+	repo := prayers.NewPostgresRepository(db)
+	cc := prayers.CoupleContext{
+		CoupleID: coupleID,
+		Location: time.UTC,
+		Members: []prayers.Member{
+			{UserID: ada, JoinedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{UserID: ben, JoinedAt: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)},
+		},
+	}
+	now := time.Date(2026, 9, 22, 8, 0, 0, 0, time.UTC)
+	poker := &countingPoker{}
+	svc := prayers.NewService(repo, fakeCouples{cc: cc}, func() time.Time { return now }, poker)
+
+	t.Run("asking twice the same day keeps one request, with the new words", func(t *testing.T) {
+		if err := svc.AskForPrayer(ctx, ada, "The interview"); err != nil {
+			t.Fatalf("first ask: %v", err)
+		}
+		if err := svc.AskForPrayer(ctx, ada, "The interview at two"); err != nil {
+			t.Fatalf("second ask: %v", err)
+		}
+		mine, _, err := svc.TodayRequests(ctx, ada)
+		if err != nil || mine == nil || mine.Text != "The interview at two" {
+			t.Fatalf("mine = %+v, err %v", mine, err)
+		}
+	})
+
+	t.Run("the partner sees it as theirs", func(t *testing.T) {
+		_, theirs, err := svc.TodayRequests(ctx, ben)
+		if err != nil || theirs == nil || theirs.Text != "The interview at two" {
+			t.Fatalf("theirs = %+v, err %v", theirs, err)
+		}
+	})
+
+	t.Run("once prayed for, it can't be changed or withdrawn", func(t *testing.T) {
+		if err := svc.PrayedForPartner(ctx, ben, true); err != nil {
+			t.Fatalf("PrayedForPartner: %v", err)
+		}
+		if err := svc.AskForPrayer(ctx, ada, "Something else"); !errors.Is(err, prayers.ErrAlreadyPrayedFor) {
+			t.Errorf("edit after prayer = %v, want ErrAlreadyPrayedFor", err)
+		}
+		if err := svc.WithdrawRequest(ctx, ada); err != nil {
+			t.Errorf("withdraw after prayer = %v, want a quiet no-op", err)
+		}
+		mine, _, _ := svc.TodayRequests(ctx, ada)
+		if mine == nil || mine.PrayedAt == nil || mine.Text != "The interview at two" {
+			t.Fatalf("mine = %+v, want it kept and marked prayed", mine)
+		}
+	})
+
+	t.Run("praying again later keeps the first time", func(t *testing.T) {
+		first, _, _ := svc.TodayRequests(ctx, ada)
+		now = now.Add(time.Hour)
+		if err := svc.PrayedForPartner(ctx, ben, true); err != nil {
+			t.Fatalf("second tap: %v", err)
+		}
+		again, _, _ := svc.TodayRequests(ctx, ada)
+		if again == nil || first == nil || !again.PrayedAt.Equal(*first.PrayedAt) {
+			t.Errorf("prayed_at moved: %v then %v", first.PrayedAt, again.PrayedAt)
+		}
+		now = now.Add(-time.Hour)
+	})
+
+	t.Run("undo clears it", func(t *testing.T) {
+		if err := svc.PrayedForPartner(ctx, ben, false); err != nil {
+			t.Fatalf("undo: %v", err)
+		}
+		mine, _, _ := svc.TodayRequests(ctx, ada)
+		if mine == nil || mine.PrayedAt != nil || mine.PrayedBy != nil {
+			t.Errorf("after undo mine = %+v, want unmarked", mine)
+		}
+		if err := svc.AskForPrayer(ctx, ada, "Edited after undo"); err != nil {
+			t.Errorf("edit after undo = %v, want allowed again", err)
+		}
+	})
+
+	t.Run("praying when they haven't asked is ErrNoRequest", func(t *testing.T) {
+		if err := svc.PrayedForPartner(ctx, ada, true); !errors.Is(err, prayers.ErrNoRequest) {
+			t.Errorf("= %v, want ErrNoRequest (Ben never asked)", err)
+		}
+	})
+
+	t.Run("you can't mark your own request", func(t *testing.T) {
+		// PrayedForPartner only ever targets the partner's row, so Ada's tap
+		// with only her own request standing does nothing to it.
+		mine, _, _ := svc.TodayRequests(ctx, ada)
+		if err := svc.PrayedForPartner(ctx, ada, true); !errors.Is(err, prayers.ErrNoRequest) {
+			t.Errorf("= %v, want ErrNoRequest", err)
+		}
+		after, _, _ := svc.TodayRequests(ctx, ada)
+		if after == nil || mine == nil || after.PrayedAt != nil {
+			t.Errorf("own request was marked: %+v", after)
+		}
+	})
+
+	t.Run("another couple can't see it", func(t *testing.T) {
+		otherID, carol, dan := pair(t, db)
+		other := prayers.CoupleContext{
+			CoupleID: otherID,
+			Location: time.UTC,
+			Members: []prayers.Member{
+				{UserID: carol, JoinedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+				{UserID: dan, JoinedAt: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)},
+			},
+		}
+		stranger := prayers.NewService(repo, fakeCouples{cc: other}, func() time.Time { return now }, poker)
+		mine, theirs, err := stranger.TodayRequests(ctx, carol)
+		if err != nil || mine != nil || theirs != nil {
+			t.Errorf("other couple: mine %+v theirs %+v err %v", mine, theirs, err)
+		}
+		if err := stranger.PrayedForPartner(ctx, carol, true); !errors.Is(err, prayers.ErrNoRequest) {
+			t.Errorf("other couple praying = %v, want ErrNoRequest", err)
+		}
+	})
+
+	t.Run("withdrawing before it's prayed for removes it", func(t *testing.T) {
+		if err := svc.WithdrawRequest(ctx, ada); err != nil {
+			t.Fatalf("withdraw: %v", err)
+		}
+		mine, _, _ := svc.TodayRequests(ctx, ada)
+		if mine != nil {
+			t.Errorf("mine = %+v, want none", mine)
+		}
+	})
+
+	t.Run("the next day starts empty", func(t *testing.T) {
+		if err := svc.AskForPrayer(ctx, ada, "Tonight"); err != nil {
+			t.Fatalf("ask: %v", err)
+		}
+		tomorrow := prayers.NewService(repo, fakeCouples{cc: cc},
+			func() time.Time { return now.Add(24 * time.Hour) }, poker)
+		mine, theirs, err := tomorrow.TodayRequests(ctx, ada)
+		if err != nil || mine != nil || theirs != nil {
+			t.Errorf("tomorrow: mine %+v theirs %+v err %v", mine, theirs, err)
+		}
+	})
+}
+
+func TestValidateRequestText(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		ok   bool
+	}{
+		{"empty", "", false},
+		{"only spaces", "   ", false},
+		{"one line", "My interview at two", true},
+		{"exactly 200", strings.Repeat("a", 200), true},
+		{"201", strings.Repeat("a", 201), false},
+		{"emoji count as one", strings.Repeat("🙏", 200), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := prayers.ValidateRequestText(tc.in)
+			if (err == nil) != tc.ok {
+				t.Errorf("err = %v, want ok=%v", err, tc.ok)
+			}
+		})
+	}
 }

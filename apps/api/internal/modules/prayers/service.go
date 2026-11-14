@@ -21,6 +21,10 @@ type Repository interface {
 	SetAnswered(ctx context.Context, pointID, userID uuid.UUID, answered bool, note string, at time.Time) error
 	Answered(ctx context.Context, coupleID uuid.UUID) ([]Answered, error)
 	SetReflection(ctx context.Context, weekID, userID uuid.UUID, body string, at time.Time) error
+	RequestsOn(ctx context.Context, coupleID uuid.UUID, day time.Time) ([]Request, error)
+	KeepRequest(ctx context.Context, coupleID, authorID uuid.UUID, day time.Time, text string, at time.Time) error
+	DeleteRequest(ctx context.Context, coupleID, authorID uuid.UUID, day time.Time) error
+	MarkRequestPrayed(ctx context.Context, coupleID, authorID uuid.UUID, day time.Time, prayedBy uuid.UUID, done bool, at time.Time) error
 }
 
 // CoupleContext is everything this module needs about a couple (DEC-27),
@@ -305,4 +309,81 @@ func (s *Service) SetReflection(ctx context.Context, userID, weekID uuid.UUID, b
 
 	rec, err = s.repo.WeekByID(ctx, cc.CoupleID, weekID)
 	return rec, cc, err
+}
+
+// TodayRequests is what each of you asked for today, from the caller's side:
+// mine is the caller's own, theirs is the partner's. Either may be nil.
+func (s *Service) TodayRequests(ctx context.Context, userID uuid.UUID) (mine, theirs *Request, err error) {
+	cc, err := s.coupleContext(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	partner := cc.Partner(userID)
+	if partner == (uuid.UUID{}) {
+		return nil, nil, ErrWaitingForPartner
+	}
+	all, err := s.repo.RequestsOn(ctx, cc.CoupleID, cc.Today)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i := range all {
+		switch all[i].AuthorID {
+		case userID:
+			mine = &all[i]
+		case partner:
+			theirs = &all[i]
+		}
+	}
+	return mine, theirs, nil
+}
+
+// AskForPrayer writes or rewrites the caller's request for today.
+func (s *Service) AskForPrayer(ctx context.Context, userID uuid.UUID, text string) error {
+	clean, err := ValidateRequestText(text)
+	if err != nil {
+		return err
+	}
+	cc, err := s.coupleContext(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if cc.Partner(userID) == (uuid.UUID{}) {
+		return ErrWaitingForPartner
+	}
+	if err := s.repo.KeepRequest(ctx, cc.CoupleID, userID, cc.Today, clean, s.now()); err != nil {
+		return err
+	}
+	// Only the first write is announced (the worker reads created_at), so a
+	// poke on an edit costs one pass and sends nothing.
+	s.poker.Poke()
+	return nil
+}
+
+// WithdrawRequest takes back the caller's request for today.
+func (s *Service) WithdrawRequest(ctx context.Context, userID uuid.UUID) error {
+	cc, err := s.coupleContext(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.DeleteRequest(ctx, cc.CoupleID, userID, cc.Today)
+}
+
+// PrayedForPartner marks, or unmarks, the partner's request for today.
+// There is no request id in the call, so marking your own can't happen.
+func (s *Service) PrayedForPartner(ctx context.Context, userID uuid.UUID, done bool) error {
+	cc, err := s.coupleContext(ctx, userID)
+	if err != nil {
+		return err
+	}
+	partner := cc.Partner(userID)
+	if partner == (uuid.UUID{}) {
+		return ErrWaitingForPartner
+	}
+	if err := s.repo.MarkRequestPrayed(ctx, cc.CoupleID, partner, cc.Today, userID, done, s.now()); err != nil {
+		return err
+	}
+	if done {
+		s.poker.Poke()
+	}
+	return nil
 }
