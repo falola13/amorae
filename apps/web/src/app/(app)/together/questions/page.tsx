@@ -62,36 +62,53 @@ export default function PastQuestions() {
   );
 }
 
+/** Facing pages: yours on the left, theirs on the right, a hairline between. */
 function Day({ day, partner, last }: { day: QuestionEntry; partner: string; last: boolean }) {
+  const right = day.theirs
+    ? null
+    : day.mine
+      ? `Sealed — ${partner} didn’t answer that day`
+      : day.theirs_answered
+        ? `Sealed — ${partner} answered, and yours wasn’t written`
+        : `${partner} didn’t answer that day`;
   return (
-    <article className={`flex flex-col gap-2 py-5 ${last ? "" : "border-b border-line"}`}>
+    <article className={`flex flex-col gap-3 py-5 ${last ? "" : "border-b border-line"}`}>
       <span className="text-micro uppercase text-stone">{weekdayDate(day.asked_on)}</span>
       <h2 className="m-0 font-text text-bodylg font-medium">{day.question}</h2>
-      {day.mine ? (
-        <Line who="You" text={day.mine.text} />
-      ) : (
-        <Para size="support">You didn’t answer this one.</Para>
-      )}
-      {day.theirs ? (
-        <Line who={partner} text={day.theirs.text} />
-      ) : day.theirs_answered ? (
-        <Para size="support">
-          {partner} answered. It stays sealed, because yours wasn’t written.
-        </Para>
-      ) : (
-        <Para size="support">{partner} didn’t answer this one.</Para>
-      )}
+      <div className="grid grid-cols-2">
+        <Page who="You" text={day.mine?.text} empty="You didn’t answer that day" />
+        <Page who={partner} text={day.theirs?.text} empty={right} divided />
+      </div>
     </article>
   );
 }
 
-function Line({ who, text }: { who: string; text: string }) {
+function Page({
+  who,
+  text,
+  empty,
+  divided,
+}: {
+  who: string;
+  text?: string;
+  empty?: string | null;
+  divided?: boolean;
+}) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-support font-semibold text-stone">{who}</span>
-      <p className="m-0 font-text text-bodylg text-ink" data-selectable>
-        {text}
-      </p>
+    <div
+      className={`flex min-w-0 flex-col gap-1 ${divided ? "border-l border-line pl-4" : "pr-4"}`}
+    >
+      <span className="text-micro font-semibold uppercase text-stone">{who}</span>
+      {text ? (
+        <p
+          className="m-0 whitespace-pre-wrap break-words font-text text-[15px] leading-[1.55] text-ink md:text-bodylg"
+          data-selectable
+        >
+          {text}
+        </p>
+      ) : (
+        <p className="m-0 text-support italic text-stone">{empty}</p>
+      )}
     </div>
   );
 }
