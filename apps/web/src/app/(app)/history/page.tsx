@@ -49,7 +49,7 @@ const FILTERS: { value: TimelineFilter; label: string }[] = [
 // Each entry is named by a small word rather than an icon: the words do the work.
 const KIND: Record<TimelineItem["type"], string> = {
   prayer_week: "Prayer",
-  prayer_answered: "Prayer answered",
+  prayer_answered: "Answered prayer",
   memory: "Memory",
   event: "Plan",
   goal: "Goal",
@@ -164,6 +164,9 @@ function TimelineRow({
   // Journal and appreciation are the couple's own words, so they're set as
   // words in the serif; their "title" is only the tag or the kind again.
   const words = item.type === "journal" || item.type === "appreciation";
+  const answered = item.type === "prayer_answered";
+  // The feed sends "Answered" or "Answered · <note>"; only the note is theirs.
+  const answeredNote = answered ? (item.sub ?? "").replace(/^Answereds*·?s*/, "").trim() : "";
   const [reading, setReading] = useState(false);
   const rowClass = "press grid grid-cols-[44px_1fr] gap-x-1 py-5 text-left text-ink no-underline";
   const body = (
@@ -188,32 +191,45 @@ function TimelineRow({
             className="mb-3 aspect-[4/3] w-full rounded-xs bg-photo object-cover"
           />
         ) : null}
-        <span
-          className={cx(
-            "text-support font-medium",
-            item.type === "prayer_answered" ? "text-green" : "text-stone",
-          )}
-        >
-          {KIND[item.type]}
-          {name ? ` · ${name}` : ""}
-        </span>
-        {words ? null : (
-          <span className="mt-0.5 font-text text-[19px] leading-[1.3]">{item.title}</span>
-        )}
-        {item.sub ? (
-          words ? (
-            <span
-              className={cx(
-                "mt-1 font-text text-bodylg leading-[1.45]",
-                item.type === "appreciation" && "italic",
-              )}
-            >
-              {item.type === "appreciation" ? `“${excerpt(item.sub)}”` : excerpt(item.sub)}
+        {answered ? (
+          <span className="flex flex-col border-l-2 border-green pl-3">
+            <span className="flex items-center gap-1.5 text-support font-medium text-green">
+              <Icon name="check" size={16} />
+              {KIND[item.type]}
+              {name ? ` · ${name}` : ""}
             </span>
-          ) : (
-            <span className="text-support text-stone">{item.sub}</span>
-          )
-        ) : null}
+            <span className="mt-0.5 font-text text-[22px] leading-[1.25]">{item.title}</span>
+            {answeredNote ? (
+              <span className="mt-1 font-text text-bodylg italic leading-[1.45]">
+                {`“${answeredNote}”`}
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          <>
+            <span className="text-support font-medium text-stone">
+              {KIND[item.type]}
+              {name ? ` · ${name}` : ""}
+            </span>
+            {words ? null : (
+              <span className="mt-0.5 font-text text-[19px] leading-[1.3]">{item.title}</span>
+            )}
+            {item.sub ? (
+              words ? (
+                <span
+                  className={cx(
+                    "mt-1 font-text text-bodylg leading-[1.45]",
+                    item.type === "appreciation" && "italic",
+                  )}
+                >
+                  {item.type === "appreciation" ? `“${excerpt(item.sub)}”` : excerpt(item.sub)}
+                </span>
+              ) : (
+                <span className="text-support text-stone">{item.sub}</span>
+              )
+            ) : null}
+          </>
+        )}
       </span>
     </>
   );
