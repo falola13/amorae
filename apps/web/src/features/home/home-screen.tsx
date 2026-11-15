@@ -459,9 +459,12 @@ function Nudge({
   const first = partner.split(" ")[0];
 
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4">
+    // One row: what they sent on the left, yours to send back on the right.
+    // The button sits in a shrink-wrapped span because Button is full-width by
+    // default and its own className can't override that.
+    <div className="mt-3 flex items-center justify-between gap-x-3">
       {received ? (
-        <p className="m-0 text-support text-stone" role="status">
+        <p className="m-0 min-w-0 text-support text-stone" role="status">
           {nudgeLine(first, received.count, received.last)}
         </p>
       ) : null}
@@ -470,9 +473,10 @@ function Nudge({
           {said}
         </p>
       ) : (
+        <span className="shrink-0">
         <Button
           variant="text"
-          icon="together"
+          icon={received ? undefined : "together"}
           loading={nudge.isPending}
           className="w-auto px-0"
           onClick={() =>
@@ -487,8 +491,10 @@ function Nudge({
             })
           }
         >
-          Thinking of {first}
+          {/* Beside their line it's a reply, and the shorter label keeps the row whole. */}
+          {received ? "Send one back" : `Thinking of ${first}`}
         </Button>
+        </span>
       )}
     </div>
   );

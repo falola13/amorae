@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon, type IconName } from "@/components/icons";
 import { useDialog } from "@/lib/hooks/use-dialog";
 import { Spinner } from "./buttons";
@@ -142,7 +143,10 @@ type SheetProps = {
 
 export function Sheet(props: SheetProps) {
   // Mounted only while open, so the "discard?" question never outlives one opening.
-  return props.open ? <OpenSheet {...props} /> : null;
+  // Portalled to the body: a sheet opened from inside a page section would
+  // otherwise share that section's stacking layer and sit under the tab bar.
+  if (!props.open || typeof document === "undefined") return null;
+  return createPortal(<OpenSheet {...props} />, document.body);
 }
 
 function OpenSheet({ title, onClose, children, labelledBy, dirty = false }: SheetProps) {
