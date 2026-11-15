@@ -25,7 +25,9 @@ const ms = (o: Partial<Milestone>): Milestone => ({
 
 describe("nextAhead", () => {
   it("is null when nothing is ahead", () => {
-    expect(nextAhead([ev({ date: "2026-11-01" })], [ms({ reminder: false })], "2026-11-15")).toBeNull();
+    expect(
+      nextAhead([ev({ date: "2026-11-01" })], [ms({ reminder: false })], "2026-11-15"),
+    ).toBeNull();
   });
 
   it("picks the earliest event on or after the start, skipping finished ones", () => {

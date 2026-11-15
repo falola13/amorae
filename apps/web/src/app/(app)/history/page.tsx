@@ -99,7 +99,9 @@ function withAnniversaries(
       date: day,
       title: `Our ${ordinal(n)} anniversary`,
       // Only claim letters that exist: most years nobody wrote one.
-      sub: letters.has(year) ? `${yearsWord(n)} together · your letters` : `${yearsWord(n)} together`,
+      sub: letters.has(year)
+        ? `${yearsWord(n)} together · your letters`
+        : `${yearsWord(n)} together`,
       path: routes.ourDay(),
     });
   }
