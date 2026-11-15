@@ -1,5 +1,6 @@
 import { sumOf } from "@/features/together/goals";
-import type { Event, Goal, NotificationPrefs, PrayerWeek } from "@/lib/api/types";
+import type { Event, Goal, Memory, NotificationPrefs, PrayerWeek } from "@/lib/api/types";
+import { occursOn } from "@/features/together/milestones";
 import { isApiError } from "@/lib/api/errors";
 import { eventPhase } from "@/features/together/events";
 import { time12 } from "@/lib/dates";
@@ -54,3 +55,22 @@ export const lastWeekSummary = (
 /** "Off", or the reminder time as "7:00 pm". */
 export const reminderLabel = (prefs: NotificationPrefs | undefined): string =>
   prefs?.prayer_reminder ? time12(prefs.reminder_time) : "Off";
+
+/** The most recent memory from this day in an earlier year, and how many years
+ *  back it is. A Feb 29 memory comes round on Feb 28 in a non-leap year (the
+ *  same rule as the reminders; see occursOn). */
+export function onThisDay(
+  memories: Memory[],
+  todayIso: string,
+): { memory: Memory; yearsAgo: number } | null {
+  const thisYear = Number(todayIso.slice(0, 4));
+  let best: Memory | null = null;
+  for (const m of memories) {
+    if (Number(m.date.slice(0, 4)) >= thisYear || !occursOn(m.date, todayIso)) continue;
+    if (!best || m.date > best.date) best = m;
+  }
+  return best ? { memory: best, yearsAgo: thisYear - Number(best.date.slice(0, 4)) } : null;
+}
+
+export const yearsAgoLabel = (n: number): string =>
+  n === 1 ? "A year ago today" : `${n} years ago today`;

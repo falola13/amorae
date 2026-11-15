@@ -5,19 +5,32 @@ import { useState } from "react";
 
 import { Icon } from "@/components/icons";
 import { Main } from "@/components/layout/screen";
-import { Button, LinkButton, Micro, Para, Row, Section, cx, Skeleton } from "@/components/ui/kit";
+import {
+  Alert,
+  Button,
+  LinkButton,
+  Micro,
+  Para,
+  Row,
+  Section,
+  cx,
+  Skeleton,
+} from "@/components/ui/kit";
 import { isAbsence } from "@/lib/api/envelope";
 import { readableMessage } from "@/lib/query/client";
 import { whenLabel, yearsWord } from "@/features/anniversary/derive";
 import { useAnniversary } from "@/features/anniversary/hooks";
 import { useCouple } from "@/features/couple/hooks";
+import { nudgeLine, nudgesToday } from "@/features/notifications/derive";
 import { useInbox } from "@/features/notifications/hooks";
-import { useWeek } from "@/features/prayers/hooks";
+import { useTodayRequests, useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
+import { HomeAdd } from "./add-sheet";
 import { AnniversaryHome } from "./anniversary-home";
 import { HomeChallengeCard } from "./challenge-card";
 import { goalNothingYet } from "@/features/together/goals";
 import { homeChallengeRows } from "@/features/together/challenges";
+import { OnThisDay } from "./on-this-day";
 import { TodaysPrayer } from "./todays-prayer";
 import { QuestionCard } from "./question-card";
 import { eventPhase, nowLabel } from "@/features/together/events";
@@ -69,6 +82,11 @@ export function HomeScreen() {
   const milestones = useMilestones();
   const inbox = useInbox();
   const anniversary = useAnniversary();
+  const requests = useTodayRequests();
+  // Bumped by the "+" sheet's "Ask ... to pray for you" to open the request box.
+  const [askToken, setAskToken] = useState(0);
+  // Persists (no auto-dismiss) since it flags a photo that still needs re-uploading.
+  const [photoFailed, setPhotoFailed] = useState(false);
   const unread = inbox.data?.unread ?? 0;
   const now = today();
   const todayIso = iso(now);
@@ -217,15 +235,32 @@ export function HomeScreen() {
               />
             ) : null}
           </Link>
-          <Link
-            href={routes.eventNew()}
-            aria-label="Add something to our space"
-            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink"
-          >
-            <Icon name="plus" size={24} />
-          </Link>
+          <HomeAdd
+            first={partner.split(" ")[0]}
+            canAsk={!alone && Boolean(requests.data) && !requests.data?.mine?.prayed_at}
+            onAsk={() => setAskToken((n) => n + 1)}
+            onPhotoFailed={() => setPhotoFailed(true)}
+          />
         </div>
       </div>
+
+      {photoFailed ? (
+        <div className="mt-3 flex flex-col gap-1.5">
+          <Alert message="The moment was saved, but the photo didn’t upload." />
+          <button
+            type="button"
+            onClick={() => setPhotoFailed(false)}
+            className="press self-start px-1 text-[15px] font-semibold text-plum"
+          >
+            Got it
+          </button>
+        </div>
+      ) : null}
+
+      {/* Thought of you, and thinking of them, together under the masthead. */}
+      {coupleData.partner ? (
+        <Nudge partner={partner} received={nudgesToday(inbox.data?.items ?? [], todayIso)} />
+      ) : null}
 
       <Celebrations
         milestones={milestones.data ?? []}
@@ -261,6 +296,7 @@ export function HomeScreen() {
               couple={coupleData}
               week={w}
               reminder={prefs.data ? reminder : null}
+              askToken={askToken}
               weekPrompt={(raised) =>
                 w && w.status !== "published" ? (
                   <WeekPrompt week={w} meId={me.id} partner={partner} raised={raised} />
@@ -268,6 +304,7 @@ export function HomeScreen() {
               }
             />
             <QuestionCard partner={partner} />
+            <OnThisDay todayIso={todayIso} />
           </div>
           <div className="flex flex-col">
             {alsoToday}
@@ -275,8 +312,6 @@ export function HomeScreen() {
           </div>
         </div>
       )}
-
-      {coupleData.partner ? <Nudge partner={partner} /> : null}
     </Main>
   );
 }
@@ -412,38 +447,49 @@ function AnniversaryAhead({ a, partner }: { a: Anniversary; partner: string }) {
  * rather than as a toast, including the refusals — that they are asleep, or
  * that today's three are spent — because those are the answer, not errors.
  */
-function Nudge({ partner }: { partner: string }) {
+function Nudge({
+  partner,
+  received,
+}: {
+  partner: string;
+  received: { count: number; last: Date } | null;
+}) {
   const nudge = useNudge();
   const [said, setSaid] = useState<string | null>(null);
   const first = partner.split(" ")[0];
 
-  if (said) {
-    return (
-      <p className="m-0 pb-4 pt-1 text-support text-stone" role="status">
-        {said}
-      </p>
-    );
-  }
   return (
-    <div className="pb-4 pt-1">
-      <Button
-        variant="text"
-        icon="together"
-        loading={nudge.isPending}
-        onClick={() =>
-          nudge.mutate(undefined, {
-            onSuccess: ({ left }) =>
-              setSaid(
-                `${first} will know you were thinking of them. ${
-                  left === 0 ? "That was today’s last." : `${left} more today.`
-                }`,
-              ),
-            onError: (e) => setSaid(readableMessage(e)),
-          })
-        }
-      >
-        Thinking of {first}
-      </Button>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4">
+      {received ? (
+        <p className="m-0 text-support text-stone" role="status">
+          {nudgeLine(first, received.count, received.last)}
+        </p>
+      ) : null}
+      {said ? (
+        <p className="m-0 py-2 text-support text-stone" role="status">
+          {said}
+        </p>
+      ) : (
+        <Button
+          variant="text"
+          icon="together"
+          loading={nudge.isPending}
+          className="w-auto px-0"
+          onClick={() =>
+            nudge.mutate(undefined, {
+              onSuccess: ({ left }) =>
+                setSaid(
+                  `${first} will know you were thinking of them. ${
+                    left === 0 ? "That was today’s last." : `${left} more today.`
+                  }`,
+                ),
+              onError: (e) => setSaid(readableMessage(e)),
+            })
+          }
+        >
+          Thinking of {first}
+        </Button>
+      )}
     </div>
   );
 }

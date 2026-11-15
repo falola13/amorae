@@ -23,11 +23,13 @@ export function TodaysPrayer({
   week,
   weekPrompt,
   reminder,
+  askToken,
 }: {
   couple: Couple;
   week: PrayerWeek | undefined;
   weekPrompt: (raised: boolean) => ReactNode;
   reminder: string | null;
+  askToken?: number;
 }) {
   const requests = useTodayRequests();
   const partner = couple.partner?.display_name ?? "your partner";
@@ -82,7 +84,7 @@ export function TodaysPrayer({
         weekPrompt(Boolean(requests.data) && !(theirs && !theirs.prayed_at))
       )}
 
-      {requests.data ? <MyRequest request={mine} first={first} /> : null}
+      {requests.data ? <MyRequest request={mine} first={first} askToken={askToken} /> : null}
     </Section>
   );
 }

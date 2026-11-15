@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import type { Event } from "@/lib/api/types";
-import { isAlone, todayEvent, upcomingEvents } from "./derive";
+import type { Event, Memory } from "@/lib/api/types";
+import { isAlone, onThisDay, todayEvent, upcomingEvents, yearsAgoLabel } from "./derive";
 
 const apiError = (code: string) => new ApiError(409, code, "");
 
@@ -56,5 +56,36 @@ describe("upcomingEvents", () => {
   it("keeps a no-time event on its day and picks it as today's", () => {
     const up = upcomingEvents([ev({ id: "all-day" })], now);
     expect(todayEvent(up, "2026-09-30")?.id).toBe("all-day");
+  });
+});
+
+describe("onThisDay", () => {
+  const mem = (id: string, date: string): Memory => ({ id, title: id, date, has_photo: false });
+
+  it("finds nothing when no earlier year shares the day", () => {
+    expect(onThisDay([mem("a", "2025-11-14"), mem("b", "2026-11-15")], "2026-11-15")).toBeNull();
+  });
+
+  it("takes the most recent earlier year, and not this year's own", () => {
+    const got = onThisDay(
+      [mem("old", "2023-11-15"), mem("last", "2025-11-15"), mem("now", "2026-11-15")],
+      "2026-11-15",
+    );
+    expect(got?.memory.id).toBe("last");
+    expect(got?.yearsAgo).toBe(1);
+  });
+
+  it("brings a Feb 29 memory to Feb 28 in a year with no 29th, and to the 29th in a leap year", () => {
+    const leap = mem("leap", "2024-02-29");
+    expect(onThisDay([leap], "2027-02-28")?.yearsAgo).toBe(3);
+    expect(onThisDay([leap], "2028-02-29")?.yearsAgo).toBe(4);
+    expect(onThisDay([leap], "2027-03-01")).toBeNull();
+  });
+});
+
+describe("yearsAgoLabel", () => {
+  it("says a year, then counts", () => {
+    expect(yearsAgoLabel(1)).toBe("A year ago today");
+    expect(yearsAgoLabel(2)).toBe("2 years ago today");
   });
 });

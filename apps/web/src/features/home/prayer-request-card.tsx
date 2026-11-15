@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, Field } from "@/components/ui/kit";
 import { prayedAtLabel } from "@/features/prayers/derive";
@@ -53,7 +53,16 @@ export function TheirRequest({ request, first }: { request: PrayerRequest; first
 }
 
 /** Your own request: a quiet line under the rest of the prayer section. */
-export function MyRequest({ request, first }: { request: PrayerRequest | null; first: string }) {
+export function MyRequest({
+  request,
+  first,
+  askToken = 0,
+}: {
+  request: PrayerRequest | null;
+  first: string;
+  /** Bumped by Home's "+" to open the box and put the cursor in it. */
+  askToken?: number;
+}) {
   const text = request?.text ?? null;
   const prayedAt = request?.prayed_at ?? null;
   const ask = useAsk();
@@ -67,6 +76,20 @@ export function MyRequest({ request, first }: { request: PrayerRequest | null; f
     setError(undefined);
     setEditing(true);
   };
+  // Opening is this component's own state, so it follows the token during
+  // render (no effect); only the focus has to wait until the box is there.
+  const [seenToken, setSeenToken] = useState(askToken);
+  if (askToken !== seenToken) {
+    setSeenToken(askToken);
+    open();
+  }
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!askToken) return;
+    // After the sheet that asked has handed focus back, or it would take it.
+    const t = setTimeout(() => input.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [askToken]);
   const send = () => {
     const line = draft.trim();
     if (!line) {
@@ -88,6 +111,7 @@ export function MyRequest({ request, first }: { request: PrayerRequest | null; f
         }}
       >
         <Field
+          ref={input}
           label={`What should ${first} pray for?`}
           value={draft}
           maxLength={200}
@@ -122,9 +146,7 @@ export function MyRequest({ request, first }: { request: PrayerRequest | null; f
         &ldquo;{text}&rdquo;
       </p>
       <span className={prayedAt ? "mt-1 text-support text-green" : "mt-1 text-support text-stone"}>
-        {prayedAt
-          ? `${first} prayed for you ${prayedAtLabel(prayedAt)}`
-          : `Waiting for ${first}`}
+        {prayedAt ? `${first} prayed for you ${prayedAtLabel(prayedAt)}` : `Waiting for ${first}`}
       </span>
       {prayedAt ? null : (
         <div className="-ml-2 flex items-center">
