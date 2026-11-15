@@ -1,9 +1,16 @@
 import { sumOf } from "@/features/together/goals";
-import type { Event, Goal, Memory, NotificationPrefs, PrayerWeek } from "@/lib/api/types";
+import type {
+  AnsweredPrayer,
+  Event,
+  Goal,
+  Memory,
+  NotificationPrefs,
+  PrayerWeek,
+} from "@/lib/api/types";
 import { occursOn } from "@/features/together/milestones";
 import { isApiError } from "@/lib/api/errors";
 import { eventPhase } from "@/features/together/events";
-import { time12 } from "@/lib/dates";
+import { iso, time12 } from "@/lib/dates";
 
 // True if no partner, or the API's 409 waiting_for_partner (only returned once a week was asked for).
 export const isAlone = (hasPartner: boolean, weekError: unknown): boolean =>
@@ -74,3 +81,11 @@ export function onThisDay(
 
 export const yearsAgoLabel = (n: number): string =>
   n === 1 ? "A year ago today" : `${n} years ago today`;
+
+/** Prayers marked answered today (by either of you), latest first. The couple's
+ *  own date wins when the API sent it; otherwise the local date of the instant. */
+export function answeredToday(items: AnsweredPrayer[], todayIso: string): AnsweredPrayer[] {
+  return items
+    .filter((p) => p.answered_at && (p.answered_on ?? iso(new Date(p.answered_at))) === todayIso)
+    .sort((a, b) => (b.answered_at ?? "").localeCompare(a.answered_at ?? ""));
+}

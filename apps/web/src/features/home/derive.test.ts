@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import type { Event, Memory } from "@/lib/api/types";
-import { isAlone, onThisDay, todayEvent, upcomingEvents, yearsAgoLabel } from "./derive";
+import type { AnsweredPrayer, Event, Memory } from "@/lib/api/types";
+import { answeredToday, isAlone, onThisDay, todayEvent, upcomingEvents, yearsAgoLabel } from "./derive";
 
 const apiError = (code: string) => new ApiError(409, code, "");
 
@@ -87,5 +87,39 @@ describe("yearsAgoLabel", () => {
   it("says a year, then counts", () => {
     expect(yearsAgoLabel(1)).toBe("A year ago today");
     expect(yearsAgoLabel(2)).toBe("2 years ago today");
+  });
+});
+
+describe("answeredToday", () => {
+  const p = (id: string, answered_at?: string, answered_on?: string): AnsweredPrayer => ({
+    id,
+    title: id,
+    text: "",
+    position: 0,
+    weekdays: [],
+    week_id: "w",
+    week_start: "2026-11-09",
+    answered_at,
+    answered_on,
+  });
+
+  it("keeps only today's, latest first", () => {
+    const items = [
+      p("old", "2026-11-14T09:00:00Z", "2026-11-14"),
+      p("early", "2026-11-15T07:00:00Z", "2026-11-15"),
+      p("late", "2026-11-15T15:40:00Z", "2026-11-15"),
+      p("never"),
+    ];
+    expect(answeredToday(items, "2026-11-15").map((x) => x.id)).toEqual(["late", "early"]);
+  });
+
+  it("prefers the couple's date over the instant's", () => {
+    const items = [p("x", "2026-11-15T23:30:00Z", "2026-11-16")];
+    expect(answeredToday(items, "2026-11-15")).toEqual([]);
+    expect(answeredToday(items, "2026-11-16")).toHaveLength(1);
+  });
+
+  it("is empty when nothing was answered", () => {
+    expect(answeredToday([], "2026-11-15")).toEqual([]);
   });
 });

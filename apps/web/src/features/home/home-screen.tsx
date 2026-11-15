@@ -23,7 +23,7 @@ import { useAnniversary } from "@/features/anniversary/hooks";
 import { useCouple } from "@/features/couple/hooks";
 import { nudgeLine, nudgesToday } from "@/features/notifications/derive";
 import { useInbox } from "@/features/notifications/hooks";
-import { useTodayRequests, useWeek } from "@/features/prayers/hooks";
+import { useAnswered, useTodayRequests, useWeek } from "@/features/prayers/hooks";
 import { usePrefs } from "@/features/settings/hooks";
 import { HomeAdd } from "./add-sheet";
 import { AnniversaryHome } from "./anniversary-home";
@@ -47,9 +47,10 @@ import {
   todaysMilestones,
   upcomingMilestones,
 } from "@/features/together/milestones";
-import type { Anniversary, Milestone, PrayerWeek } from "@/lib/api/types";
+import type { AnsweredPrayer, Anniversary, Milestone, PrayerWeek } from "@/lib/api/types";
 import {
   activeGoal,
+  answeredToday,
   isAlone,
   nextUpcomingEvent,
   reminderLabel,
@@ -83,6 +84,7 @@ export function HomeScreen() {
   const inbox = useInbox();
   const anniversary = useAnniversary();
   const requests = useTodayRequests();
+  const answered = useAnswered();
   // Bumped by the "+" sheet's "Ask ... to pray for you" to open the request box.
   const [askToken, setAskToken] = useState(0);
   // Persists (no auto-dismiss) since it flags a photo that still needs re-uploading.
@@ -262,6 +264,15 @@ export function HomeScreen() {
         <Nudge partner={partner} received={nudgesToday(inbox.data?.items ?? [], todayIso)} />
       ) : null}
 
+      {!alone ? (
+        <AnsweredNow
+          items={answeredToday(answered.data ?? [], todayIso)}
+          meId={me.id}
+          meName={me.display_name}
+          partner={partner}
+        />
+      ) : null}
+
       <Celebrations
         milestones={milestones.data ?? []}
         meId={me.id}
@@ -313,6 +324,48 @@ export function HomeScreen() {
         </div>
       )}
     </Main>
+  );
+}
+
+/** A prayer marked answered today, ruled in under the masthead: the latest,
+ *  with a link to the rest. Nothing renders on a day nothing was answered. */
+function AnsweredNow({
+  items,
+  meId,
+  meName,
+  partner,
+}: {
+  items: AnsweredPrayer[];
+  meId: string;
+  meName: string;
+  partner: string;
+}) {
+  const [latest, ...more] = items;
+  if (!latest) return null;
+  const who = (latest.answered_by === meId ? meName : partner).split(" ")[0];
+  const at = latest.answered_at ? new Date(latest.answered_at) : null;
+  const when = at ? ` · ${time12(`${at.getHours()}:${at.getMinutes()}`)}` : "";
+  return (
+    <div className="mt-6 flex flex-col items-start border-y border-line py-4">
+      <span className="text-micro font-semibold uppercase text-green">Answered today</span>
+      <h2 className="m-0 mt-2 font-text text-title">{latest.title}</h2>
+      {latest.answer_note ? (
+        <p className="m-0 mt-1 font-text text-bodylg italic leading-[1.45]">
+          {`“${latest.answer_note}”`}
+        </p>
+      ) : null}
+      <span className="mt-2 text-support text-stone">
+        {who} marked it{when}
+      </span>
+      {more.length > 0 ? (
+        <Link
+          href={routes.prayersAnswered}
+          className="press -mb-2 mt-1 flex h-11 items-center text-support font-semibold text-plum no-underline"
+        >
+          +{more.length} more
+        </Link>
+      ) : null}
+    </div>
   );
 }
 
