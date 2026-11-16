@@ -166,7 +166,7 @@ function TimelineRow({
   const words = item.type === "journal" || item.type === "appreciation";
   const answered = item.type === "prayer_answered";
   // The feed sends "Answered" or "Answered · <note>"; only the note is theirs.
-  const answeredNote = answered ? (item.sub ?? "").replace(/^Answereds*·?s*/, "").trim() : "";
+  const answeredNote = answered ? (item.sub ?? "").replace(/^Answered\s*·?\s*/, "").trim() : "";
   const [reading, setReading] = useState(false);
   const rowClass = "press grid grid-cols-[44px_1fr] gap-x-1 py-5 text-left text-ink no-underline";
   const body = (

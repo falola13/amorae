@@ -346,7 +346,7 @@ function AnsweredNow({
   const at = latest.answered_at ? new Date(latest.answered_at) : null;
   const when = at ? ` · ${time12(`${at.getHours()}:${at.getMinutes()}`)}` : "";
   return (
-    <div className="mt-6 flex flex-col items-start border-y border-line py-4">
+    <div className="mt-6 flex flex-col items-start border-t border-line py-4">
       <span className="text-micro font-semibold uppercase text-green">Answered today</span>
       <h2 className="m-0 mt-2 font-text text-title">{latest.title}</h2>
       {latest.answer_note ? (
